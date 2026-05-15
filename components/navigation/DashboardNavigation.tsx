@@ -52,6 +52,22 @@ const navigationItems = [
       </svg>
     ),
   },
+  {
+    label: "Planning",
+    href: "/planning",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
+        <path
+          d="M7 3.75v3M17 3.75v3M4.75 8.25h14.5M6.25 5.25h11.5a1.5 1.5 0 0 1 1.5 1.5v11a1.5 1.5 0 0 1-1.5 1.5H6.25a1.5 1.5 0 0 1-1.5-1.5v-11a1.5 1.5 0 0 1 1.5-1.5ZM8 12h2.25M8 15.5h2.25M13.75 12H16M13.75 15.5H16"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.8"
+        />
+      </svg>
+    ),
+  },
 ];
 
 type DashboardNavigationProps = {

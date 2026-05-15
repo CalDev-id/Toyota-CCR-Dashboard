@@ -1,6 +1,7 @@
 "use client";
 
 import DashboardNavigation from "@/components/navigation/DashboardNavigation";
+import Image from "next/image";
 import { useState } from "react";
 
 type DefaultLayoutProps = {
@@ -47,15 +48,22 @@ export default function DefaultLayout({ children }: DefaultLayoutProps) {
               isSidebarCollapsed ? "justify-center" : "gap-3"
             }`}
           >
-            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#465fff] text-sm font-bold tracking-wide text-white">
-              TC
+            <div className="grid h-10 w-14 shrink-0 place-items-center overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
+              <Image
+                src="/images/tmmin_logo.png"
+                alt="TMMIN logo"
+                width={800}
+                height={344}
+                className="h-7 w-auto object-contain"
+                priority
+              />
             </div>
             <div className={isSidebarCollapsed ? "hidden" : "min-w-0"}>
               <p className="truncate text-base font-semibold tracking-tight text-[#101828]">
                 Toyota CCR
               </p>
               <p className="truncate text-xs font-medium text-[#667085]">
-                Production Planning & Inventory Control
+                PPIC & Warehouse
               </p>
             </div>
           </div>
@@ -93,27 +101,6 @@ export default function DefaultLayout({ children }: DefaultLayoutProps) {
                   </svg>
                 </button>
 
-                <label className="relative hidden min-w-0 max-w-[430px] flex-1 sm:block">
-                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3]">
-                    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
-                      <path
-                        d="m20 20-4.2-4.2M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeWidth="1.8"
-                      />
-                    </svg>
-                  </span>
-                  <input
-                    className="h-11 w-full rounded-lg border border-[#e4e7ec] bg-white pl-11 pr-24 text-sm text-[#344054] outline-none transition placeholder:text-[#98a2b3] focus:border-[#465fff] focus:ring-4 focus:ring-[#ecf3ff]"
-                    placeholder="Search part, model, supplier"
-                    type="search"
-                  />
-                  <span className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-[#e4e7ec] px-2 py-1 text-xs font-medium text-[#98a2b3] md:block">
-                    ⌘ K
-                  </span>
-                </label>
               </div>
 
               <div className="flex shrink-0 items-center gap-2">
