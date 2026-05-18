@@ -135,18 +135,44 @@ export function getEditableColumns(columns: PlanningColumn[], mode: "create" | "
   });
 }
 
-export async function getPlanningSummaries() {
+function findColumnByName(columns: PlanningColumn[], name: string) {
+  return columns.find((column) => column.field.toLowerCase() === name.toLowerCase());
+}
+
+export async function getPlanningSummaries(month: string) {
   const entries = await Promise.all(
     Object.entries(planningParts).map(async ([key, part]) => {
-      const rows = await prisma.$queryRawUnsafe<{ count: bigint | number }[]>(
-        `SELECT COUNT(*) AS count FROM ${quoteIdentifier(part.tableName)}`,
+      const partKey = key as PlanningPartKey;
+      const columns = await getPlanningColumns(partKey);
+      const dateColumn = getConflictColumns(columns).dateColumn;
+      const oneTrColumn = findColumnByName(columns, "f1tr");
+      const twoTrColumn = findColumnByName(columns, "f2tr");
+      const { start, end } = getMonthRange(month);
+      const rows = await prisma.$queryRawUnsafe<
+        {
+          count: bigint | number;
+          one_tr_total: string | number | null;
+          two_tr_total: string | number | null;
+        }[]
+      >(
+        `SELECT COUNT(*) AS count, ${
+          oneTrColumn ? `COALESCE(SUM(${quotedColumn(oneTrColumn.field)}), 0)` : "0"
+        } AS one_tr_total, ${
+          twoTrColumn ? `COALESCE(SUM(${quotedColumn(twoTrColumn.field)}), 0)` : "0"
+        } AS two_tr_total FROM ${quoteIdentifier(part.tableName)} WHERE ${quotedColumn(
+          dateColumn.field,
+        )} >= ? AND ${quotedColumn(dateColumn.field)} < ?`,
+        start,
+        end,
       );
 
       return {
-        key: key as PlanningPartKey,
+        key: partKey,
         label: part.label,
         tableName: part.tableName,
         count: Number(rows[0]?.count ?? 0),
+        oneTrTotal: Number(rows[0]?.one_tr_total ?? 0),
+        twoTrTotal: Number(rows[0]?.two_tr_total ?? 0),
       } satisfies PlanningPartSummary;
     }),
   );

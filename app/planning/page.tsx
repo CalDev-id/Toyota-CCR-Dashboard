@@ -31,6 +31,11 @@ type ApiError = Error & {
   conflicts?: Array<{ date: string; shift: string; group: string }>;
 };
 
+type Toast = {
+  message: string;
+  type: "success" | "error";
+};
+
 const defaultPart: PlanningPartKey = "cylblock";
 function getCurrentMonth() {
   const date = new Date();
@@ -38,32 +43,12 @@ function getCurrentMonth() {
 }
 
 const currentMonth = getCurrentMonth();
-const fallbackParts: PlanningPartSummary[] = [
-  {
-    key: "cylblock",
-    label: "Cylblock",
-    tableName: "t_plan_daily_production_cylblock",
-    count: 0,
-  },
-  {
-    key: "cylhead",
-    label: "Cylhead",
-    tableName: "t_plan_daily_production_cylhead",
-    count: 0,
-  },
-  {
-    key: "camshaft",
-    label: "Camshaft",
-    tableName: "t_plan_daily_production_camshaft",
-    count: 0,
-  },
-  {
-    key: "crankshaft",
-    label: "Crankshaft",
-    tableName: "t_plan_daily_production_crankshaft",
-    count: 0,
-  },
-];
+const partIcons: Record<PlanningPartKey, string> = {
+  cylblock: "CB",
+  cylhead: "CH",
+  camshaft: "CA",
+  crankshaft: "CR",
+};
 
 async function readResponse(response: Response) {
   const body = await response.json().catch(() => ({}));
@@ -134,7 +119,6 @@ function makeEditing(rows: PlanningRow[], columns: PlanningColumn[]) {
 
 export default function PlanningPage() {
   const [activePart, setActivePart] = useState<PlanningPartKey>(defaultPart);
-  const [modalPart, setModalPart] = useState<PlanningPartKey>(defaultPart);
   const [parts, setParts] = useState<PlanningPartSummary[]>([]);
   const [columns, setColumns] = useState<PlanningColumn[]>([]);
   const [rows, setRows] = useState<PlanningRow[]>([]);
@@ -147,8 +131,7 @@ export default function PlanningPage() {
   }>({ shifts: [], groups: [] });
   const [draftRows, setDraftRows] = useState<Array<{ id: string }>>([]);
   const [editing, setEditing] = useState<Record<string, Record<string, string>>>({});
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -165,7 +148,10 @@ export default function PlanningPage() {
     () => columns.filter(isVisibleColumn),
     [columns],
   );
-  const selectableParts = parts.length > 0 ? parts : fallbackParts;
+  const activePartSummary = useMemo(
+    () => parts.find((part) => part.key === activePart),
+    [activePart, parts],
+  );
 
   const buildPlanningUrl = useCallback(
     (part: PlanningPartKey) => {
@@ -181,9 +167,24 @@ export default function PlanningPage() {
     [filterGroup, filterMonth, filterShift],
   );
 
+  function showToast(message: string, type: Toast["type"]) {
+    setToast({ message, type });
+  }
+
+  useEffect(() => {
+    if (!toast) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setToast(null);
+    }, 3500);
+
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
+
   async function loadPlanning(part: PlanningPartKey) {
     setIsLoading(true);
-    setError(null);
 
     try {
       const body = await readResponse(await fetch(buildPlanningUrl(part)));
@@ -194,10 +195,11 @@ export default function PlanningPage() {
       setFilterOptions(data.filterOptions);
       setEditing(makeEditing(data.rows, data.columns));
     } catch (loadError) {
-      setError(
+      showToast(
         loadError instanceof Error
           ? loadError.message
           : "Unable to load planning data",
+        "error",
       );
       setRows([]);
       setColumns([]);
@@ -227,17 +229,18 @@ export default function PlanningPage() {
         setRows(data.rows);
         setFilterOptions(data.filterOptions);
         setEditing(makeEditing(data.rows, data.columns));
-        setError(null);
+        setToast(null);
       })
       .catch((loadError: unknown) => {
         if (!isActive) {
           return;
         }
 
-        setError(
+        showToast(
           loadError instanceof Error
             ? loadError.message
             : "Unable to load planning data",
+          "error",
         );
         setRows([]);
         setColumns([]);
@@ -263,7 +266,6 @@ export default function PlanningPage() {
   }
 
   function openImportModal() {
-    setModalPart(activePart);
     setIsImportModalOpen(true);
   }
 
@@ -272,6 +274,7 @@ export default function PlanningPage() {
       return;
     }
 
+    setDraftRows([]);
     setIsLoading(true);
     setActivePart(part);
     setFilterShift("all");
@@ -280,8 +283,6 @@ export default function PlanningPage() {
 
   async function saveDraftRow(id: string) {
     setIsSaving(true);
-    setError(null);
-    setMessage(null);
 
     try {
       await readResponse(
@@ -291,14 +292,15 @@ export default function PlanningPage() {
           body: JSON.stringify(editing[id] ?? {}),
         }),
       );
-      setMessage("Planning row created.");
+      showToast("Planning row created.", "success");
       setDraftRows((current) => current.filter((row) => row.id !== id));
       await loadPlanning(activePart);
     } catch (createError) {
-      setError(
+      showToast(
         createError instanceof Error
           ? createError.message
           : "Unable to create planning data",
+        "error",
       );
     } finally {
       setIsSaving(false);
@@ -306,9 +308,6 @@ export default function PlanningPage() {
   }
 
   async function updateRow(id: string) {
-    setError(null);
-    setMessage(null);
-
     try {
       await readResponse(
         await fetch(`/api/planning/${activePart}/${encodeURIComponent(id)}`, {
@@ -317,34 +316,33 @@ export default function PlanningPage() {
           body: JSON.stringify(editing[id] ?? {}),
         }),
       );
-      setMessage("Planning row updated.");
+      showToast("Planning row updated.", "success");
       await loadPlanning(activePart);
     } catch (updateError) {
-      setError(
+      showToast(
         updateError instanceof Error
           ? updateError.message
           : "Unable to update planning data",
+        "error",
       );
     }
   }
 
   async function deleteRow(id: string) {
-    setError(null);
-    setMessage(null);
-
     try {
       await readResponse(
         await fetch(`/api/planning/${activePart}/${encodeURIComponent(id)}`, {
           method: "DELETE",
         }),
       );
-      setMessage("Planning row deleted.");
+      showToast("Planning row deleted.", "success");
       await loadPlanning(activePart);
     } catch (deleteError) {
-      setError(
+      showToast(
         deleteError instanceof Error
           ? deleteError.message
           : "Unable to delete planning data",
+        "error",
       );
     }
   }
@@ -353,13 +351,11 @@ export default function PlanningPage() {
     const file = fileInputRef.current?.files?.[0];
 
     if (!file) {
-      setError("Choose an Excel file first.");
+      showToast("Choose an Excel file first.", "error");
       return;
     }
 
     setIsImporting(true);
-    setError(null);
-    setMessage(null);
 
     try {
       const formData = new FormData();
@@ -372,7 +368,7 @@ export default function PlanningPage() {
       });
 
       const body = await readResponse(response);
-      setMessage(`Imported ${body.data.inserted} rows.`);
+      showToast(`Imported ${body.data.inserted} rows.`, "success");
       setIsImportModalOpen(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
@@ -400,10 +396,11 @@ export default function PlanningPage() {
           return;
         }
       } else {
-        setError(
+        showToast(
           importError instanceof Error
             ? importError.message
             : "Unable to import planning data",
+          "error",
         );
       }
     } finally {
@@ -423,19 +420,6 @@ export default function PlanningPage() {
 
   return (
     <DefaultLayout>
-      {error ? (
-        <section className="mb-6 rounded-2xl border border-[#fecdca] bg-[#fef3f2] p-5 text-sm text-[#b42318]">
-          <h2 className="font-semibold text-[#912018]">Planning request failed</h2>
-          <p className="mt-1 break-words text-xs text-[#d92d20]">{error}</p>
-        </section>
-      ) : null}
-
-      {message ? (
-        <section className="mb-6 rounded-2xl border border-[#abefc6] bg-[#ecfdf3] p-5 text-sm font-medium text-[#027a48]">
-          {message}
-        </section>
-      ) : null}
-
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {parts.length === 0
           ? ["Cylblock", "Cylhead", "Camshaft", "Crankshaft"].map((label) => (
@@ -443,8 +427,26 @@ export default function PlanningPage() {
                 key={label}
                 className="rounded-2xl border border-[#e4e7ec] bg-white p-5 shadow-sm"
               >
-                <p className="text-sm font-medium text-[#667085]">{label}</p>
-                <p className="mt-3 text-3xl font-semibold text-[#101828]">-</p>
+                <div className="flex items-center gap-3">
+                  <div className="grid size-11 place-items-center rounded-xl bg-[#f2f4f7] text-sm font-semibold text-[#344054]">
+                    {label.slice(0, 2).toUpperCase()}
+                  </div>
+                  <p className="text-sm font-semibold text-[#101828]">{label}</p>
+                </div>
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <div className="rounded-xl bg-[#f9fafb] p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#98a2b3]">
+                      1TR
+                    </p>
+                    <p className="mt-1 text-xl font-semibold text-[#101828]">-</p>
+                  </div>
+                  <div className="rounded-xl bg-[#f9fafb] p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#98a2b3]">
+                      2TR
+                    </p>
+                    <p className="mt-1 text-xl font-semibold text-[#101828]">-</p>
+                  </div>
+                </div>
               </article>
             ))
           : parts.map((part) => (
@@ -452,136 +454,162 @@ export default function PlanningPage() {
                 key={part.key}
                 className={`rounded-2xl border p-5 text-left shadow-sm transition ${
                   activePart === part.key
-                    ? "border-[#465fff] bg-[#ecf3ff]"
+                    ? "border-[#465fff] bg-[#f5f8ff] ring-4 ring-[#ecf3ff]"
                     : "border-[#e4e7ec] bg-white hover:bg-[#f9fafb]"
                 }`}
                 type="button"
                 onClick={() => selectPart(part.key)}
               >
-                <p className="text-sm font-medium text-[#667085]">{part.label}</p>
-                <p className="mt-3 text-3xl font-semibold text-[#101828]">
-                  {part.count.toLocaleString()}
-                </p>
-                <p className="mt-1 truncate text-xs text-[#667085]">{part.tableName}</p>
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`grid size-11 place-items-center rounded-xl text-sm font-semibold ${
+                      activePart === part.key
+                        ? "bg-[#465fff] text-white"
+                        : "bg-[#f2f4f7] text-[#344054]"
+                    }`}
+                  >
+                    {partIcons[part.key]}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-[#101828]">
+                      {part.label}
+                    </p>
+                    <p className="mt-0.5 text-xs text-[#667085]">
+                      Monthly planning
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <div className="rounded-xl bg-white p-3 shadow-[inset_0_0_0_1px_#e4e7ec]">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#98a2b3]">
+                      1TR
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold text-[#101828]">
+                      {part.oneTrTotal.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-white p-3 shadow-[inset_0_0_0_1px_#e4e7ec]">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#98a2b3]">
+                      2TR
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold text-[#101828]">
+                      {part.twoTrTotal.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
               </button>
             ))}
       </section>
 
-      <section className="mt-6 overflow-hidden rounded-2xl border border-[#e4e7ec] bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-[#e4e7ec] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-[#101828]">Planning Detail</h2>
-            <p className="mt-1 text-sm text-[#667085]">
-              Showing up to 200 rows from the selected table
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {parts.map((part) => (
-              <button
-                key={part.key}
-                className={`h-10 rounded-lg px-3 text-sm font-medium transition ${
-                  activePart === part.key
-                    ? "bg-[#465fff] text-white"
-                    : "border border-[#e4e7ec] text-[#344054] hover:bg-[#f9fafb]"
-                }`}
-                type="button"
-                onClick={() => selectPart(part.key)}
-              >
-                {part.label}
-              </button>
-            ))}
-          </div>
+      <div className="mt-6 border-b-2 border-[#465fff]">
+        <div className="flex gap-3 overflow-x-auto">
+          {parts.map((part) => (
+            <button
+              key={part.key}
+              className={`min-w-[132px] rounded-t-lg border px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.16em] transition ${
+                activePart === part.key
+                  ? "border-[#465fff] bg-[#465fff] text-white shadow-sm"
+                  : "border-[#e4e7ec] bg-[#f9fafb] text-[#98a2b3] hover:bg-[#f2f4f7] hover:text-[#667085]"
+              }`}
+              type="button"
+              onClick={() => selectPart(part.key)}
+            >
+              {part.label}
+            </button>
+          ))}
         </div>
+      </div>
 
+      <section className="overflow-hidden rounded-b-2xl border border-t-0 border-[#e4e7ec] bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-[#e4e7ec] px-5 py-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-          <label className="block w-full text-xs font-semibold uppercase tracking-wide text-[#667085] sm:w-40">
-            Month
-            <input
-              className="mt-1 h-10 w-full rounded-lg border border-[#e4e7ec] px-3 text-sm font-medium normal-case tracking-normal text-[#344054] outline-none focus:border-[#465fff] focus:ring-4 focus:ring-[#ecf3ff]"
-              type="month"
-              value={filterMonth}
-              onChange={(event) => {
-                setDraftRows([]);
-                setFilterMonth(event.target.value || currentMonth);
-                setFilterShift("all");
-                setFilterGroup("all");
-                setIsLoading(true);
-              }}
-            />
-          </label>
-
-          <label className="block w-full text-xs font-semibold uppercase tracking-wide text-[#667085] sm:w-28">
-            Shift
-            <span className="relative mt-1 block">
-              <select
-                className="h-10 w-full appearance-none rounded-lg border border-[#e4e7ec] bg-white pl-3 pr-10 text-sm font-medium normal-case tracking-normal text-[#344054] outline-none focus:border-[#465fff] focus:ring-4 focus:ring-[#ecf3ff]"
-                value={filterShift}
+            <label className="block w-full text-xs font-semibold uppercase tracking-wide text-[#667085] sm:w-40">
+              Month
+              <input
+                className="mt-1 h-10 w-full rounded-lg border border-[#e4e7ec] px-3 text-sm font-medium normal-case tracking-normal text-[#344054] outline-none focus:border-[#465fff] focus:ring-4 focus:ring-[#ecf3ff]"
+                type="month"
+                value={filterMonth}
                 onChange={(event) => {
                   setDraftRows([]);
-                  setFilterShift(event.target.value);
+                  setFilterMonth(event.target.value || currentMonth);
+                  setFilterShift("all");
+                  setFilterGroup("all");
                   setIsLoading(true);
                 }}
-              >
-                <option value="all">All</option>
-                {filterOptions.shifts.map((shift) => (
-                  <option key={shift} value={shift}>
-                    {shift}
-                  </option>
-                ))}
-              </select>
-              <svg
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#667085]"
-              >
-                <path
-                  d="m6 9 6 6 6-6"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="1.8"
-                />
-              </svg>
-            </span>
-          </label>
+              />
+            </label>
 
-          <label className="block w-full text-xs font-semibold uppercase tracking-wide text-[#667085] sm:w-28">
-            Group
-            <span className="relative mt-1 block">
-              <select
-                className="h-10 w-full appearance-none rounded-lg border border-[#e4e7ec] bg-white pl-3 pr-10 text-sm font-medium normal-case tracking-normal text-[#344054] outline-none focus:border-[#465fff] focus:ring-4 focus:ring-[#ecf3ff]"
-                value={filterGroup}
-                onChange={(event) => {
-                  setDraftRows([]);
-                  setFilterGroup(event.target.value);
-                  setIsLoading(true);
-                }}
-              >
-                <option value="all">All</option>
-                {filterOptions.groups.map((group) => (
-                  <option key={group} value={group}>
-                    {group}
-                  </option>
-                ))}
-              </select>
-              <svg
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#667085]"
-              >
-                <path
-                  d="m6 9 6 6 6-6"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="1.8"
-                />
-              </svg>
-            </span>
-          </label>
+            <label className="block w-full text-xs font-semibold uppercase tracking-wide text-[#667085] sm:w-28">
+              Shift
+              <span className="relative mt-1 block">
+                <select
+                  className="h-10 w-full appearance-none rounded-lg border border-[#e4e7ec] bg-white pl-3 pr-10 text-sm font-medium normal-case tracking-normal text-[#344054] outline-none focus:border-[#465fff] focus:ring-4 focus:ring-[#ecf3ff]"
+                  value={filterShift}
+                  onChange={(event) => {
+                    setDraftRows([]);
+                    setFilterShift(event.target.value);
+                    setIsLoading(true);
+                  }}
+                >
+                  <option value="all">All</option>
+                  {filterOptions.shifts.map((shift) => (
+                    <option key={shift} value={shift}>
+                      {shift}
+                    </option>
+                  ))}
+                </select>
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#667085]"
+                >
+                  <path
+                    d="m6 9 6 6 6-6"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.8"
+                  />
+                </svg>
+              </span>
+            </label>
+
+            <label className="block w-full text-xs font-semibold uppercase tracking-wide text-[#667085] sm:w-28">
+              Group
+              <span className="relative mt-1 block">
+                <select
+                  className="h-10 w-full appearance-none rounded-lg border border-[#e4e7ec] bg-white pl-3 pr-10 text-sm font-medium normal-case tracking-normal text-[#344054] outline-none focus:border-[#465fff] focus:ring-4 focus:ring-[#ecf3ff]"
+                  value={filterGroup}
+                  onChange={(event) => {
+                    setDraftRows([]);
+                    setFilterGroup(event.target.value);
+                    setIsLoading(true);
+                  }}
+                >
+                  <option value="all">All</option>
+                  {filterOptions.groups.map((group) => (
+                    <option key={group} value={group}>
+                      {group}
+                    </option>
+                  ))}
+                </select>
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#667085]"
+                >
+                  <path
+                    d="m6 9 6 6 6-6"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.8"
+                  />
+                </svg>
+              </span>
+            </label>
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
@@ -734,7 +762,7 @@ export default function PlanningPage() {
                   Import Excel
                 </h2>
                 <p className="mt-1 text-sm text-[#667085]">
-                  Choose the part table and upload one Excel file.
+                  Upload file untuk {activePartSummary?.label ?? activePart}.
                 </p>
               </div>
               <button
@@ -753,26 +781,6 @@ export default function PlanningPage() {
                   />
                 </svg>
               </button>
-            </div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              {selectableParts.map((part) => (
-                <button
-                  key={part.key}
-                  className={`rounded-xl border p-4 text-left transition ${
-                    modalPart === part.key
-                      ? "border-[#465fff] bg-[#ecf3ff]"
-                      : "border-[#e4e7ec] hover:bg-[#f9fafb]"
-                  }`}
-                  type="button"
-                  onClick={() => setModalPart(part.key)}
-                >
-                  <p className="text-sm font-semibold text-[#101828]">
-                    {part.label}
-                  </p>
-                  <p className="mt-1 text-xs text-[#667085]">{part.tableName}</p>
-                </button>
-              ))}
             </div>
 
             <input
@@ -794,10 +802,36 @@ export default function PlanningPage() {
                 className="h-10 rounded-lg bg-[#465fff] px-4 text-sm font-semibold text-white transition hover:bg-[#3648d9] disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={isImporting}
                 type="button"
-                onClick={() => void uploadExcel(modalPart, false)}
+                onClick={() => void uploadExcel(activePart, false)}
               >
                 {isImporting ? "Importing..." : "Import"}
               </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {toast ? (
+        <div className="fixed bottom-5 right-5 z-[60] w-[min(360px,calc(100vw-40px))]">
+          <section
+            className={`rounded-xl border bg-white p-4 text-sm shadow-lg ${
+              toast.type === "success"
+                ? "border-[#abefc6] text-[#027a48]"
+                : "border-[#fecdca] text-[#b42318]"
+            }`}
+            role="status"
+          >
+            <div className="flex items-start gap-3">
+              <span
+                className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-xs font-semibold ${
+                  toast.type === "success"
+                    ? "bg-[#ecfdf3] text-[#039855]"
+                    : "bg-[#fef3f2] text-[#d92d20]"
+                }`}
+              >
+                {toast.type === "success" ? "✓" : "!"}
+              </span>
+              <p className="min-w-0 break-words font-medium">{toast.message}</p>
             </div>
           </section>
         </div>

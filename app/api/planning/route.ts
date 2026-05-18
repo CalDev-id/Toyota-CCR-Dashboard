@@ -24,7 +24,7 @@ export async function GET(request: Request) {
       group: url.searchParams.get("group") || "all",
     };
     const [summaries, columns] = await Promise.all([
-      getPlanningSummaries(),
+      getPlanningSummaries(filters.month),
       getPlanningColumns(part),
     ]);
     const [rows, filterOptions] = await Promise.all([

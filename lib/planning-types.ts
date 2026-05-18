@@ -21,7 +21,8 @@ export type PlanningPartSummary = {
   label: string;
   tableName: string;
   count: number;
+  oneTrTotal: number;
+  twoTrTotal: number;
 };
 
 export type PlanningRow = Record<string, string | number | boolean | null>;
-
