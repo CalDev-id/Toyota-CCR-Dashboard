@@ -501,46 +501,8 @@ export default function PlanningPage() {
             ))}
       </section>
 
-      <div className="mt-6 border-b-2 border-[#465fff]">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="flex gap-3 overflow-x-auto">
-            {parts.map((part) => (
-              <button
-                key={part.key}
-                className={`min-w-[132px] rounded-t-lg border px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.16em] transition ${
-                  activePart === part.key
-                    ? "border-[#465fff] bg-[#465fff] text-white shadow-sm"
-                    : "border-[#d0d5dd] bg-[#f2f4f7] text-[#667085] shadow-sm hover:bg-[#eaecf0] hover:text-[#344054]"
-                }`}
-                type="button"
-                onClick={() => selectPart(part.key)}
-              >
-                {part.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex flex-col gap-2 pb-2 sm:flex-row lg:justify-end">
-            <button
-              className="h-9 rounded-lg border border-[#e4e7ec] bg-white px-4 text-sm font-semibold text-[#344054] shadow-sm transition hover:bg-[#f9fafb]"
-              type="button"
-              onClick={openImportModal}
-            >
-              Import Excel
-            </button>
-            <button
-              className="h-9 rounded-lg bg-[#465fff] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3648d9]"
-              type="button"
-              onClick={() => addDraftRow()}
-            >
-              Add Row
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <section className="overflow-hidden rounded-b-2xl border border-t-0 border-[#e4e7ec] bg-white shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-[#e4e7ec] px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+      <section className="mt-6 rounded-t-2xl border border-b-0 border-[#e4e7ec] bg-white px-5 pt-5 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-[#101828]">
               {activePartSummary?.label ?? "Planning"} Detail
@@ -641,6 +603,46 @@ export default function PlanningPage() {
           </div>
         </div>
 
+      <div className="mt-5 border-b-2 border-[#84adff]">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex gap-3 overflow-x-auto">
+            {parts.map((part) => (
+              <button
+                key={part.key}
+                className={`min-w-[132px] rounded-t-lg border px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.16em] transition ${
+                  activePart === part.key
+                    ? "border-[#465fff] bg-[#465fff] text-white shadow-sm"
+                    : "border-[#d0d5dd] bg-[#f2f4f7] text-[#667085] shadow-sm hover:bg-[#eaecf0] hover:text-[#344054]"
+                }`}
+                type="button"
+                onClick={() => selectPart(part.key)}
+              >
+                {part.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-2 pb-2 sm:flex-row lg:justify-end">
+            <button
+              className="h-9 rounded-lg border border-[#e4e7ec] bg-white px-4 text-sm font-semibold text-[#344054] shadow-sm transition hover:bg-[#f9fafb]"
+              type="button"
+              onClick={openImportModal}
+            >
+              Import Excel
+            </button>
+            <button
+              className="h-9 rounded-lg bg-[#465fff] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3648d9]"
+              type="button"
+              onClick={() => addDraftRow()}
+            >
+              Add Row
+            </button>
+          </div>
+        </div>
+      </div>
+      </section>
+
+      <section className="overflow-hidden rounded-b-2xl border border-t-0 border-[#e4e7ec] bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[920px] text-left text-sm">
             <thead className="bg-[#f9fafb] text-xs font-medium uppercase tracking-wide text-[#667085]">
