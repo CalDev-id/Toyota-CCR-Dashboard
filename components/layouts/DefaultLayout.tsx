@@ -2,14 +2,43 @@
 
 import DashboardNavigation from "@/components/navigation/DashboardNavigation";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 type DefaultLayoutProps = {
   children: React.ReactNode;
 };
 
+const pageHeaders = [
+  {
+    href: "/planning",
+    title: "Planning",
+    subtitle: "Monthly production planning by part, period, shift, and group",
+  },
+  {
+    href: "/production",
+    title: "Production",
+    subtitle: "Manage production records and output quantities",
+  },
+  {
+    href: "/analysis",
+    title: "Analysis",
+    subtitle: "PPIC performance, material readiness, and inventory trends",
+  },
+  {
+    href: "/",
+    title: "Dashboard",
+    subtitle: "Production planning and inventory control overview",
+  },
+];
+
 export default function DefaultLayout({ children }: DefaultLayoutProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const pathname = usePathname();
+  const pageHeader =
+    pageHeaders.find((item) =>
+      item.href === "/" ? pathname === "/" : pathname.startsWith(item.href),
+    ) ?? pageHeaders[pageHeaders.length - 1];
 
   return (
     <div className="h-screen overflow-hidden bg-[#f9fafb] text-[#101828]">
@@ -101,6 +130,14 @@ export default function DefaultLayout({ children }: DefaultLayoutProps) {
                   </svg>
                 </button>
 
+                <div className="min-w-0">
+                  <h1 className="truncate text-base font-semibold text-[#101828]">
+                    {pageHeader.title}
+                  </h1>
+                  <p className="truncate text-xs font-medium text-[#667085]">
+                    {pageHeader.subtitle}
+                  </p>
+                </div>
               </div>
 
               <div className="flex shrink-0 items-center gap-2">

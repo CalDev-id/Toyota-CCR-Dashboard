@@ -36,6 +36,11 @@ type Toast = {
   type: "success" | "error";
 };
 
+type ImportConflict = {
+  part: PlanningPartKey;
+  conflicts: Array<{ date: string; shift: string; group: string }>;
+};
+
 const defaultPart: PlanningPartKey = "cylblock";
 function getCurrentMonth() {
   const date = new Date();
@@ -49,6 +54,21 @@ const partIcons: Record<PlanningPartKey, string> = {
   camshaft: "CA",
   crankshaft: "CR",
 };
+const partLabels: Record<PlanningPartKey, string> = {
+  cylblock: "Cylblock",
+  cylhead: "Cylhead",
+  camshaft: "Camshaft",
+  crankshaft: "Crankshaft",
+};
+
+const importLineOptions: Array<{ key: PlanningPartKey; label: string }> = [
+  { key: "cylblock", label: "Cylinder block" },
+  { key: "cylhead", label: "Cylinder head" },
+  { key: "camshaft", label: "Camshaft" },
+  { key: "crankshaft", label: "Crankshaft" },
+];
+const shiftOptions = ["1", "2"];
+const groupOptions = ["R", "W"];
 
 async function readResponse(response: Response) {
   const body = await response.json().catch(() => ({}));
@@ -94,6 +114,18 @@ function isVisibleColumn(column: PlanningColumn) {
   return field !== "fid" && field !== "fdatetime_modified";
 }
 
+function isShiftColumn(column: PlanningColumn) {
+  return column.field.toLowerCase() === "shift" || column.field.toLowerCase() === "fshift";
+}
+
+function isGroupColumn(column: PlanningColumn) {
+  return column.field.toLowerCase() === "group" || column.field.toLowerCase() === "fgroup";
+}
+
+function getPartLabel(part: PlanningPartKey) {
+  return partLabels[part];
+}
+
 function formatColumnLabel(field: string) {
   return /^f/i.test(field) ? field.slice(1) : field;
 }
@@ -125,10 +157,6 @@ export default function PlanningPage() {
   const [filterMonth, setFilterMonth] = useState(currentMonth);
   const [filterShift, setFilterShift] = useState("all");
   const [filterGroup, setFilterGroup] = useState("all");
-  const [filterOptions, setFilterOptions] = useState<{
-    shifts: string[];
-    groups: string[];
-  }>({ shifts: [], groups: [] });
   const [draftRows, setDraftRows] = useState<Array<{ id: string }>>([]);
   const [editing, setEditing] = useState<Record<string, Record<string, string>>>({});
   const [toast, setToast] = useState<Toast | null>(null);
@@ -136,6 +164,12 @@ export default function PlanningPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importPart, setImportPart] = useState<PlanningPartKey | "">("");
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    part: PlanningPartKey;
+  } | null>(null);
+  const [importConflict, setImportConflict] = useState<ImportConflict | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const manuallyLoadedPartRef = useRef<PlanningPartKey | null>(null);
 
@@ -192,7 +226,6 @@ export default function PlanningPage() {
       setParts(data.parts);
       setColumns(data.columns);
       setRows(data.rows);
-      setFilterOptions(data.filterOptions);
       setEditing(makeEditing(data.rows, data.columns));
     } catch (loadError) {
       showToast(
@@ -227,7 +260,6 @@ export default function PlanningPage() {
         setParts(data.parts);
         setColumns(data.columns);
         setRows(data.rows);
-        setFilterOptions(data.filterOptions);
         setEditing(makeEditing(data.rows, data.columns));
         setToast(null);
       })
@@ -292,7 +324,7 @@ export default function PlanningPage() {
           body: JSON.stringify(editing[id] ?? {}),
         }),
       );
-      showToast("Planning row created.", "success");
+      showToast(`Data ${getPartLabel(activePart)} berhasil diinput.`, "success");
       setDraftRows((current) => current.filter((row) => row.id !== id));
       await loadPlanning(activePart);
     } catch (createError) {
@@ -316,7 +348,7 @@ export default function PlanningPage() {
           body: JSON.stringify(editing[id] ?? {}),
         }),
       );
-      showToast("Planning row updated.", "success");
+      showToast(`Data ${getPartLabel(activePart)} berhasil diupdate.`, "success");
       await loadPlanning(activePart);
     } catch (updateError) {
       showToast(
@@ -328,15 +360,25 @@ export default function PlanningPage() {
     }
   }
 
-  async function deleteRow(id: string) {
+  async function confirmDeleteRow() {
+    if (!deleteTarget) {
+      return;
+    }
+
+    const { id, part } = deleteTarget;
+    const partLabel = getPartLabel(part);
+
     try {
       await readResponse(
-        await fetch(`/api/planning/${activePart}/${encodeURIComponent(id)}`, {
+        await fetch(`/api/planning/${part}/${encodeURIComponent(id)}`, {
           method: "DELETE",
         }),
       );
-      showToast("Planning row deleted.", "success");
-      await loadPlanning(activePart);
+      showToast(`Data ${partLabel} berhasil dihapus.`, "success");
+      setDeleteTarget(null);
+      if (part === activePart) {
+        await loadPlanning(activePart);
+      }
     } catch (deleteError) {
       showToast(
         deleteError instanceof Error
@@ -349,6 +391,11 @@ export default function PlanningPage() {
 
   async function uploadExcel(part: PlanningPartKey, overwrite = false) {
     const file = fileInputRef.current?.files?.[0];
+
+    if (!part) {
+      showToast("Pilih line terlebih dahulu.", "error");
+      return;
+    }
 
     if (!file) {
       showToast("Choose an Excel file first.", "error");
@@ -368,7 +415,10 @@ export default function PlanningPage() {
       });
 
       const body = await readResponse(response);
-      showToast(`Imported ${body.data.inserted} rows.`, "success");
+      showToast(
+        `Data ${getPartLabel(part)} berhasil diimport (${body.data.inserted} rows).`,
+        "success",
+      );
       setIsImportModalOpen(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
@@ -383,18 +433,7 @@ export default function PlanningPage() {
       const apiError = importError as ApiError;
 
       if (apiError.status === 409 && apiError.conflicts?.length) {
-        const preview = apiError.conflicts
-          .slice(0, 5)
-          .map((conflict) => `${conflict.date} / ${conflict.shift} / ${conflict.group}`)
-          .join("\n");
-        const shouldOverwrite = window.confirm(
-          `Data untuk date, shift, dan group berikut sudah ada:\n${preview}\n\nTimpa data lama dengan file terbaru?`,
-        );
-
-        if (shouldOverwrite) {
-          await uploadExcel(part, true);
-          return;
-        }
+        setImportConflict({ part, conflicts: apiError.conflicts });
       } else {
         showToast(
           importError instanceof Error
@@ -422,16 +461,23 @@ export default function PlanningPage() {
     <DefaultLayout>
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {parts.length === 0
-          ? ["Cylblock", "Cylhead", "Camshaft", "Crankshaft"].map((label) => (
+          ? [
+              { key: "cylblock" as const, label: "Cylblock" },
+              { key: "cylhead" as const, label: "Cylhead" },
+              { key: "camshaft" as const, label: "Camshaft" },
+              { key: "crankshaft" as const, label: "Crankshaft" },
+            ].map((part) => (
               <article
-                key={label}
+                key={part.key}
                 className="rounded-2xl border border-[#e4e7ec] bg-white p-5 shadow-sm"
               >
                 <div className="flex items-center gap-3">
                   <div className="grid size-11 place-items-center rounded-xl bg-[#f2f4f7] text-sm font-semibold text-[#344054]">
-                    {label.slice(0, 2).toUpperCase()}
+                    {partIcons[part.key]}
                   </div>
-                  <p className="text-sm font-semibold text-[#101828]">{label}</p>
+                  <p className="text-sm font-semibold text-[#101828]">
+                    {part.label}
+                  </p>
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-3">
                   <div className="rounded-xl bg-[#f9fafb] p-3">
@@ -449,56 +495,72 @@ export default function PlanningPage() {
                 </div>
               </article>
             ))
-          : parts.map((part) => (
-              <button
-                key={part.key}
-                className={`rounded-2xl border p-5 text-left shadow-sm transition ${
-                  activePart === part.key
-                    ? "border-[#465fff] bg-[#f5f8ff] ring-4 ring-[#ecf3ff]"
-                    : "border-[#e4e7ec] bg-white hover:bg-[#f9fafb]"
-                }`}
-                type="button"
-                onClick={() => selectPart(part.key)}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`grid size-11 place-items-center rounded-xl text-sm font-semibold ${
-                      activePart === part.key
-                        ? "bg-[#465fff] text-white"
-                        : "bg-[#f2f4f7] text-[#344054]"
-                    }`}
-                  >
-                    {partIcons[part.key]}
+          : parts.map((part) => {
+              const partTotal = part.oneTrTotal + part.twoTrTotal;
+              const oneTrPercentage =
+                partTotal > 0 ? Math.round((part.oneTrTotal / partTotal) * 100) : 0;
+              const twoTrPercentage =
+                partTotal > 0 ? Math.round((part.twoTrTotal / partTotal) * 100) : 0;
+
+              return (
+                <article
+                  key={part.key}
+                  className="rounded-2xl border border-[#e4e7ec] bg-white p-5 shadow-sm"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#f2f4f7] text-sm font-semibold text-[#344054]">
+                      {partIcons[part.key]}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[#101828]">
+                        {part.label}
+                      </p>
+                      <p className="mt-0.5 text-xs text-[#667085]">
+                        Monthly planning
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-[#101828]">
-                      {part.label}
-                    </p>
-                    <p className="mt-0.5 text-xs text-[#667085]">
-                      Monthly planning
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-5 grid grid-cols-2 gap-3">
-                  <div className="rounded-xl bg-white p-3 shadow-[inset_0_0_0_1px_#e4e7ec]">
+
+                  <div className="mt-5 rounded-xl bg-[#f9fafb] p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-[#98a2b3]">
-                      1TR
+                      Total Plan
                     </p>
-                    <p className="mt-1 text-2xl font-semibold text-[#101828]">
-                      {part.oneTrTotal.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="rounded-xl bg-white p-3 shadow-[inset_0_0_0_1px_#e4e7ec]">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[#98a2b3]">
-                      2TR
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold text-[#101828]">
-                      {part.twoTrTotal.toLocaleString()}
+                    <p className="mt-1 text-3xl font-semibold text-[#101828]">
+                      {partTotal.toLocaleString()}
                     </p>
                   </div>
-                </div>
-              </button>
-            ))}
+
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-[#f9fafb] p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[#98a2b3]">
+                          1TR
+                        </p>
+                        <span className="text-xs font-semibold text-[#039855]">
+                          {oneTrPercentage}%
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xl font-semibold text-[#101828]">
+                        {part.oneTrTotal.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-[#f9fafb] p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[#98a2b3]">
+                          2TR
+                        </p>
+                        <span className="text-xs font-semibold text-[#465fff]">
+                          {twoTrPercentage}%
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xl font-semibold text-[#101828]">
+                        {part.twoTrTotal.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
       </section>
 
       <section className="mt-6 rounded-t-2xl border border-b-0 border-[#e4e7ec] bg-white px-5 pt-5 shadow-sm">
@@ -542,7 +604,7 @@ export default function PlanningPage() {
                   }}
                 >
                   <option value="all">All</option>
-                  {filterOptions.shifts.map((shift) => (
+                  {shiftOptions.map((shift) => (
                     <option key={shift} value={shift}>
                       {shift}
                     </option>
@@ -578,7 +640,7 @@ export default function PlanningPage() {
                   }}
                 >
                   <option value="all">All</option>
-                  {filterOptions.groups.map((group) => (
+                  {groupOptions.map((group) => (
                     <option key={group} value={group}>
                       {group}
                     </option>
@@ -697,6 +759,45 @@ export default function PlanningPage() {
                             <span className="rounded-full bg-[#fef0c7] px-2.5 py-1 text-xs font-medium text-[#b54708]">
                               New
                             </span>
+                          ) : (isDraft || isUpdateField(column)) &&
+                            (isShiftColumn(column) || isGroupColumn(column)) ? (
+                            <span className="relative block w-40">
+                              <select
+                                value={editing[rowId]?.[column.field] ?? ""}
+                                onChange={(event) =>
+                                  setEditingValue(
+                                    rowId,
+                                    column.field,
+                                    event.target.value,
+                                  )
+                                }
+                                className="h-10 w-full appearance-none rounded-lg border border-[#e4e7ec] bg-white pl-3 pr-9 text-sm text-[#344054] outline-none focus:border-[#465fff]"
+                              >
+                                <option value="">Pilih</option>
+                                {(isShiftColumn(column)
+                                  ? shiftOptions
+                                  : groupOptions
+                                ).map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
+                              <svg
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                                className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#667085]"
+                              >
+                                <path
+                                  d="m6 9 6 6 6-6"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="1.8"
+                                />
+                              </svg>
+                            </span>
                           ) : isDraft || isUpdateField(column) ? (
                             <input
                               value={editing[rowId]?.[column.field] ?? ""}
@@ -750,7 +851,7 @@ export default function PlanningPage() {
                                 return;
                               }
 
-                              void deleteRow(rowId);
+                              setDeleteTarget({ id: rowId, part: activePart });
                             }}
                           >
                             {isDraft ? "Cancel" : "Delete"}
@@ -767,15 +868,15 @@ export default function PlanningPage() {
       </section>
 
       {isImportModalOpen ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-[#101828]/40 px-4">
-          <section className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#101828]/40 px-4 py-6">
+          <section className="max-h-[calc(100vh-48px)] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-[#101828]">
-                  Import Excel
+                  Import plan daily production
                 </h2>
                 <p className="mt-1 text-sm text-[#667085]">
-                  Upload file untuk {activePartSummary?.label ?? activePart}.
+                  Upload Excel berdasarkan line yang dipilih.
                 </p>
               </div>
               <button
@@ -796,12 +897,79 @@ export default function PlanningPage() {
               </button>
             </div>
 
-            <input
-              ref={fileInputRef}
-              className="mt-5 h-11 w-full rounded-lg border border-[#e4e7ec] px-3 py-2 text-sm text-[#344054] file:mr-3 file:rounded-md file:border-0 file:bg-[#f2f4f7] file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-[#344054]"
-              type="file"
-              accept=".xlsx,.xls"
-            />
+            <div className="mt-5 rounded-xl border border-[#d6e4ff] bg-[#f5f8ff] p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-semibold text-[#101828]">Format import</p>
+                <a
+                  className="inline-flex h-9 items-center justify-center rounded-lg border border-[#b2ccff] bg-white px-3 text-sm font-semibold text-[#344054] transition hover:bg-[#eff4ff]"
+                  href="/template_import_plan.xlsx"
+                  download
+                >
+                  Download format
+                </a>
+              </div>
+              <ul className="mt-4 grid gap-2 text-sm text-[#344054] sm:grid-cols-2">
+                {[
+                  "Format tanggal YYYY-MM-DD",
+                  "Shift hanya 1/2",
+                  "Group hanya R/W",
+                  "1TR dan 2TR wajib angka",
+                  "OT boleh decimal",
+                  "Jika data sudah ada maka akan update",
+                ].map((rule) => (
+                  <li key={rule} className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0 text-xs font-semibold text-[#039855]">
+                      ✓
+                    </span>
+                    <span className="leading-5">{rule}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <label className="mt-4 block text-sm font-medium text-[#344054]">
+              File Excel
+              <input
+                ref={fileInputRef}
+                className="mt-1 block h-11 w-full cursor-pointer rounded-lg border border-[#e4e7ec] bg-white text-sm text-[#667085] outline-none file:h-full file:border-0 file:border-r file:border-[#e4e7ec] file:bg-[#f9fafb] file:px-4 file:text-sm file:font-semibold file:text-[#344054] hover:file:bg-[#f2f4f7] focus:border-[#465fff] focus:ring-4 focus:ring-[#ecf3ff]"
+                type="file"
+                accept=".xlsx,.xls"
+              />
+            </label>
+
+            <label className="mt-4 block text-sm font-medium text-[#344054]">
+              Line
+              <span className="relative mt-1 block">
+                <select
+                  className="h-11 w-full appearance-none rounded-lg border border-[#e4e7ec] bg-white pl-3 pr-10 text-sm text-[#344054] outline-none focus:border-[#465fff] focus:ring-4 focus:ring-[#ecf3ff]"
+                  value={importPart}
+                  onChange={(event) =>
+                    setImportPart(event.target.value as PlanningPartKey | "")
+                  }
+                >
+                  <option value="">Pilih</option>
+                  {importLineOptions.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#667085]"
+                >
+                  <path
+                    d="m6 9 6 6 6-6"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.8"
+                  />
+                </svg>
+              </span>
+            </label>
 
             <div className="mt-6 flex justify-end gap-2">
               <button
@@ -815,9 +983,140 @@ export default function PlanningPage() {
                 className="h-10 rounded-lg bg-[#465fff] px-4 text-sm font-semibold text-white transition hover:bg-[#3648d9] disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={isImporting}
                 type="button"
-                onClick={() => void uploadExcel(activePart, false)}
+                onClick={() => {
+                  if (!importPart) {
+                    showToast("Pilih line terlebih dahulu.", "error");
+                    return;
+                  }
+
+                  void uploadExcel(importPart, false);
+                }}
               >
                 {isImporting ? "Importing..." : "Import"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {deleteTarget ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#101828]/40 px-4">
+          <section className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="flex items-start gap-4">
+              <div className="grid size-11 shrink-0 place-items-center rounded-full bg-[#fef3f2] text-[#d92d20]">
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
+                  <path
+                    d="M12 8v5M12 16.5h.01M10.3 4.9 3.7 16.6A2.2 2.2 0 0 0 5.6 20h12.8a2.2 2.2 0 0 0 1.9-3.4L13.7 4.9a2 2 0 0 0-3.4 0Z"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.8"
+                  />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-[#101828]">
+                  Hapus data {getPartLabel(deleteTarget.part)}?
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-[#667085]">
+                  Data yang sudah dihapus tidak bisa dikembalikan. Pastikan data
+                  ini memang sudah tidak dibutuhkan.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                className="h-10 rounded-lg border border-[#e4e7ec] px-4 text-sm font-semibold text-[#344054] transition hover:bg-[#f9fafb]"
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="h-10 rounded-lg bg-[#d92d20] px-4 text-sm font-semibold text-white transition hover:bg-[#b42318]"
+                type="button"
+                onClick={() => void confirmDeleteRow()}
+              >
+                Hapus
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {importConflict ? (
+        <div className="fixed inset-0 z-[55] grid place-items-center bg-[#101828]/40 px-4">
+          <section className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+            <div className="flex items-start gap-4">
+              <div className="grid size-11 shrink-0 place-items-center rounded-full bg-[#fffaeb] text-[#b54708]">
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
+                  <path
+                    d="M12 8v5M12 16.5h.01M10.3 4.9 3.7 16.6A2.2 2.2 0 0 0 5.6 20h12.8a2.2 2.2 0 0 0 1.9-3.4L13.7 4.9a2 2 0 0 0-3.4 0Z"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.8"
+                  />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-[#101828]">
+                  Data {getPartLabel(importConflict.part)} sudah ada
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-[#667085]">
+                  Beberapa kombinasi tanggal, shift, dan group sudah tersimpan.
+                  Jika dilanjutkan, data lama akan diupdate memakai file terbaru.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-xl border border-[#fedf89] bg-[#fffaeb] p-4">
+              <p className="text-sm font-semibold text-[#93370d]">
+                Data yang bentrok
+              </p>
+              <div className="mt-3 max-h-40 overflow-y-auto rounded-lg bg-white">
+                {importConflict.conflicts.slice(0, 8).map((conflict) => (
+                  <div
+                    key={`${conflict.date}-${conflict.shift}-${conflict.group}`}
+                    className="grid grid-cols-3 gap-2 border-b border-[#fef0c7] px-3 py-2 text-sm last:border-b-0"
+                  >
+                    <span className="font-medium text-[#101828]">
+                      {conflict.date}
+                    </span>
+                    <span className="text-[#667085]">Shift {conflict.shift}</span>
+                    <span className="text-[#667085]">Group {conflict.group}</span>
+                  </div>
+                ))}
+              </div>
+              {importConflict.conflicts.length > 8 ? (
+                <p className="mt-2 text-xs font-medium text-[#b54708]">
+                  +{importConflict.conflicts.length - 8} data lainnya
+                </p>
+              ) : null}
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                className="h-10 rounded-lg border border-[#e4e7ec] px-4 text-sm font-semibold text-[#344054] transition hover:bg-[#f9fafb]"
+                type="button"
+                onClick={() => setImportConflict(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="h-10 rounded-lg bg-[#b54708] px-4 text-sm font-semibold text-white transition hover:bg-[#93370d] disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isImporting}
+                type="button"
+                onClick={() => {
+                  const part = importConflict.part;
+                  setImportConflict(null);
+                  void uploadExcel(part, true);
+                }}
+              >
+                {isImporting ? "Updating..." : "Update data lama"}
               </button>
             </div>
           </section>
