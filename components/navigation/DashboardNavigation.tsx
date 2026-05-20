@@ -68,16 +68,34 @@ const navigationItems = [
       </svg>
     ),
   },
+  {
+    label: "Users",
+    href: "/users",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
+        <path
+          d="M8.25 11.25a3.25 3.25 0 1 0 0-6.5 3.25 3.25 0 0 0 0 6.5ZM3.25 19.25c.52-3.25 2.38-5 5-5s4.48 1.75 5 5M16 9.25h4.5M18.25 7v4.5M15 19.25h5.75"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.8"
+        />
+      </svg>
+    ),
+  },
 ];
 
 type DashboardNavigationProps = {
   compact?: boolean;
   collapsed?: boolean;
+  onNavigate?: () => void;
 };
 
 export default function DashboardNavigation({
   compact = false,
   collapsed = false,
+  onNavigate,
 }: DashboardNavigationProps) {
   const pathname = usePathname();
 
@@ -88,7 +106,9 @@ export default function DashboardNavigation({
     >
       {navigationItems.map((item) => {
         const isActive =
-          item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+          item.href === "/"
+            ? pathname === "/"
+            : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
         return (
           <Link
@@ -96,6 +116,7 @@ export default function DashboardNavigation({
             href={item.href}
             aria-current={isActive ? "page" : undefined}
             title={collapsed ? item.label : undefined}
+            onClick={onNavigate}
             className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
               isActive
                 ? "bg-[#ecf3ff] text-[#465fff]"

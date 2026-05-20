@@ -2,7 +2,8 @@
 
 import DashboardNavigation from "@/components/navigation/DashboardNavigation";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { signOut, useSession } from "next-auth/react";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
 type DefaultLayoutProps = {
@@ -18,12 +19,17 @@ const pageHeaders = [
   {
     href: "/production",
     title: "Production",
-    subtitle: "Manage production records and output quantities",
+    subtitle: "Cylblock OEE, production attainment, overtime, and shift performance",
   },
   {
     href: "/analysis",
     title: "Analysis",
     subtitle: "PPIC performance, material readiness, and inventory trends",
+  },
+  {
+    href: "/users",
+    title: "Users",
+    subtitle: "Manage dashboard login accounts",
   },
   {
     href: "/",
@@ -34,15 +40,100 @@ const pageHeaders = [
 
 export default function DefaultLayout({ children }: DefaultLayoutProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const { data: session } = useSession();
   const pathname = usePathname();
+  const router = useRouter();
+  const userName = session?.user?.name ?? "User CCR";
+  const userEmail = session?.user?.email ?? "Signed in";
+  const userInitials = userName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "UC";
   const pageHeader =
     pageHeaders.find((item) =>
       item.href === "/" ? pathname === "/" : pathname.startsWith(item.href),
     ) ?? pageHeaders[pageHeaders.length - 1];
 
+  async function handleLogout() {
+    setIsProfileMenuOpen(false);
+    await signOut({ redirect: false });
+    router.push("/login");
+    router.refresh();
+  }
+
   return (
     <div className="h-screen overflow-hidden bg-[#f9fafb] text-[#101828]">
       <div className="flex h-full overflow-hidden">
+        <div
+          className={`fixed inset-0 z-40 bg-[#101828]/40 transition-opacity lg:hidden ${
+            isMobileSidebarOpen
+              ? "opacity-100"
+              : "pointer-events-none opacity-0"
+          }`}
+          aria-hidden="true"
+          onClick={() => setIsMobileSidebarOpen(false)}
+        />
+
+        <aside
+          id="mobile-sidebar"
+          className={`fixed inset-y-0 left-0 z-50 flex w-[290px] max-w-[calc(100vw-48px)] flex-col border-r border-[#e4e7ec] bg-white shadow-xl transition-transform duration-200 ease-out lg:hidden ${
+            isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+          aria-label="Mobile sidebar"
+          aria-hidden={!isMobileSidebarOpen}
+        >
+          <div className="flex h-20 items-center justify-between gap-3 border-b border-[#e4e7ec] px-5">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="grid h-10 w-14 shrink-0 place-items-center overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
+                <Image
+                  src="/images/tmmin_logo.png"
+                  alt="TMMIN logo"
+                  width={800}
+                  height={344}
+                  className="h-7 w-auto object-contain"
+                  priority
+                />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold tracking-tight text-[#101828]">
+                  Toyota CCR
+                </p>
+                <p className="truncate text-xs font-medium text-[#667085]">
+                  PPIC & Warehouse
+                </p>
+              </div>
+            </div>
+
+            <button
+              className="grid size-10 shrink-0 place-items-center rounded-lg border border-[#e4e7ec] bg-white text-[#667085] transition hover:bg-[#f9fafb] hover:text-[#101828]"
+              aria-label="Close sidebar"
+              onClick={() => setIsMobileSidebarOpen(false)}
+              type="button"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
+                <path
+                  d="m6 6 12 12M18 6 6 18"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="1.8"
+                />
+              </svg>
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-4 py-6">
+            <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wide text-[#98a2b3]">
+              Menu
+            </p>
+            <DashboardNavigation onNavigate={() => setIsMobileSidebarOpen(false)} />
+          </div>
+        </aside>
+
         <aside
           className={`relative z-40 hidden h-full shrink-0 border-r border-[#e4e7ec] bg-white transition-[width] duration-200 ease-out lg:flex lg:flex-col ${
             isSidebarCollapsed ? "w-[92px]" : "w-[290px]"
@@ -115,8 +206,11 @@ export default function DefaultLayout({ children }: DefaultLayoutProps) {
             <div className="flex min-h-16 items-center justify-between gap-3 px-4 py-3 md:px-6">
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <button
-                  className="grid size-10 place-items-center rounded-lg border border-[#e4e7ec] bg-white text-[#667085] transition hover:bg-[#f9fafb] hover:text-[#101828] lg:hidden"
+                  className="grid size-10 shrink-0 place-items-center rounded-lg border border-[#e4e7ec] bg-white text-[#667085] transition hover:bg-[#f9fafb] hover:text-[#101828] lg:hidden"
                   aria-label="Open sidebar"
+                  aria-expanded={isMobileSidebarOpen}
+                  aria-controls="mobile-sidebar"
+                  onClick={() => setIsMobileSidebarOpen((current) => !current)}
                   type="button"
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
@@ -196,44 +290,103 @@ export default function DefaultLayout({ children }: DefaultLayoutProps) {
                   </button>
                 ))}
 
-                <button
-                  className="ml-1 flex h-11 items-center gap-3 rounded-full border border-[#e4e7ec] bg-white py-1 pl-1 pr-3 transition hover:bg-[#f9fafb]"
-                  type="button"
-                >
-                  <span className="grid size-9 place-items-center rounded-full bg-[#101828] text-xs font-semibold text-white">
-                    AD
-                  </span>
-                  <span className="hidden text-left sm:block">
-                    <span className="block text-sm font-medium leading-4 text-[#101828]">
-                      Admin CCR
-                    </span>
-                    <span className="mt-0.5 block text-xs text-[#667085]">
-                      PPIC Team
-                    </span>
-                  </span>
-                  <svg
-                    viewBox="0 0 20 20"
-                    aria-hidden="true"
-                    className="hidden size-4 text-[#667085] sm:block"
-                  >
-                    <path
-                      d="m5 7.5 5 5 5-5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="1.7"
+                <div className="relative ml-1">
+                  {isProfileMenuOpen ? (
+                    <button
+                      className="fixed inset-0 z-40 cursor-default"
+                      type="button"
+                      aria-label="Close profile menu"
+                      onClick={() => setIsProfileMenuOpen(false)}
                     />
-                  </svg>
-                </button>
+                  ) : null}
+
+                  <button
+                    className="relative z-50 flex h-11 items-center gap-3 rounded-full border border-[#e4e7ec] bg-white py-1 pl-1 pr-3 transition hover:bg-[#f9fafb]"
+                    type="button"
+                    onClick={() => setIsProfileMenuOpen((current) => !current)}
+                    aria-expanded={isProfileMenuOpen}
+                    aria-haspopup="menu"
+                  >
+                    <span className="grid size-9 place-items-center rounded-full bg-[#101828] text-xs font-semibold text-white">
+                      {userInitials}
+                    </span>
+                    <span className="hidden text-left sm:block">
+                      <span className="block text-sm font-medium leading-4 text-[#101828]">
+                        {userName}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-[#667085]">
+                        {userEmail}
+                      </span>
+                    </span>
+                    <svg
+                      viewBox="0 0 20 20"
+                      aria-hidden="true"
+                      className={`hidden size-4 text-[#667085] transition-transform sm:block ${
+                        isProfileMenuOpen ? "rotate-180" : ""
+                      }`}
+                    >
+                      <path
+                        d="m5 7.5 5 5 5-5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="1.7"
+                      />
+                    </svg>
+                  </button>
+
+                  {isProfileMenuOpen ? (
+                    <div
+                      className="absolute right-0 top-13 z-50 w-72 overflow-hidden rounded-xl border border-[#e4e7ec] bg-white shadow-lg"
+                      role="menu"
+                    >
+                      <div className="border-b border-[#e4e7ec] p-4">
+                        <div className="flex items-center gap-3">
+                          <span className="grid size-10 place-items-center rounded-full bg-[#101828] text-xs font-semibold text-white">
+                            {userInitials}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-[#101828]">
+                              {userName}
+                            </p>
+                            <p className="mt-0.5 truncate text-xs text-[#667085]">
+                              {userEmail}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-2">
+                        <button
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[#b42318] transition hover:bg-[#fef3f2]"
+                          type="button"
+                          role="menuitem"
+                          onClick={handleLogout}
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                            className="size-5"
+                          >
+                            <path
+                              d="M9.75 6.75V5.5a1.75 1.75 0 0 1 1.75-1.75h5A1.75 1.75 0 0 1 18.25 5.5v13a1.75 1.75 0 0 1-1.75 1.75h-5a1.75 1.75 0 0 1-1.75-1.75v-1.25M4.75 12h9M11 8.75 14.25 12 11 15.25"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="1.8"
+                            />
+                          </svg>
+                          Logout
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
 
-            <div className="mt-4 lg:hidden">
-              <div className="rounded-lg border border-[#e4e7ec] bg-[#f9fafb] p-2">
-                <DashboardNavigation compact />
-              </div>
-            </div>
           </header>
 
           <main>
