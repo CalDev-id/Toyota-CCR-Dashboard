@@ -1,8 +1,17 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #f9fafb;
   --foreground: #101828;
+  --surface: #ffffff;
+  --surface-muted: #f9fafb;
+  --surface-subtle: #f2f4f7;
+  --border: #e4e7ec;
+  --border-strong: #d0d5dd;
+  --text-muted: #667085;
+  --text-subtle: #98a2b3;
   --brand-25: #f2f7ff;
   --brand-50: #ecf3ff;
   --brand-100: #dde9ff;
@@ -16,6 +25,48 @@
   --gray-700: #344054;
   --gray-800: #1d2939;
   --gray-900: #101828;
+  --success-surface: #ecfdf3;
+  --success-text: #027a48;
+  --error-surface: #fef3f2;
+  --error-border: #fecdca;
+  --error-text: #b42318;
+  --warning-surface: #fffaeb;
+  --warning-border: #fedf89;
+  --warning-text: #b54708;
+}
+
+html.dark {
+  --background: #0b111d;
+  --foreground: #f8fafc;
+  --surface: #111827;
+  --surface-muted: #162033;
+  --surface-subtle: #1f2937;
+  --border: #273449;
+  --border-strong: #384860;
+  --text-muted: #a7b0c0;
+  --text-subtle: #7f8a9d;
+  --brand-25: #101b3c;
+  --brand-50: #14245a;
+  --brand-100: #1f3478;
+  --brand-500: #8da2ff;
+  --brand-600: #a6b6ff;
+  --gray-25: #101725;
+  --gray-50: #111827;
+  --gray-100: #1f2937;
+  --gray-200: #273449;
+  --gray-500: #a7b0c0;
+  --gray-700: #d4dae5;
+  --gray-800: #e8edf5;
+  --gray-900: #f8fafc;
+  --success-surface: #062b1b;
+  --success-text: #75e0a7;
+  --error-surface: #3b1111;
+  --error-border: #7a271a;
+  --error-text: #fda29b;
+  --warning-surface: #3a2604;
+  --warning-border: #7a4f01;
+  --warning-text: #fdb022;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -50,15 +101,159 @@ html {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--gray-100);
+  background: var(--surface-subtle);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d0d5dd;
-  border: 2px solid var(--gray-100);
+  background: var(--border-strong);
+  border: 2px solid var(--surface-subtle);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--brand-500);
+}
+
+input,
+select,
+textarea {
+  background-color: var(--surface);
+  color: var(--foreground);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-subtle);
+}
+
+html.dark img {
+  color-scheme: light;
+}
+
+html.dark :where(.bg-white) {
+  background-color: var(--surface);
+}
+
+html.dark :where(.bg-\[\#f9fafb\]) {
+  background-color: var(--surface-muted);
+}
+
+html.dark :where(.bg-\[\#f2f4f7\], .hover\:bg-\[\#f2f4f7\]:hover, .hover\:bg-\[\#eaecf0\]:hover) {
+  background-color: var(--surface-subtle);
+}
+
+html.dark :where(.hover\:bg-\[\#f9fafb\]:hover, .group:hover .group-hover\:bg-white) {
+  background-color: var(--surface-muted);
+}
+
+html.dark :where(.bg-\[\#ecf3ff\], .bg-\[\#f2f7ff\], .bg-\[\#f5f8ff\], .hover\:bg-\[\#eff4ff\]:hover) {
+  background-color: var(--brand-50);
+}
+
+html.dark :where(.bg-\[\#ecfdf3\]) {
+  background-color: var(--success-surface);
+}
+
+html.dark :where(.bg-\[\#fef3f2\], .hover\:bg-\[\#fef3f2\]:hover) {
+  background-color: var(--error-surface);
+}
+
+html.dark :where(.bg-\[\#fffaeb\], .bg-\[\#fffcf5\]) {
+  background-color: var(--warning-surface);
+}
+
+html.dark :where(.bg-\[\#fef0c7\]) {
+  background-color: #533814;
+}
+
+html.dark :where(.border-\[\#e4e7ec\], .divide-\[\#e4e7ec\] > :not([hidden]) ~ :not([hidden])) {
+  border-color: var(--border);
+}
+
+html.dark .divide-\[\#e4e7ec\] > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--border) !important;
+}
+
+html.dark table :where(thead, tbody, tr, th, td) {
+  border-color: var(--border);
+}
+
+html.dark :where(.border-\[\#d0d5dd\], .border-\[\#d6e4ff\], .border-\[\#b2ccff\]) {
+  border-color: var(--border-strong);
+}
+
+html.dark :where(.border-\[\#fecdca\]) {
+  border-color: var(--error-border);
+}
+
+html.dark :where(.border-\[\#fedf89\], .border-\[\#fef0c7\]) {
+  border-color: var(--warning-border);
+}
+
+html.dark :where(.border-\[\#84adff\]) {
+  border-color: var(--brand-500);
+}
+
+html.dark :where(.text-\[\#101828\]) {
+  color: var(--foreground);
+}
+
+html.dark :where(.text-\[\#344054\]) {
+  color: var(--gray-700);
+}
+
+html.dark :where(.text-\[\#667085\]) {
+  color: var(--text-muted);
+}
+
+html.dark :where(.text-\[\#98a2b3\]) {
+  color: var(--text-subtle);
+}
+
+html.dark :where(.text-\[\#465fff\]) {
+  color: var(--brand-500);
+}
+
+html.dark :where(.text-\[\#027a48\], .text-\[\#039855\]) {
+  color: var(--success-text);
+}
+
+html.dark :where(.text-\[\#b42318\], .text-\[\#d92d20\]) {
+  color: var(--error-text);
+}
+
+html.dark :where(.text-\[\#93370d\], .text-\[\#b54708\]) {
+  color: var(--warning-text);
+}
+
+html.dark :where(.ring-white) {
+  --tw-ring-color: var(--surface);
+}
+
+html.dark :where(.focus\:ring-\[\#ecf3ff\]:focus) {
+  --tw-ring-color: color-mix(in srgb, var(--brand-500) 28%, transparent);
+}
+
+html.dark :where(.shadow-sm, .shadow-lg, .shadow-xl) {
+  --tw-shadow-color: rgb(0 0 0 / 0.5);
+}
+
+html.dark .theme-logo-surface {
+  background-color: #ffffff;
+}
+
+html.dark svg [fill="#ffffff"] {
+  fill: var(--surface);
+}
+
+html.dark svg [stroke="#e4e7ec"] {
+  stroke: var(--border);
+}
+
+html.dark svg [stroke="#f9fafb"] {
+  stroke: var(--surface-muted);
+}
+
+html.dark svg [fill="#344054"] {
+  fill: var(--text-muted);
 }

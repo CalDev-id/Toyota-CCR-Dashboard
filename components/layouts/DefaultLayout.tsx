@@ -4,11 +4,40 @@ import DashboardNavigation from "@/components/navigation/DashboardNavigation";
 import Image from "next/image";
 import { signOut, useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 type DefaultLayoutProps = {
   children: React.ReactNode;
 };
+
+type Theme = "light" | "dark";
+
+const themeStorageKey = "toyota-ccr-theme";
+const themeChangeEvent = "toyota-ccr-theme-change";
+
+function getThemeSnapshot(): Theme {
+  return window.localStorage.getItem(themeStorageKey) === "dark" ? "dark" : "light";
+}
+
+function getServerThemeSnapshot(): Theme {
+  return "light";
+}
+
+function subscribeTheme(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(themeChangeEvent, onStoreChange);
+
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(themeChangeEvent, onStoreChange);
+  };
+}
+
+function saveTheme(theme: Theme) {
+  document.documentElement.classList.toggle("dark", theme === "dark");
+  window.localStorage.setItem(themeStorageKey, theme);
+  window.dispatchEvent(new Event(themeChangeEvent));
+}
 
 const pageHeaders = [
   {
@@ -42,6 +71,11 @@ export default function DefaultLayout({ children }: DefaultLayoutProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const theme = useSyncExternalStore(
+    subscribeTheme,
+    getThemeSnapshot,
+    getServerThemeSnapshot,
+  );
   const { data: session } = useSession();
   const pathname = usePathname();
   const router = useRouter();
@@ -57,12 +91,17 @@ export default function DefaultLayout({ children }: DefaultLayoutProps) {
     pageHeaders.find((item) =>
       item.href === "/" ? pathname === "/" : pathname.startsWith(item.href),
     ) ?? pageHeaders[pageHeaders.length - 1];
+  const isDarkMode = theme === "dark";
 
   async function handleLogout() {
     setIsProfileMenuOpen(false);
     await signOut({ redirect: false });
     router.push("/login");
     router.refresh();
+  }
+
+  function toggleTheme() {
+    saveTheme(isDarkMode ? "light" : "dark");
   }
 
   return (
@@ -88,7 +127,7 @@ export default function DefaultLayout({ children }: DefaultLayoutProps) {
         >
           <div className="flex h-20 items-center justify-between gap-3 border-b border-[#e4e7ec] px-5">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="grid h-10 w-14 shrink-0 place-items-center overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
+              <div className="theme-logo-surface grid h-10 w-14 shrink-0 place-items-center overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
                 <Image
                   src="/images/tmmin_logo.png"
                   alt="TMMIN logo"
@@ -168,7 +207,7 @@ export default function DefaultLayout({ children }: DefaultLayoutProps) {
               isSidebarCollapsed ? "justify-center" : "gap-3"
             }`}
           >
-            <div className="grid h-10 w-14 shrink-0 place-items-center overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
+            <div className="theme-logo-surface grid h-10 w-14 shrink-0 place-items-center overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
               <Image
                 src="/images/tmmin_logo.png"
                 alt="TMMIN logo"
@@ -235,22 +274,41 @@ export default function DefaultLayout({ children }: DefaultLayoutProps) {
               </div>
 
               <div className="flex shrink-0 items-center gap-2">
-                {[
-                  // {
-                  //   label: "Toggle theme",
-                  //   icon: (
-                  //     <path
-                  //       d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.8 6.8 0 0 0 9.8 9.8Z"
-                  //       fill="none"
-                  //       stroke="currentColor"
-                  //       strokeLinejoin="round"
-                  //       strokeWidth="1.8"
-                  //     />
-                  //   ),
-                  // },
-                  {
-                    label: "Notifications",
-                    icon: (
+                <button
+                  aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+                  aria-pressed={isDarkMode}
+                  className="relative grid size-10 place-items-center rounded-full border border-[#e4e7ec] bg-white text-[#667085] transition hover:bg-[#f9fafb] hover:text-[#101828]"
+                  type="button"
+                  onClick={toggleTheme}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
+                    {isDarkMode ? (
+                      <path
+                        d="M12 4.25V3m0 18v-1.25M5.52 5.52l-.88-.88m14.72 14.72-.88-.88M4.25 12H3m18 0h-1.25M5.52 18.48l-.88.88M19.36 4.64l-.88.88M16.25 12a4.25 4.25 0 1 1-8.5 0 4.25 4.25 0 0 1 8.5 0Z"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="1.8"
+                      />
+                    ) : (
+                      <path
+                        d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.8 6.8 0 0 0 9.8 9.8Z"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeLinejoin="round"
+                        strokeWidth="1.8"
+                      />
+                    )}
+                  </svg>
+                </button>
+
+                <button
+                  aria-label="Notifications"
+                  className="relative grid size-10 place-items-center rounded-full border border-[#e4e7ec] bg-white text-[#667085] transition hover:bg-[#f9fafb] hover:text-[#101828]"
+                  type="button"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
                       <path
                         d="M18 9.75a6 6 0 0 0-12 0c0 6-2 6.5-2 6.5h16s-2-.5-2-6.5ZM10 19h4"
                         fill="none"
@@ -259,36 +317,9 @@ export default function DefaultLayout({ children }: DefaultLayoutProps) {
                         strokeLinejoin="round"
                         strokeWidth="1.8"
                       />
-                    ),
-                  },
-                  // {
-                  //   label: "Messages",
-                  //   icon: (
-                  //     <path
-                  //       d="M5.5 18.5h9.8l3.2 2.2v-2.2h.5a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2H5.5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2Z"
-                  //       fill="none"
-                  //       stroke="currentColor"
-                  //       strokeLinecap="round"
-                  //       strokeLinejoin="round"
-                  //       strokeWidth="1.8"
-                  //     />
-                  //   ),
-                  // },
-                ].map((action) => (
-                  <button
-                    key={action.label}
-                    aria-label={action.label}
-                    className="relative grid size-10 place-items-center rounded-full border border-[#e4e7ec] bg-white text-[#667085] transition hover:bg-[#f9fafb] hover:text-[#101828]"
-                    type="button"
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
-                      {action.icon}
-                    </svg>
-                    {action.label === "Notifications" ? (
-                      <span className="absolute right-2 top-2 size-2 rounded-full bg-[#f04438] ring-2 ring-white" />
-                    ) : null}
-                  </button>
-                ))}
+                  </svg>
+                  <span className="absolute right-2 top-2 size-2 rounded-full bg-[#f04438] ring-2 ring-white" />
+                </button>
 
                 <div className="relative ml-1">
                   {isProfileMenuOpen ? (

@@ -11,6 +11,9 @@ type AnalysisLine = {
 type RawOeeRow = {
   date: Date | string | null;
   shift: string | null;
+  av: string | number | null;
+  pe: string | number | null;
+  rq: string | number | null;
   oee: string | number | null;
   balance: string | number | null;
   otPlan: string | number | null;
@@ -38,9 +41,13 @@ export type AnalysisOeeSeriesRow = {
   date: string;
 } & Record<AnalysisLineKey, number | null>;
 
+export type AnalysisShiftSeriesRow = {
+  date: string;
+} & Record<`${AnalysisLineKey}R` | `${AnalysisLineKey}W`, number | null>;
+
 export type AnalysisGapSeriesRow = {
   date: string;
-} & Record<`${AnalysisLineKey}R` | `${AnalysisLineKey}W`, number>;
+} & Record<`${AnalysisLineKey}R` | `${AnalysisLineKey}W`, number | null>;
 
 const analysisLines: AnalysisLine[] = [
   { key: "cylblock", label: "Cyl Block", tableName: "v_cylblock_summary" },
@@ -120,6 +127,9 @@ async function getLineRows(line: AnalysisLine, start: string, endExclusive: stri
     `SELECT
       \`DATE\` AS date,
       SHIFT AS shift,
+      AV AS av,
+      PE AS pe,
+      RQ AS rq,
       OEE AS oee,
       Balance AS balance,
       OT_plan AS otPlan,
@@ -133,16 +143,13 @@ async function getLineRows(line: AnalysisLine, start: string, endExclusive: stri
 }
 
 function buildCard(line: AnalysisLine, rows: RawOeeRow[], selectedDate: string): AnalysisOeeCard {
-  const rValues = rows
-    .filter((row) => normalizeShift(row.shift) === "R")
-    .map((row) => toNumber(row.oee));
-  const wValues = rows
-    .filter((row) => normalizeShift(row.shift) === "W")
-    .map((row) => toNumber(row.oee));
-  const allValues = rows.map((row) => toNumber(row.oee));
   const selectedRows = rows.filter((row) => toDateKey(row.date) === selectedDate);
   const selectedRRows = selectedRows.filter((row) => normalizeShift(row.shift) === "R");
   const selectedWRows = selectedRows.filter((row) => normalizeShift(row.shift) === "W");
+  const dailyR = average(selectedRRows.map((row) => toNumber(row.oee)));
+  const dailyW = average(selectedWRows.map((row) => toNumber(row.oee)));
+  const dailyAverage = average([dailyR, dailyW].filter((value) => value !== null));
+  const allValues = rows.map((row) => toNumber(row.oee));
   const monthlyRRows = rows.filter((row) => normalizeShift(row.shift) === "R");
   const monthlyWRows = rows.filter((row) => normalizeShift(row.shift) === "W");
   const dailyGap = buildDailyGap(rows);
@@ -150,9 +157,9 @@ function buildCard(line: AnalysisLine, rows: RawOeeRow[], selectedDate: string):
   return {
     key: line.key,
     line: line.label,
-    r: average(rValues),
-    w: average(wValues),
-    ave: average(allValues),
+    r: dailyR,
+    w: dailyW,
+    ave: dailyAverage,
     monthly: average(allValues),
     balance: selectedRows.reduce((total, row) => total + toNumber(row.balance), 0),
     balanceMonthly: rows.reduce((total, row) => total + toNumber(row.balance), 0),
@@ -165,7 +172,7 @@ function buildCard(line: AnalysisLine, rows: RawOeeRow[], selectedDate: string):
   };
 }
 
-function buildDailyAverage(rows: RawOeeRow[]) {
+function buildDailyAverage(rows: RawOeeRow[], key: "oee" | "av" | "pe" | "rq") {
   const grouped = new Map<string, number[]>();
 
   for (const row of rows) {
@@ -175,11 +182,45 @@ function buildDailyAverage(rows: RawOeeRow[]) {
       continue;
     }
 
-    grouped.set(date, [...(grouped.get(date) ?? []), toNumber(row.oee)]);
+    grouped.set(date, [...(grouped.get(date) ?? []), toNumber(row[key])]);
   }
 
   return new Map(
     Array.from(grouped.entries()).map(([date, values]) => [date, average(values)]),
+  );
+}
+
+function buildDailyShiftAverage(rows: RawOeeRow[], key: "oee" | "av" | "pe" | "rq") {
+  const grouped = new Map<string, { r: number[]; w: number[] }>();
+
+  for (const row of rows) {
+    const date = toDateKey(row.date);
+
+    if (!date) {
+      continue;
+    }
+
+    const current = grouped.get(date) ?? { r: [], w: [] };
+
+    if (normalizeShift(row.shift) === "R") {
+      current.r.push(toNumber(row[key]));
+    }
+
+    if (normalizeShift(row.shift) === "W") {
+      current.w.push(toNumber(row[key]));
+    }
+
+    grouped.set(date, current);
+  }
+
+  return new Map(
+    Array.from(grouped.entries()).map(([date, values]) => [
+      date,
+      {
+        r: average(values.r),
+        w: average(values.w),
+      },
+    ]),
   );
 }
 
@@ -239,7 +280,28 @@ export async function getAnalysisOee(dateParam: string | null) {
   );
   const cards = entries.map((entry) => buildCard(entry.line, entry.rows, range.date));
   const dailyByLine = new Map(
-    entries.map((entry) => [entry.line.key, buildDailyAverage(entry.rows)]),
+    entries.map((entry) => [entry.line.key, buildDailyAverage(entry.rows, "oee")]),
+  );
+  const dailyShiftByLine = new Map(
+    entries.map((entry) => [entry.line.key, buildDailyShiftAverage(entry.rows, "oee")]),
+  );
+  const avByLine = new Map(
+    entries.map((entry) => [entry.line.key, buildDailyAverage(entry.rows, "av")]),
+  );
+  const avShiftByLine = new Map(
+    entries.map((entry) => [entry.line.key, buildDailyShiftAverage(entry.rows, "av")]),
+  );
+  const peByLine = new Map(
+    entries.map((entry) => [entry.line.key, buildDailyAverage(entry.rows, "pe")]),
+  );
+  const peShiftByLine = new Map(
+    entries.map((entry) => [entry.line.key, buildDailyShiftAverage(entry.rows, "pe")]),
+  );
+  const rqByLine = new Map(
+    entries.map((entry) => [entry.line.key, buildDailyAverage(entry.rows, "rq")]),
+  );
+  const rqShiftByLine = new Map(
+    entries.map((entry) => [entry.line.key, buildDailyShiftAverage(entry.rows, "rq")]),
   );
   const gapByLine = new Map(
     entries.map((entry) => [entry.line.key, buildDailyGap(entry.rows)]),
@@ -258,8 +320,79 @@ export async function getAnalysisOee(dateParam: string | null) {
 
     for (const line of analysisLines) {
       const values = gapByLine.get(line.key)?.get(date);
-      row[`${line.key}R`] = values?.r ?? 0;
-      row[`${line.key}W`] = values?.w ?? 0;
+      row[`${line.key}R`] = values?.r ?? null;
+      row[`${line.key}W`] = values?.w ?? null;
+    }
+
+    return row;
+  });
+  const shiftSeries = days.map((date) => {
+    const row = { date } as AnalysisShiftSeriesRow;
+
+    for (const line of analysisLines) {
+      const values = dailyShiftByLine.get(line.key)?.get(date);
+      row[`${line.key}R`] = values?.r ?? null;
+      row[`${line.key}W`] = values?.w ?? null;
+    }
+
+    return row;
+  });
+  const rqShiftSeries = days.map((date) => {
+    const row = { date } as AnalysisShiftSeriesRow;
+
+    for (const line of analysisLines) {
+      const values = rqShiftByLine.get(line.key)?.get(date);
+      row[`${line.key}R`] = values?.r ?? null;
+      row[`${line.key}W`] = values?.w ?? null;
+    }
+
+    return row;
+  });
+  const avShiftSeries = days.map((date) => {
+    const row = { date } as AnalysisShiftSeriesRow;
+
+    for (const line of analysisLines) {
+      const values = avShiftByLine.get(line.key)?.get(date);
+      row[`${line.key}R`] = values?.r ?? null;
+      row[`${line.key}W`] = values?.w ?? null;
+    }
+
+    return row;
+  });
+  const peShiftSeries = days.map((date) => {
+    const row = { date } as AnalysisShiftSeriesRow;
+
+    for (const line of analysisLines) {
+      const values = peShiftByLine.get(line.key)?.get(date);
+      row[`${line.key}R`] = values?.r ?? null;
+      row[`${line.key}W`] = values?.w ?? null;
+    }
+
+    return row;
+  });
+  const rqSeries = days.map((date) => {
+    const row = { date } as AnalysisOeeSeriesRow;
+
+    for (const line of analysisLines) {
+      row[line.key] = rqByLine.get(line.key)?.get(date) ?? null;
+    }
+
+    return row;
+  });
+  const avSeries = days.map((date) => {
+    const row = { date } as AnalysisOeeSeriesRow;
+
+    for (const line of analysisLines) {
+      row[line.key] = avByLine.get(line.key)?.get(date) ?? null;
+    }
+
+    return row;
+  });
+  const peSeries = days.map((date) => {
+    const row = { date } as AnalysisOeeSeriesRow;
+
+    for (const line of analysisLines) {
+      row[line.key] = peByLine.get(line.key)?.get(date) ?? null;
     }
 
     return row;
@@ -271,7 +404,14 @@ export async function getAnalysisOee(dateParam: string | null) {
     end: range.date,
     cards,
     series,
+    shiftSeries,
     gapSeries,
+    avSeries,
+    avShiftSeries,
+    peSeries,
+    peShiftSeries,
+    rqSeries,
+    rqShiftSeries,
     lines: analysisLines.map(({ key, label }) => ({ key, label })),
   };
 }

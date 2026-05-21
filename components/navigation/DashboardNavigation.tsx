@@ -119,15 +119,15 @@ export default function DashboardNavigation({
             onClick={onNavigate}
             className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
               isActive
-                ? "bg-[#ecf3ff] text-[#465fff]"
-                : "text-[#667085] hover:bg-[#f9fafb] hover:text-[#101828]"
+                ? "bg-[#ecf3ff] text-[#465fff] dark:bg-[#14245a] dark:text-[#a6b6ff]"
+                : "text-[#667085] hover:bg-[#f9fafb] hover:text-[#101828] dark:text-[#a7b0c0] dark:hover:bg-[#162033] dark:hover:text-[#f8fafc]"
             }`}
           >
             <span
               className={`grid size-8 shrink-0 place-items-center rounded-lg ${
                 isActive
-                  ? "bg-[#465fff] text-white"
-                  : "bg-[#f2f4f7] text-[#667085] group-hover:bg-white"
+                  ? "bg-[#465fff] text-white dark:bg-[#8da2ff] dark:text-[#0b111d]"
+                  : "bg-[#f2f4f7] text-[#667085] group-hover:bg-white dark:bg-[#1f2937] dark:text-[#a7b0c0] dark:group-hover:bg-[#273449]"
               }`}
             >
               {item.icon}
