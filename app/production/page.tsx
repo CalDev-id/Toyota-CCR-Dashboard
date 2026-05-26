@@ -1,8 +1,7 @@
 "use client";
 
 import DefaultLayout from "@/components/layouts/DefaultLayout";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type SummaryRow = {
   date: string;
@@ -32,7 +31,30 @@ type FilterOptions = {
 
 type SummaryResponse = {
   rows: SummaryRow[];
+  problemRows: ProblemRow[];
   filterOptions: FilterOptions;
+};
+
+type ProblemRow = {
+  date: string;
+  plant: string;
+  shift: string;
+  shift2: string;
+  shop: string;
+  ttMin: number;
+  jam: string;
+  problemAv: string;
+  lsAvUnit: string;
+  lsAvMin: number;
+  problemPe: string;
+  lsPeUnit: string;
+  lsPeMin: number;
+  problemRq: string;
+  defectC: number;
+  defectM: number;
+  defectCMin: number;
+  defectMMin: number;
+  modifiedAt: string;
 };
 
 type Trend = {
@@ -101,10 +123,11 @@ function currentMonth() {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function previousMonth(month: string) {
-  const [year, monthNumber] = month.split("-").map(Number);
-  const date = new Date(Date.UTC(year, monthNumber - 2, 1));
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+function currentDate() {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
 }
 
 async function readResponse(response: Response) {
@@ -154,7 +177,7 @@ function makeTrend(current: number, previous: number): Trend {
 function TrendBadge({ trend }: { trend: Trend }) {
   if (!trend) {
     return (
-      <span className="text-xs font-medium text-[#98a2b3]">No last month data</span>
+      <span className="text-xs font-medium text-[#98a2b3]">No monthly avg</span>
     );
   }
 
@@ -169,7 +192,7 @@ function TrendBadge({ trend }: { trend: Trend }) {
 
   return (
     <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${trendClass}`}>
-      {symbol} {formatNumberAuto(trend.value)}% vs last month
+      {symbol} {formatNumberAuto(trend.value)}% vs monthly avg
     </span>
   );
 }
@@ -182,51 +205,20 @@ function average(rows: SummaryRow[], key: "oee" | "av" | "pe" | "rq") {
   return rows.reduce((total, row) => total + row[key], 0) / rows.length;
 }
 
-function groupByDate(rows: SummaryRow[]) {
-  const grouped = new Map<
-    string,
-    {
-      date: string;
-      prodPlan: number;
-      prodAct: number;
-      oee: number;
-      av: number;
-      pe: number;
-      rq: number;
-      count: number;
-    }
-  >();
+function averageDailyTotal(rows: SummaryRow[], key: "prodAct" | "prodPlan" | "balance") {
+  const grouped = new Map<string, number>();
 
   for (const row of rows) {
-    const item =
-      grouped.get(row.date) ??
-      {
-        date: row.date,
-        prodPlan: 0,
-        prodAct: 0,
-        oee: 0,
-        av: 0,
-        pe: 0,
-        rq: 0,
-        count: 0,
-      };
-    item.prodPlan += row.prodPlan;
-    item.prodAct += row.prodAct;
-    item.oee += row.oee;
-    item.av += row.av;
-    item.pe += row.pe;
-    item.rq += row.rq;
-    item.count += 1;
-    grouped.set(row.date, item);
+    grouped.set(row.date, (grouped.get(row.date) ?? 0) + row[key]);
   }
 
-  return Array.from(grouped.values()).map((item) => ({
-    ...item,
-    oee: item.count ? item.oee / item.count : 0,
-    av: item.count ? item.av / item.count : 0,
-    pe: item.count ? item.pe / item.count : 0,
-    rq: item.count ? item.rq / item.count : 0,
-  }));
+  const values = Array.from(grouped.values());
+
+  if (values.length === 0) {
+    return 0;
+  }
+
+  return values.reduce((total, value) => total + value, 0) / values.length;
 }
 
 function KpiCard({
@@ -236,6 +228,7 @@ function KpiCard({
   tone = "neutral",
   className = "",
   trend = null,
+  showTrend = true,
 }: {
   label: string;
   value: string;
@@ -243,6 +236,7 @@ function KpiCard({
   tone?: "neutral" | "good" | "warn";
   className?: string;
   trend?: Trend;
+  showTrend?: boolean;
 }) {
   const toneClass =
     tone === "good"
@@ -269,9 +263,11 @@ function KpiCard({
       >
         {value}
       </p>
-      <div className="mt-4">
-        <TrendBadge trend={trend} />
-      </div>
+      {showTrend ? (
+        <div className="mt-4">
+          <TrendBadge trend={trend} />
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -323,7 +319,7 @@ function OeeGauge({ value, trend }: { value: number; trend: Trend }) {
 
       <div className="rounded-xl bg-[#f9fafb] p-3 text-center">
         <div>
-          <p className="text-xs font-medium text-[#667085]">Last Mo.</p>
+          <p className="text-xs font-medium text-[#667085]">Month Avg</p>
           <p
             className={`mt-1 text-sm font-semibold ${
               trend?.direction === "up"
@@ -391,127 +387,14 @@ function FilterSelect({
   );
 }
 
-function MetricBars({ rows }: { rows: ReturnType<typeof groupByDate> }) {
-  const chartRef = useRef<HTMLDivElement>(null);
-  const [tooltip, setTooltip] = useState<{
-    row: ReturnType<typeof groupByDate>[number];
-    x: number;
-    y: number;
-  } | null>(null);
-  const maxVolume = Math.max(
-    ...rows.map((row) => Math.max(row.prodPlan, row.prodAct)),
-    1,
-  );
-  const axisValues = [maxVolume, maxVolume * 0.75, maxVolume * 0.5, maxVolume * 0.25, 0].map(
-    Math.round,
-  );
-
-  function showTooltip(
-    row: ReturnType<typeof groupByDate>[number],
-    event: MouseEvent<HTMLDivElement>,
-  ) {
-    const rect = chartRef.current?.getBoundingClientRect();
-
-    if (!rect) {
-      return;
-    }
-
-    setTooltip({
-      row,
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-    });
-  }
-
-  return (
-    <div className="mt-6">
-      <article className="rounded-2xl border border-[#e4e7ec] bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-[#101828]">Plan vs Actual</h2>
-            <p className="mt-1 text-sm text-[#667085]">Daily production volume</p>
-          </div>
-          <div className="flex items-center gap-5 text-xs font-medium text-[#667085]">
-            <span className="inline-flex items-center gap-2.5">
-              <span className="h-2.5 w-7 rounded-full bg-[#465fff]" />
-              Plan
-            </span>
-            <span className="inline-flex items-center gap-2.5">
-              <span className="h-2.5 w-7 rounded-full bg-[#12b76a]" />
-              Actual
-            </span>
-          </div>
-        </div>
-        <div
-          ref={chartRef}
-          className="relative mt-6 grid h-64 grid-cols-[56px_1fr] rounded-2xl bg-[#f9fafb] p-4"
-          onMouseLeave={() => setTooltip(null)}
-        >
-          {tooltip ? (
-            <div
-              className="pointer-events-none absolute z-[999] w-max rounded-lg border border-[#e4e7ec] bg-white px-3 py-2 text-left text-xs font-medium text-[#344054] shadow-xl"
-              style={{
-                left: tooltip.x,
-                top: tooltip.y - 12,
-                transform: "translate(-50%, -100%)",
-              }}
-            >
-              <p className="font-semibold text-[#101828]">{tooltip.row.date}</p>
-              <p className="mt-1">Plan: {formatNumberAuto(tooltip.row.prodPlan)}</p>
-              <p>Actual: {formatNumberAuto(tooltip.row.prodAct)}</p>
-            </div>
-          ) : null}
-          <div className="flex h-full flex-col justify-between pr-3 text-right text-[10px] font-semibold text-[#98a2b3]">
-            {axisValues.map((value, index) => (
-              <span key={`${value}-${index}`}>{formatNumberAuto(value)}</span>
-            ))}
-          </div>
-          {rows.length ? (
-            <div className="flex min-w-0 items-end gap-3 overflow-x-auto overflow-y-visible pt-12">
-              {rows.map((row) => (
-                <div
-                  key={row.date}
-                  className="group flex min-w-14 flex-1 flex-col items-center gap-2"
-                  onMouseMove={(event) => showTooltip(row, event)}
-                >
-                  <div className="relative flex h-48 w-full items-end justify-center gap-1.5">
-                    <div
-                      className="w-4 rounded-t bg-[#465fff]"
-                      style={{
-                        height: `${Math.max((row.prodPlan / maxVolume) * 100, 2)}%`,
-                      }}
-                    />
-                    <div
-                      className="w-4 rounded-t bg-[#12b76a]"
-                      style={{
-                        height: `${Math.max((row.prodAct / maxVolume) * 100, 2)}%`,
-                      }}
-                    />
-                  </div>
-                  <span className="text-xs font-medium text-[#667085]">
-                    {row.date.slice(8, 10)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid h-full w-full place-items-center text-sm font-medium text-[#98a2b3]">
-              No data
-              </div>
-          )}
-        </div>
-      </article>
-    </div>
-  );
-}
-
 export default function ProductionPage() {
-  const [month, setMonth] = useState(currentMonth);
+  const [date, setDate] = useState(currentDate);
   const [shift, setShift] = useState("all");
   const [shift2, setShift2] = useState("all");
   const [line, setLine] = useState(defaultLine);
   const [rows, setRows] = useState<SummaryRow[]>([]);
-  const [previousRows, setPreviousRows] = useState<SummaryRow[]>([]);
+  const [monthlyRows, setMonthlyRows] = useState<SummaryRow[]>([]);
+  const [problemRows, setProblemRows] = useState<ProblemRow[]>([]);
   const [filterOptions, setFilterOptions] = useState(emptyOptions);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -521,35 +404,42 @@ export default function ProductionPage() {
   );
 
   const url = useMemo(() => {
-    const params = new URLSearchParams({ month, shift, shift2, shop });
-    return `/api/cylblock/summary?${params.toString()}`;
-  }, [month, shift, shift2, shop]);
-
-  const previousUrl = useMemo(() => {
     const params = new URLSearchParams({
-      month: previousMonth(month),
+      date,
+      month: date.slice(0, 7) || currentMonth(),
       shift,
       shift2,
       shop,
     });
     return `/api/cylblock/summary?${params.toString()}`;
-  }, [month, shift, shift2, shop]);
+  }, [date, shift, shift2, shop]);
+
+  const monthlyUrl = useMemo(() => {
+    const params = new URLSearchParams({
+      month: date.slice(0, 7) || currentMonth(),
+      shift,
+      shift2,
+      shop,
+    });
+    return `/api/cylblock/summary?${params.toString()}`;
+  }, [date, shift, shift2, shop]);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const [body, previousBody] = await Promise.all([
+      const [body, monthlyBody] = await Promise.all([
         readResponse(await fetch(url)),
-        fetch(previousUrl)
+        fetch(monthlyUrl)
           .then(readResponse)
           .catch(() => ({ data: { rows: [] } })),
       ]);
       const data = body.data as SummaryResponse;
-      const previousData = previousBody.data as Partial<SummaryResponse>;
+      const monthlyData = monthlyBody.data as Partial<SummaryResponse>;
       setRows(data.rows);
-      setPreviousRows(previousData.rows ?? []);
+      setMonthlyRows(monthlyData.rows ?? []);
+      setProblemRows(data.problemRows ?? []);
       setFilterOptions(data.filterOptions);
     } catch (loadError) {
       setError(
@@ -558,11 +448,12 @@ export default function ProductionPage() {
           : "Unable to load production summary",
       );
       setRows([]);
-      setPreviousRows([]);
+      setMonthlyRows([]);
+      setProblemRows([]);
     } finally {
       setIsLoading(false);
     }
-  }, [previousUrl, url]);
+  }, [monthlyUrl, url]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -584,31 +475,44 @@ export default function ProductionPage() {
     }),
     [rows],
   );
-  const previousTotals = useMemo(
+  const monthlyAverages = useMemo(
     () => ({
-      prodPlan: previousRows.reduce((total, row) => total + row.prodPlan, 0),
-      prodAct: previousRows.reduce((total, row) => total + row.prodAct, 0),
-      balance: previousRows.reduce((total, row) => total + row.balance, 0),
-      oee: average(previousRows, "oee"),
-      av: average(previousRows, "av"),
-      pe: average(previousRows, "pe"),
-      rq: average(previousRows, "rq"),
+      prodPlan: averageDailyTotal(monthlyRows, "prodPlan"),
+      prodAct: averageDailyTotal(monthlyRows, "prodAct"),
+      balance: averageDailyTotal(monthlyRows, "balance"),
+      oee: average(monthlyRows, "oee"),
+      av: average(monthlyRows, "av"),
+      pe: average(monthlyRows, "pe"),
+      rq: average(monthlyRows, "rq"),
     }),
-    [previousRows],
+    [monthlyRows],
   );
   const trends = useMemo(
     () => ({
-      prodAct: makeTrend(totals.prodAct, previousTotals.prodAct),
-      balance: makeTrend(totals.balance, previousTotals.balance),
-      oee: makeTrend(normalizePercent(totals.oee), normalizePercent(previousTotals.oee)),
-      av: makeTrend(normalizePercent(totals.av), normalizePercent(previousTotals.av)),
-      pe: makeTrend(normalizePercent(totals.pe), normalizePercent(previousTotals.pe)),
-      rq: makeTrend(normalizePercent(totals.rq), normalizePercent(previousTotals.rq)),
+      prodAct: makeTrend(totals.prodAct, monthlyAverages.prodAct),
+      oee: makeTrend(normalizePercent(totals.oee), normalizePercent(monthlyAverages.oee)),
+      av: makeTrend(normalizePercent(totals.av), normalizePercent(monthlyAverages.av)),
+      pe: makeTrend(normalizePercent(totals.pe), normalizePercent(monthlyAverages.pe)),
+      rq: makeTrend(normalizePercent(totals.rq), normalizePercent(monthlyAverages.rq)),
     }),
-    [previousTotals, totals],
+    [monthlyAverages, totals],
   );
-  const dailyRows = useMemo(() => groupByDate(rows), [rows]);
   const lineLabel = getLineLabel(line);
+  const problemTotals = useMemo(
+    () => ({
+      avMinutes: problemRows.reduce((total, row) => total + row.lsAvMin, 0),
+      peMinutes: problemRows.reduce((total, row) => total + row.lsPeMin, 0),
+      rqMinutes: problemRows.reduce(
+        (total, row) => total + row.defectCMin + row.defectMMin,
+        0,
+      ),
+      defectUnits: problemRows.reduce(
+        (total, row) => total + row.defectC + row.defectM,
+        0,
+      ),
+    }),
+    [problemRows],
+  );
 
   return (
     <DefaultLayout>
@@ -659,7 +563,7 @@ export default function ProductionPage() {
             label="Balance"
             value={formatNumberAuto(totals.balance)}
             caption="Total plan balance"
-            trend={trends.balance}
+            showTrend={false}
             tone={totals.balance < 0 ? "warn" : "good"}
           />
         </div>
@@ -672,16 +576,14 @@ export default function ProductionPage() {
         </div>
       ) : (
         <>
-          <MetricBars rows={dailyRows} />
-
           <section className="mt-6 rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <label className="grid gap-1.5 text-sm font-medium text-[#344054]">
-                Month
+                Date
                 <input
-                  type="month"
-                  value={month}
-                  onChange={(event) => setMonth(event.target.value)}
+                  type="date"
+                  value={date}
+                  onChange={(event) => setDate(event.target.value)}
                   className="h-10 rounded-lg border border-[#d0d5dd] px-3 text-sm font-medium outline-none transition focus:border-[#465fff] focus:ring-2 focus:ring-[#ecf3ff]"
                 />
               </label>
@@ -714,7 +616,7 @@ export default function ProductionPage() {
                   Daily Production Rows
                 </h2>
                 <p className="mt-1 text-sm text-[#667085]">
-                  Daily production summary for {lineLabel}
+                  {date} daily production summary for {lineLabel}
                 </p>
               </div>
               <div className="overflow-x-auto">
@@ -786,6 +688,122 @@ export default function ProductionPage() {
                           className="px-5 py-12 text-center text-sm font-medium text-[#98a2b3]"
                         >
                           No data
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          </section>
+
+          <section className="mt-6">
+            <article className="overflow-hidden rounded-2xl border border-[#e4e7ec] bg-white shadow-sm">
+              <div className="border-b border-[#e4e7ec] px-5 py-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-[#101828]">
+                      Detail Problem
+                    </h2>
+                    <p className="mt-1 text-sm text-[#667085]">
+                      AV, PE, RQ, loss time, and defect details for {date}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                    <div className="rounded-xl bg-[#f9fafb] px-3 py-2">
+                      <p className="text-xs font-medium text-[#667085]">AV loss</p>
+                      <p className="mt-1 font-semibold text-[#101828]">
+                        {formatNumberAuto(problemTotals.avMinutes)} min
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-[#f9fafb] px-3 py-2">
+                      <p className="text-xs font-medium text-[#667085]">PE loss</p>
+                      <p className="mt-1 font-semibold text-[#101828]">
+                        {formatNumberAuto(problemTotals.peMinutes)} min
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-[#f9fafb] px-3 py-2">
+                      <p className="text-xs font-medium text-[#667085]">RQ loss</p>
+                      <p className="mt-1 font-semibold text-[#101828]">
+                        {formatNumberAuto(problemTotals.rqMinutes)} min
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-[#f9fafb] px-3 py-2">
+                      <p className="text-xs font-medium text-[#667085]">Defect</p>
+                      <p className="mt-1 font-semibold text-[#101828]">
+                        {formatNumberAuto(problemTotals.defectUnits)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1180px] text-left text-sm">
+                  <thead className="bg-[#f9fafb] text-xs font-medium uppercase tracking-wide text-[#667085]">
+                    <tr>
+                      <th className="px-5 py-3">Time</th>
+                      <th className="px-5 py-3">Shift</th>
+                      <th className="px-5 py-3">Problem AV</th>
+                      <th className="px-5 py-3 text-right">AV Min</th>
+                      <th className="px-5 py-3">Problem PE</th>
+                      <th className="px-5 py-3 text-right">PE Min</th>
+                      <th className="px-5 py-3">Problem RQ</th>
+                      <th className="px-5 py-3 text-right">Defect</th>
+                      <th className="px-5 py-3 text-right">RQ Min</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#e4e7ec]">
+                    {problemRows.length ? (
+                      problemRows.map((row, index) => (
+                        <tr
+                          key={`${row.date}-${row.shift}-${row.jam}-${row.shop}-${index}`}
+                          className="hover:bg-[#f9fafb]"
+                        >
+                          <td className="px-5 py-4 font-medium text-[#101828]">
+                            {row.jam || "-"}
+                          </td>
+                          <td className="px-5 py-4 text-[#667085]">
+                            {[row.shift, row.shift2].filter(Boolean).join(" / ") || "-"}
+                          </td>
+                          <td
+                            className="max-w-[220px] truncate px-5 py-4 text-[#667085]"
+                            title={row.problemAv}
+                          >
+                            {row.problemAv || "-"}
+                          </td>
+                          <td className="px-5 py-4 text-right font-medium text-[#101828]">
+                            {formatNumberAuto(row.lsAvMin)}
+                          </td>
+                          <td
+                            className="max-w-[220px] truncate px-5 py-4 text-[#667085]"
+                            title={row.problemPe}
+                          >
+                            {row.problemPe || "-"}
+                          </td>
+                          <td className="px-5 py-4 text-right font-medium text-[#101828]">
+                            {formatNumberAuto(row.lsPeMin)}
+                          </td>
+                          <td
+                            className="max-w-[220px] truncate px-5 py-4 text-[#667085]"
+                            title={row.problemRq}
+                          >
+                            {row.problemRq || "-"}
+                          </td>
+                          <td className="px-5 py-4 text-right font-medium text-[#101828]">
+                            {formatNumberAuto(row.defectC + row.defectM)}
+                          </td>
+                          <td className="px-5 py-4 text-right font-medium text-[#101828]">
+                            {formatNumberAuto(row.defectCMin + row.defectMMin)}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={9}
+                          className="px-5 py-12 text-center text-sm font-medium text-[#98a2b3]"
+                        >
+                          No detail problem data for this day
                         </td>
                       </tr>
                     )}
