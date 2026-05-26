@@ -46,6 +46,56 @@ const emptyOptions: FilterOptions = {
   shops: [],
 };
 
+const lineOptions = [
+  {
+    label: "Cylinder Block",
+    value: "Cylinder Block",
+    aliases: ["cylinder block", "cyl block", "cylblock"],
+  },
+  {
+    label: "Cylinder Head",
+    value: "Cylinder Head",
+    aliases: ["cylinder head", "cyl head", "cylhead"],
+  },
+  {
+    label: "Camshaft",
+    value: "Camshaft",
+    aliases: ["camshaft", "cam shaft"],
+  },
+  {
+    label: "Crankshaft",
+    value: "Crankshaft",
+    aliases: ["crankshaft", "crank shaft"],
+  },
+];
+
+const defaultLine = lineOptions[0].value;
+
+function getLineLabel(value: string) {
+  return lineOptions.find((option) => option.value === value)?.label ?? value;
+}
+
+function normalizeLineName(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function resolveShopValue(line: string, shops: string[]) {
+  const selectedLine = lineOptions.find((option) => option.value === line);
+
+  if (!selectedLine) {
+    return line;
+  }
+
+  const acceptedNames = [selectedLine.value, selectedLine.label, ...selectedLine.aliases].map(
+    normalizeLineName,
+  );
+  const matchingShop = shops.find((shop) =>
+    acceptedNames.includes(normalizeLineName(shop)),
+  );
+
+  return matchingShop ?? selectedLine.value;
+}
+
 function currentMonth() {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
@@ -298,11 +348,13 @@ function FilterSelect({
   value,
   options,
   onChange,
+  includeAll = true,
 }: {
   label: string;
   value: string;
   options: string[];
   onChange: (value: string) => void;
+  includeAll?: boolean;
 }) {
   return (
     <label className="grid gap-1.5 text-sm font-medium text-[#344054]">
@@ -313,7 +365,7 @@ function FilterSelect({
           onChange={(event) => onChange(event.target.value)}
           className="h-10 w-full appearance-none rounded-lg border border-[#d0d5dd] bg-white py-0 pl-3 pr-10 text-sm font-medium text-[#101828] outline-none transition focus:border-[#465fff] focus:ring-2 focus:ring-[#ecf3ff]"
         >
-          <option value="all">All</option>
+          {includeAll ? <option value="all">All</option> : null}
           {options.map((option) => (
             <option key={option} value={option}>
               {option}
@@ -410,8 +462,8 @@ function MetricBars({ rows }: { rows: ReturnType<typeof groupByDate> }) {
             </div>
           ) : null}
           <div className="flex h-full flex-col justify-between pr-3 text-right text-[10px] font-semibold text-[#98a2b3]">
-            {axisValues.map((value) => (
-              <span key={value}>{formatNumberAuto(value)}</span>
+            {axisValues.map((value, index) => (
+              <span key={`${value}-${index}`}>{formatNumberAuto(value)}</span>
             ))}
           </div>
           {rows.length ? (
@@ -457,12 +509,16 @@ export default function ProductionPage() {
   const [month, setMonth] = useState(currentMonth);
   const [shift, setShift] = useState("all");
   const [shift2, setShift2] = useState("all");
-  const [shop, setShop] = useState("all");
+  const [line, setLine] = useState(defaultLine);
   const [rows, setRows] = useState<SummaryRow[]>([]);
   const [previousRows, setPreviousRows] = useState<SummaryRow[]>([]);
   const [filterOptions, setFilterOptions] = useState(emptyOptions);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const shop = useMemo(
+    () => resolveShopValue(line, filterOptions.shops),
+    [filterOptions.shops, line],
+  );
 
   const url = useMemo(() => {
     const params = new URLSearchParams({ month, shift, shift2, shop });
@@ -552,6 +608,7 @@ export default function ProductionPage() {
     [previousTotals, totals],
   );
   const dailyRows = useMemo(() => groupByDate(rows), [rows]);
+  const lineLabel = getLineLabel(line);
 
   return (
     <DefaultLayout>
@@ -611,7 +668,7 @@ export default function ProductionPage() {
 
       {isLoading ? (
         <div className="mt-6 grid h-40 place-items-center rounded-2xl border border-[#e4e7ec] bg-white text-sm font-medium text-[#667085]">
-          Loading production summary...
+          Loading daily production summary...
         </div>
       ) : (
         <>
@@ -629,6 +686,13 @@ export default function ProductionPage() {
                 />
               </label>
               <FilterSelect
+                label="Line"
+                value={line}
+                options={lineOptions.map((option) => option.value)}
+                onChange={setLine}
+                includeAll={false}
+              />
+              <FilterSelect
                 label="Shift"
                 value={shift}
                 options={filterOptions.shifts}
@@ -640,12 +704,6 @@ export default function ProductionPage() {
                 options={filterOptions.shift2s}
                 onChange={setShift2}
               />
-              <FilterSelect
-                label="Line"
-                value={shop}
-                options={filterOptions.shops}
-                onChange={setShop}
-              />
             </div>
           </section>
 
@@ -653,10 +711,10 @@ export default function ProductionPage() {
             <article className="overflow-hidden rounded-2xl border border-[#e4e7ec] bg-white shadow-sm">
               <div className="border-b border-[#e4e7ec] px-5 py-4">
                 <h2 className="text-lg font-semibold text-[#101828]">
-                  Production Rows
+                  Daily Production Rows
                 </h2>
                 <p className="mt-1 text-sm text-[#667085]">
-                  Cylblock production summary from v_cylblock_summary
+                  Daily production summary for {lineLabel}
                 </p>
               </div>
               <div className="overflow-x-auto">
@@ -666,7 +724,7 @@ export default function ProductionPage() {
                       <th className="px-5 py-3">Date</th>
                       <th className="px-5 py-3">Plant</th>
                       <th className="px-5 py-3">Shift</th>
-                      <th className="px-5 py-3">Shop</th>
+                      <th className="px-5 py-3">Line</th>
                       <th className="px-5 py-3">Variant</th>
                       <th className="px-5 py-3 text-right">Plan</th>
                       <th className="px-5 py-3 text-right">Actual</th>

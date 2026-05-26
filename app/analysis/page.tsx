@@ -91,6 +91,14 @@ function formatPercent(value: number | null) {
   return `${formatNumber(normalizePercent(value))}%`;
 }
 
+function formatDayLabel(date: string) {
+  return String(Number(date.slice(8, 10)));
+}
+// ini buat ngubah perbesar atau perkecil ukuran chart 
+function getChartMinWidth(rowCount: number) {
+  return `max(100%, ${rowCount * 23}px)`;
+}
+
 function formatUnit(value: number) {
   return new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 0,
@@ -164,70 +172,72 @@ function DailyGapChart({ series, lineKey }: { series: GapSeriesRow[]; lineKey: L
         Math.abs(row[`${lineKey}W`] ?? 0),
       ]),
     ) * 1.15;
+  const chartMinWidth = getChartMinWidth(chartRows.length);
 
   return (
     <div>
-      <div className="relative mt-5 h-56">
-        <div className="absolute left-0 right-0 top-1/2 border-t border-dashed border-[#98a2b3]" />
-        <div className="flex h-full items-stretch gap-2">
-          {chartRows.map((row) => {
-            const rValue = row[`${lineKey}R`] ?? 0;
-            const wValue = row[`${lineKey}W`] ?? 0;
-            const bars = [
-              { key: "r", value: rValue, color: "#f04438", width: "62%", zIndex: 1 },
-              { key: "w", value: wValue, color: "#ffffff", width: "62%", zIndex: 2 },
-            ];
+      <div className="overflow-x-auto overflow-y-hidden">
+        <div className="px-4" style={{ minWidth: chartMinWidth }}>
+          <div className="relative mt-5 h-56">
+            <div className="absolute left-0 right-0 top-1/2 border-t border-dashed border-[#98a2b3]" />
+            <div className="flex h-full items-stretch gap-2">
+              {chartRows.map((row) => {
+                const rValue = row[`${lineKey}R`] ?? 0;
+                const wValue = row[`${lineKey}W`] ?? 0;
+                const bars = [
+                  { key: "r", value: rValue, color: "#f04438", width: "62%", zIndex: 1 },
+                  { key: "w", value: wValue, color: "#ffffff", width: "62%", zIndex: 2 },
+                ];
 
-            return (
-              <div key={row.date} className="flex min-w-0 flex-1 flex-col">
-                <div className="relative h-full">
-                  {bars.map((bar) => {
-                    const height = Math.min((Math.abs(bar.value) / maxValue) * 50, 50);
-                    const isPositive = bar.value >= 0;
+                return (
+                  <div key={row.date} className="flex min-w-0 flex-1 flex-col">
+                    <div className="relative h-full">
+                      {bars.map((bar) => {
+                        const height = Math.min((Math.abs(bar.value) / maxValue) * 50, 50);
+                        const isPositive = bar.value >= 0;
 
-                    return (
-                      <div
-                        key={bar.key}
-                        className="absolute left-1/2 -translate-x-1/2"
-                        style={{
-                          backgroundColor: bar.color,
-                          height: `${Math.max(height, bar.value === 0 ? 0 : 7)}%`,
-                          top: isPositive ? `${50 - height}%` : "50%",
-                          width: bar.width,
-                          zIndex: bar.zIndex,
-                        }}
-                      >
-                        {bar.value !== 0 ? (
-                          <span
-                            className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-[11px] font-semibold text-[#101828]"
+                        return (
+                          <div
+                            key={bar.key}
+                            className="absolute left-1/2 -translate-x-1/2"
                             style={{
-                              top: isPositive ? "3px" : "auto",
-                              bottom: isPositive ? "auto" : "3px",
-                              WebkitTextStroke: "0.35px #101828",
+                              backgroundColor: bar.color,
+                              height: `${Math.max(height, bar.value === 0 ? 0 : 7)}%`,
+                              top: isPositive ? `${50 - height}%` : "50%",
+                              width: bar.width,
+                              zIndex: bar.zIndex,
                             }}
                           >
-                            {formatNumber(bar.value, 1)}
-                          </span>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+                            {bar.value !== 0 ? (
+                              <span
+                                className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-[11px] font-semibold text-[#101828]"
+                                style={{
+                                  top: isPositive ? "3px" : "auto",
+                                  bottom: isPositive ? "auto" : "3px",
+                                  WebkitTextStroke: "0.35px #101828",
+                                }}
+                              >
+                                {formatNumber(bar.value, 1)}
+                              </span>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
-      <div className="mt-2 flex justify-between text-[10px] font-medium text-[#667085]">
-        {chartRows.map((row, index) => (
-          <span
-            key={row.date}
-            className={index % Math.ceil(chartRows.length / 8 || 1) === 0 ? "" : "hidden"}
-          >
-            {row.date.slice(8, 10)}
-          </span>
-        ))}
+          <div className="mt-2 flex justify-between text-[10px] font-medium text-[#667085]">
+            {chartRows.map((row, index) => (
+              <span key={`${row.date}-${index}`} className="min-w-0 text-center">
+                {formatDayLabel(row.date)}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -321,6 +331,7 @@ function DailyShiftPercentChart({
 }) {
   const chartRows = getShiftChartRows(series, line.key);
   const targetY = height - 0.9 * height;
+  const chartMinWidth = getChartMinWidth(chartRows.length);
 
   return (
     <article className="rounded-2xl border border-[#e4e7ec] bg-white px-4 pb-4 pt-4 shadow-sm">
@@ -329,8 +340,8 @@ function DailyShiftPercentChart({
         <p className="mt-0.5 text-xs font-medium text-[#667085]">{line.label}</p>
       </div>
 
-      <div className="h-[188px]">
-        <div className="min-w-0 px-1">
+      <div className="h-[188px] overflow-x-auto overflow-y-hidden">
+        <div className="min-w-0 px-4" style={{ minWidth: chartMinWidth }}>
           <div className="relative min-w-0">
             <svg
               viewBox={`0 -8 ${width} ${height + 16}`}
@@ -338,11 +349,11 @@ function DailyShiftPercentChart({
               role="img"
               aria-label={`${line.label} ${title} chart`}
             >
-              {axisValues.map((value) => {
+              {axisValues.map((value, index) => {
                 const y = height - (value / 100) * height;
                 return (
                   <line
-                    key={value}
+                    key={`${value}-${index}`}
                     x1="0"
                     x2={width}
                     y1={y}
@@ -429,11 +440,8 @@ function DailyShiftPercentChart({
 
             <div className="flex justify-between text-[10px] font-medium text-[#667085]">
               {chartRows.map((row, index) => (
-                <span
-                  key={row.date}
-                  className={index % Math.ceil(chartRows.length / 8 || 1) === 0 ? "" : "hidden"}
-                >
-                  {row.date.slice(8, 10)}
+                <span key={`${row.date}-${index}`} className="min-w-0 text-center">
+                  {formatDayLabel(row.date)}
                 </span>
               ))}
             </div>
@@ -479,6 +487,7 @@ function OeeLineChart({
         {lines.map((line) => {
           const card = cards.find((item) => item.key === line.key);
           const efficiencyRows = getShiftChartRows(shiftSeries, line.key);
+          const efficiencyMinWidth = getChartMinWidth(efficiencyRows.length);
 
           return (
             <div key={line.key} className="flex min-w-[280px] flex-1 flex-col gap-4">
@@ -490,8 +499,8 @@ function OeeLineChart({
                     </div>
                   </div>
 
-                  <div className="h-[188px]">
-                    <div className="min-w-0 px-1">
+                  <div className="h-[188px] overflow-x-auto overflow-y-hidden">
+                    <div className="min-w-0 px-4" style={{ minWidth: efficiencyMinWidth }}>
                       <div className="relative min-w-0">
                         <svg
                           viewBox={`0 -8 ${width} ${height + 16}`}
@@ -499,11 +508,11 @@ function OeeLineChart({
                           role="img"
                           aria-label={`${line.label} daily efficiency chart`}
                         >
-                          {axisValues.map((value) => {
+                          {axisValues.map((value, index) => {
                             const y = height - (value / 100) * height;
                             return (
                               <line
-                                key={value}
+                                key={`${value}-${index}`}
                                 x1="0"
                                 x2={width}
                                 y1={y}
@@ -590,15 +599,8 @@ function OeeLineChart({
 
                         <div className="flex justify-between text-[10px] font-medium text-[#667085]">
                           {efficiencyRows.map((row, index) => (
-                            <span
-                              key={row.date}
-                              className={
-                                index % Math.ceil(efficiencyRows.length / 8 || 1) === 0
-                                  ? ""
-                                  : "hidden"
-                              }
-                            >
-                              {row.date.slice(8, 10)}
+                            <span key={`${row.date}-${index}`} className="min-w-0 text-center">
+                              {formatDayLabel(row.date)}
                             </span>
                           ))}
                         </div>

@@ -37,7 +37,7 @@ const navigationItems = [
     ),
   },
   {
-    label: "Production",
+    label: "Daily Production",
     href: "/production",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
