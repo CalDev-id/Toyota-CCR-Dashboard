@@ -5,7 +5,11 @@ const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
 };
 
-const adapter = new PrismaMariaDb(process.env.DATABASE_URL ?? "");
+function getMariaDbUrl() {
+  return (process.env.DATABASE_URL ?? "").replace(/^mysql:/, "mariadb:");
+}
+
+const adapter = new PrismaMariaDb(getMariaDbUrl());
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
 

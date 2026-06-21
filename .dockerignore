@@ -1,0 +1,13 @@
+.git
+.next
+node_modules
+npm-debug.log*
+Dockerfile
+.dockerignore
+.DS_Store
+public/.DS_Store
+*.tsbuildinfo
+.env
+.env*.local
+test-results
+.next-performance

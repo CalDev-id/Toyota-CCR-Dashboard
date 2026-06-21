@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import AuthSessionProvider from "@/components/auth/AuthSessionProvider";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -26,8 +27,24 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full">{children}</body>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+try {
+  if (localStorage.getItem("toyota-ccr-theme") === "dark") {
+    document.documentElement.classList.add("dark");
+  }
+} catch {}
+            `.trim(),
+          }}
+        />
+      </head>
+      <body className="min-h-full">
+        <AuthSessionProvider>{children}</AuthSessionProvider>
+      </body>
     </html>
   );
 }

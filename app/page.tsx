@@ -1,86 +1,128 @@
 import DefaultLayout from "@/components/layouts/DefaultLayout";
+import { getHomeDashboard } from "@/lib/home-server";
 
-const metrics = [
-  {
-    label: "Planned Units",
-    value: "3,782",
-    trend: "11.01%",
-    positive: true,
-    caption: "Units scheduled this month",
-  },
-  {
-    label: "Material Orders",
-    value: "5,359",
-    trend: "9.05%",
-    positive: false,
-    caption: "Open PO and kanban items",
-  },
-  {
-    label: "Shortage Items",
-    value: "124",
-    trend: "4.24%",
-    positive: true,
-    caption: "Parts under monitoring",
-  },
-  {
-    label: "Plan Attainment",
-    value: "98.4%",
-    trend: "2.18%",
-    positive: true,
-    caption: "Production plan achieved",
-  },
-];
+export const dynamic = "force-dynamic";
 
-const monthlyBars = [44, 62, 48, 80, 52, 68, 92, 74, 64, 88, 58, 78];
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 0,
+  }).format(value);
+}
 
-export default function Home() {
+function formatPercent(value: number | null) {
+  if (value === null) {
+    return "-";
+  }
+
+  return `${new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 1,
+  }).format(value)}%`;
+}
+
+function formatTrend(value: number | null) {
+  if (value === null) {
+    return "-";
+  }
+
+  const sign = value >= 0 ? "+" : "";
+
+  return `${sign}${new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 1,
+  }).format(value)}%`;
+}
+
+function getStatusClass(status: string) {
+  if (status === "Achieved") {
+    return "bg-[#ecfdf3] text-[#039855]";
+  }
+
+  return "bg-[#fef3f2] text-[#d92d20]";
+}
+
+function formatDayLabel(date: string) {
+  return String(Number(date.slice(8, 10)));
+}
+
+function getNiceMax(value: number) {
+  if (value <= 0) {
+    return 1;
+  }
+
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const normalized = value / magnitude;
+  const rounded = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+
+  return rounded * magnitude;
+}
+
+export default async function Home() {
+  const dashboard = await getHomeDashboard();
+  const maxProduction = Math.max(
+    1,
+    ...dashboard.productionDays.map((item) => item.actual),
+  );
+  const productionMax = getNiceMax(maxProduction);
+  const productionAxis = [productionMax, productionMax * 0.75, productionMax * 0.5, productionMax * 0.25, 0];
+  const targetProgress = dashboard.target.progress;
+  const progressDisplay = formatPercent(targetProgress);
+
   return (
     <DefaultLayout>
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {metrics.map((item) => (
-          <article
-            key={item.label}
-            className="rounded-2xl border border-[#e4e7ec] bg-white p-5 shadow-sm"
-          >
-            <div className="flex items-center justify-between">
-              <div className="grid size-11 place-items-center rounded-xl bg-[#f2f4f7] text-[#344054]">
-                <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
-                  <path
-                    d="M7.75 11.25a3.25 3.25 0 1 0 0-6.5 3.25 3.25 0 0 0 0 6.5ZM16.25 12.25a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5ZM2.75 19.25c.5-3.15 2.35-5 5-5s4.5 1.85 5 5M13.25 18.25c.62-2.1 1.88-3.15 3.75-3.15 2.15 0 3.55 1.3 4.05 4.15"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="1.7"
-                  />
-                </svg>
+        {dashboard.metrics.map((item) => {
+          const isPositive = (item.trend ?? 0) >= 0;
+
+          return (
+            <article
+              key={item.label}
+              className="rounded-2xl border border-[#e4e7ec] bg-white p-5 shadow-sm"
+            >
+              <div className="flex items-center justify-between">
+                <div className="grid size-11 place-items-center rounded-xl bg-[#f2f4f7] text-[#344054]">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
+                    <path
+                      d="M4 17.5 9.25 12l3.5 3.5L20 7.5M20 7.5h-5.5M20 7.5V13"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.8"
+                    />
+                  </svg>
+                </div>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                    item.trend === null
+                      ? "bg-[#f2f4f7] text-[#667085]"
+                      : isPositive
+                        ? "bg-[#ecfdf3] text-[#039855]"
+                        : "bg-[#fef3f2] text-[#d92d20]"
+                  }`}
+                >
+                  {item.trend === null
+                    ? "No prior data"
+                    : `${isPositive ? "↑" : "↓"} ${formatTrend(item.trend)}`}
+                </span>
               </div>
-              <span
-                className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                  item.positive
-                    ? "bg-[#ecfdf3] text-[#039855]"
-                    : "bg-[#fef3f2] text-[#d92d20]"
-                }`}
-              >
-                {item.positive ? "↑" : "↓"} {item.trend}
-              </span>
-            </div>
-            <p className="mt-5 text-sm font-medium text-[#667085]">{item.label}</p>
-            <p className="mt-1 text-2xl font-semibold tracking-tight text-[#101828]">
-              {item.value}
-            </p>
-            <p className="mt-1 text-sm text-[#667085]">{item.caption}</p>
-          </article>
-        ))}
+              <p className="mt-5 text-sm font-medium text-[#667085]">{item.label}</p>
+              <p className="mt-1 text-2xl font-semibold tracking-tight text-[#101828]">
+                {formatPercent(item.value)}
+              </p>
+              <p className="mt-1 text-sm text-[#667085]">Average this month</p>
+            </article>
+          );
+        })}
       </section>
 
       <section className="mt-6 grid gap-6 xl:grid-cols-[1.45fr_0.55fr]">
         <article className="rounded-2xl border border-[#e4e7ec] bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-[#101828]">Monthly Production</h2>
+              <h2 className="text-lg font-semibold text-[#101828]">
+                Monthly Production Trend
+              </h2>
               <p className="mt-1 text-sm text-[#667085]">
-                Planned versus released production volume by month
+                Actual production volume by day
               </p>
             </div>
             <button className="h-10 rounded-lg border border-[#e4e7ec] px-4 text-sm font-medium text-[#344054]">
@@ -88,20 +130,50 @@ export default function Home() {
             </button>
           </div>
 
-          <div className="mt-7 flex h-72 items-end gap-3 rounded-2xl bg-[#f9fafb] px-4 py-5">
-            {monthlyBars.map((height, index) => (
-              <div key={index} className="flex flex-1 flex-col items-center gap-3">
-                <div className="flex h-56 w-full items-end">
-                  <div
-                    className="w-full rounded-t-lg bg-[#465fff]"
-                    style={{ height: `${height}%` }}
-                  />
+          <div className="mt-7 grid h-72 grid-cols-[38px_1fr] gap-2 rounded-2xl bg-[#f9fafb] px-3 py-5">
+            {dashboard.productionDays.length ? (
+              <>
+                <div className="flex h-56 flex-col justify-between text-right text-[10px] font-medium text-[#667085]">
+                  {productionAxis.map((value, index) => (
+                    <span key={`${value}-${index}`}>{formatNumber(value)}</span>
+                  ))}
                 </div>
-                <span className="text-xs font-medium text-[#667085]">
-                  {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][index]}
-                </span>
+                <div className="flex min-w-0 items-end gap-3 overflow-x-auto overflow-y-visible">
+                  {dashboard.productionDays.map((item, index) => (
+                    <div key={item.date} className="flex min-w-8 flex-1 flex-col items-center gap-3">
+                      <div className="flex h-56 w-full items-end">
+                        <div
+                          className="group relative w-full rounded-t-lg bg-[#465fff]"
+                          style={{ height: `${Math.max((item.actual / productionMax) * 100, 3)}%` }}
+                        >
+                          <div
+                            className={`pointer-events-none absolute top-[calc(100%-14rem+0.5rem)] z-20 hidden w-36 rounded-lg border border-[#e4e7ec] bg-white p-3 text-left text-xs shadow-lg group-hover:block ${
+                              index === 0
+                                ? "left-0"
+                                : index === dashboard.productionDays.length - 1
+                                  ? "right-0"
+                                  : "left-1/2 -translate-x-1/2"
+                            }`}
+                          >
+                            <p className="font-semibold text-[#101828]">{item.date}</p>
+                            <p className="mt-2 text-[#667085]">Plan: {formatNumber(item.plan)}</p>
+                            <p className="mt-1 text-[#667085]">Actual: {formatNumber(item.actual)}</p>
+                            <p className="mt-1 text-[#667085]">Balance: {formatNumber(item.balance)}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-xs font-medium text-[#667085]">
+                        {formatDayLabel(item.date)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="col-span-2 grid h-full w-full place-items-center text-sm font-medium text-[#98a2b3]">
+                No production data this month
               </div>
-            ))}
+            )}
           </div>
         </article>
 
@@ -109,17 +181,33 @@ export default function Home() {
           <div className="flex items-start justify-between">
             <div>
               <h2 className="text-lg font-semibold text-[#101828]">Monthly Target</h2>
-              <p className="mt-1 text-sm text-[#667085]">Production target completed this month</p>
+              <p className="mt-1 text-sm text-[#667085]">
+                Production target completed this month
+              </p>
             </div>
-            <span className="rounded-full bg-[#ecfdf3] px-2.5 py-1 text-xs font-medium text-[#039855]">
-              +10%
+            <span
+              className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                (targetProgress ?? 0) >= 100
+                  ? "bg-[#ecfdf3] text-[#039855]"
+                  : "bg-[#fef3f2] text-[#d92d20]"
+              }`}
+            >
+              {progressDisplay}
             </span>
           </div>
 
-          <div className="mx-auto mt-8 grid size-52 place-items-center rounded-full border-[18px] border-[#ecf3ff]">
-            <div className="grid size-36 place-items-center rounded-full border-[18px] border-[#465fff] bg-white text-center">
+          <div
+            className="mx-auto mt-8 grid size-52 place-items-center rounded-full p-[18px]"
+            style={{
+              background: `conic-gradient(#465fff ${Math.min(
+                Math.max(targetProgress ?? 0, 0),
+                100,
+              )}%, #ecf3ff 0)`,
+            }}
+          >
+            <div className="grid size-36 place-items-center rounded-full bg-white text-center">
               <div>
-                <p className="text-3xl font-semibold text-[#101828]">75.55%</p>
+                <p className="text-3xl font-semibold text-[#101828]">{progressDisplay}</p>
                 <p className="mt-1 text-xs font-medium text-[#667085]">Progress</p>
               </div>
             </div>
@@ -127,9 +215,9 @@ export default function Home() {
 
           <div className="mt-8 grid grid-cols-3 divide-x divide-[#e4e7ec] rounded-2xl bg-[#f9fafb] p-4 text-center">
             {[
-              ["Target", "20K"],
-              ["Released", "16K"],
-              ["Today", "1.5K"],
+              ["Plan", formatNumber(dashboard.target.plan)],
+              ["Actual", formatNumber(dashboard.target.actual)],
+              ["Balance", formatNumber(dashboard.target.balance)],
             ].map(([label, value]) => (
               <div key={label}>
                 <p className="text-xs font-medium text-[#667085]">{label}</p>
@@ -142,70 +230,64 @@ export default function Home() {
 
       <section className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <article className="rounded-2xl border border-[#e4e7ec] bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-[#101828]">Statistics</h2>
-          <p className="mt-1 text-sm text-[#667085]">Weekly PPIC activity by area</p>
+          <h2 className="text-lg font-semibold text-[#101828]">Line Performance</h2>
+          <p className="mt-1 text-sm text-[#667085]">OEE average this month by line</p>
 
           <div className="mt-6 space-y-5">
-            {[
-              ["Production Planning", "1,245", 82],
-              ["Inventory Control", "982", 68],
-              ["Material Readiness", "584", 48],
-              ["Supplier Follow-up", "312", 34],
-            ].map(([label, value, progress]) => (
-              <div key={label}>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-[#344054]">{label}</span>
-                  <span className="font-semibold text-[#101828]">{value}</span>
+            {dashboard.linePerformance.map((item) => {
+              const progress = Math.min(Math.max(item.oee ?? 0, 0), 100);
+
+              return (
+                <div key={item.key}>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium text-[#344054]">{item.label}</span>
+                    <span className="font-semibold text-[#101828]">
+                      {formatPercent(item.oee)}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#f2f4f7]">
+                    <div
+                      className={`h-full rounded-full ${
+                        progress >= 90 ? "bg-[#12b76a]" : "bg-[#f04438]"
+                      }`}
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#f2f4f7]">
-                  <div
-                    className="h-full rounded-full bg-[#465fff]"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </article>
 
         <article className="overflow-hidden rounded-2xl border border-[#e4e7ec] bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-[#e4e7ec] px-5 py-4">
-            <div>
-              <h2 className="text-lg font-semibold text-[#101828]">Recent Material Orders</h2>
-              <p className="mt-1 text-sm text-[#667085]">Latest PPIC planning and inventory movement</p>
-            </div>
-            <button className="h-10 rounded-lg border border-[#e4e7ec] px-4 text-sm font-medium text-[#344054]">
-              See all
-            </button>
+          <div className="border-b border-[#e4e7ec] px-5 py-4">
+            <h2 className="text-lg font-semibold text-[#101828]">Plan vs Actual Gap</h2>
+            <p className="mt-1 text-sm text-[#667085]">
+              Lines with the largest production shortfall this month
+            </p>
           </div>
-
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
+            <table className="w-full table-fixed min-w-[560px] text-left text-sm">
               <thead className="bg-[#f9fafb] text-xs font-medium uppercase tracking-wide text-[#667085]">
                 <tr>
-                  <th className="px-5 py-3">Order</th>
-                  <th className="px-5 py-3">Area</th>
-                  <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3 text-right">Readiness</th>
+                  <th className="w-[24%] px-5 py-3">Line</th>
+                  <th className="w-[19%] px-5 py-3 text-right">Plan</th>
+                  <th className="w-[19%] px-5 py-3 text-right">Actual</th>
+                  <th className="w-[19%] px-5 py-3 text-right">Gap</th>
+                  <th className="w-[19%] px-5 py-3 text-right">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e4e7ec]">
-                {[
-                  ["PO-2401", "Body Parts", "In Review", "96%"],
-                  ["PO-2402", "Engine Parts", "Shortage", "82%"],
-                  ["PO-2403", "Interior Parts", "Released", "100%"],
-                  ["PO-2404", "Packaging", "Pending", "74%"],
-                ].map(([id, area, status, readiness]) => (
-                  <tr key={id}>
-                    <td className="px-5 py-4 font-medium text-[#101828]">{id}</td>
-                    <td className="px-5 py-4 text-[#667085]">{area}</td>
-                    <td className="px-5 py-4">
-                      <span className="rounded-full bg-[#ecf3ff] px-2.5 py-1 text-xs font-medium text-[#465fff]">
-                        {status}
+                {dashboard.lineGaps.map((item) => (
+                  <tr key={item.line}>
+                    <td className="px-5 py-4 font-medium text-[#101828]">{item.line}</td>
+                    <td className="px-5 py-4 text-right text-[#667085]">{formatNumber(item.plan)}</td>
+                    <td className="px-5 py-4 text-right text-[#667085]">{formatNumber(item.actual)}</td>
+                    <td className="px-5 py-4 text-right font-medium text-[#101828]">{formatNumber(item.gap)}</td>
+                    <td className="px-5 py-4 text-right">
+                      <span className={`inline-flex justify-center rounded-full px-2.5 py-1 text-xs font-medium ${getStatusClass(item.status)}`}>
+                        {item.status}
                       </span>
-                    </td>
-                    <td className="px-5 py-4 text-right font-medium text-[#101828]">
-                      {readiness}
                     </td>
                   </tr>
                 ))}

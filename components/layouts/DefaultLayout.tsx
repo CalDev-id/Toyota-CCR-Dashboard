@@ -1,18 +1,178 @@
 "use client";
 
 import DashboardNavigation from "@/components/navigation/DashboardNavigation";
-import { useState } from "react";
+import Image from "next/image";
+import { signOut, useSession } from "next-auth/react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState, useSyncExternalStore } from "react";
 
 type DefaultLayoutProps = {
   children: React.ReactNode;
 };
 
+type Theme = "light" | "dark";
+
+const themeStorageKey = "toyota-ccr-theme";
+const themeChangeEvent = "toyota-ccr-theme-change";
+
+function getThemeSnapshot(): Theme {
+  return window.localStorage.getItem(themeStorageKey) === "dark" ? "dark" : "light";
+}
+
+function getServerThemeSnapshot(): Theme {
+  return "light";
+}
+
+function subscribeTheme(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(themeChangeEvent, onStoreChange);
+
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(themeChangeEvent, onStoreChange);
+  };
+}
+
+function saveTheme(theme: Theme) {
+  document.documentElement.classList.toggle("dark", theme === "dark");
+  window.localStorage.setItem(themeStorageKey, theme);
+  window.dispatchEvent(new Event(themeChangeEvent));
+}
+
+const pageHeaders = [
+  {
+    href: "/planning",
+    title: "Planning",
+    subtitle: "Monthly production planning by part, period, shift, and group",
+  },
+  {
+    href: "/production",
+    title: "Production",
+    subtitle: "Cylblock OEE, production attainment, overtime, and shift performance",
+  },
+  {
+    href: "/analysis",
+    title: "Analysis",
+    subtitle: "PPIC performance, material readiness, and inventory trends",
+  },
+  {
+    href: "/users",
+    title: "Users",
+    subtitle: "Manage dashboard login accounts",
+  },
+  {
+    href: "/",
+    title: "Dashboard",
+    subtitle: "Production planning and inventory control overview",
+  },
+];
+
 export default function DefaultLayout({ children }: DefaultLayoutProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const theme = useSyncExternalStore(
+    subscribeTheme,
+    getThemeSnapshot,
+    getServerThemeSnapshot,
+  );
+  const { data: session } = useSession();
+  const pathname = usePathname();
+  const router = useRouter();
+  const userName = session?.user?.name ?? "User CCR";
+  const userEmail = session?.user?.email ?? "Signed in";
+  const userInitials = userName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "UC";
+  const pageHeader =
+    pageHeaders.find((item) =>
+      item.href === "/" ? pathname === "/" : pathname.startsWith(item.href),
+    ) ?? pageHeaders[pageHeaders.length - 1];
+  const isDarkMode = theme === "dark";
+
+  async function handleLogout() {
+    setIsProfileMenuOpen(false);
+    await signOut({ redirect: false });
+    router.push("/login");
+    router.refresh();
+  }
+
+  function toggleTheme() {
+    saveTheme(isDarkMode ? "light" : "dark");
+  }
 
   return (
     <div className="h-screen overflow-hidden bg-[#f9fafb] text-[#101828]">
       <div className="flex h-full overflow-hidden">
+        <div
+          className={`fixed inset-0 z-40 bg-[#101828]/40 transition-opacity lg:hidden ${
+            isMobileSidebarOpen
+              ? "opacity-100"
+              : "pointer-events-none opacity-0"
+          }`}
+          aria-hidden="true"
+          onClick={() => setIsMobileSidebarOpen(false)}
+        />
+
+        <aside
+          id="mobile-sidebar"
+          className={`fixed inset-y-0 left-0 z-50 flex w-[290px] max-w-[calc(100vw-48px)] flex-col border-r border-[#e4e7ec] bg-white shadow-xl transition-transform duration-200 ease-out lg:hidden ${
+            isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+          aria-label="Mobile sidebar"
+          aria-hidden={!isMobileSidebarOpen}
+        >
+          <div className="flex h-20 items-center justify-between gap-3 border-b border-[#e4e7ec] px-5">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="theme-logo-surface grid h-10 w-14 shrink-0 place-items-center overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
+                <Image
+                  src="/images/tmmin_logo.png"
+                  alt="TMMIN logo"
+                  width={800}
+                  height={344}
+                  className="h-7 w-auto object-contain"
+                  priority
+                />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold tracking-tight text-[#101828]">
+                  Toyota CCR
+                </p>
+                <p className="truncate text-xs font-medium text-[#667085]">
+                  PPIC & Warehouse
+                </p>
+              </div>
+            </div>
+
+            <button
+              className="grid size-10 shrink-0 place-items-center rounded-lg border border-[#e4e7ec] bg-white text-[#667085] transition hover:bg-[#f9fafb] hover:text-[#101828]"
+              aria-label="Close sidebar"
+              onClick={() => setIsMobileSidebarOpen(false)}
+              type="button"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
+                <path
+                  d="m6 6 12 12M18 6 6 18"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="1.8"
+                />
+              </svg>
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-4 py-6">
+            <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wide text-[#98a2b3]">
+              Menu
+            </p>
+            <DashboardNavigation onNavigate={() => setIsMobileSidebarOpen(false)} />
+          </div>
+        </aside>
+
         <aside
           className={`relative z-40 hidden h-full shrink-0 border-r border-[#e4e7ec] bg-white transition-[width] duration-200 ease-out lg:flex lg:flex-col ${
             isSidebarCollapsed ? "w-[92px]" : "w-[290px]"
@@ -47,15 +207,22 @@ export default function DefaultLayout({ children }: DefaultLayoutProps) {
               isSidebarCollapsed ? "justify-center" : "gap-3"
             }`}
           >
-            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#465fff] text-sm font-bold tracking-wide text-white">
-              TC
+            <div className="theme-logo-surface grid h-10 w-14 shrink-0 place-items-center overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
+              <Image
+                src="/images/tmmin_logo.png"
+                alt="TMMIN logo"
+                width={800}
+                height={344}
+                className="h-7 w-auto object-contain"
+                priority
+              />
             </div>
             <div className={isSidebarCollapsed ? "hidden" : "min-w-0"}>
               <p className="truncate text-base font-semibold tracking-tight text-[#101828]">
                 Toyota CCR
               </p>
               <p className="truncate text-xs font-medium text-[#667085]">
-                Production Planning & Inventory Control
+                PPIC & Warehouse
               </p>
             </div>
           </div>
@@ -78,8 +245,11 @@ export default function DefaultLayout({ children }: DefaultLayoutProps) {
             <div className="flex min-h-16 items-center justify-between gap-3 px-4 py-3 md:px-6">
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <button
-                  className="grid size-10 place-items-center rounded-lg border border-[#e4e7ec] bg-white text-[#667085] transition hover:bg-[#f9fafb] hover:text-[#101828] lg:hidden"
+                  className="grid size-10 shrink-0 place-items-center rounded-lg border border-[#e4e7ec] bg-white text-[#667085] transition hover:bg-[#f9fafb] hover:text-[#101828] lg:hidden"
                   aria-label="Open sidebar"
+                  aria-expanded={isMobileSidebarOpen}
+                  aria-controls="mobile-sidebar"
+                  onClick={() => setIsMobileSidebarOpen((current) => !current)}
                   type="button"
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
@@ -93,46 +263,52 @@ export default function DefaultLayout({ children }: DefaultLayoutProps) {
                   </svg>
                 </button>
 
-                <label className="relative hidden min-w-0 max-w-[430px] flex-1 sm:block">
-                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3]">
-                    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
-                      <path
-                        d="m20 20-4.2-4.2M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeWidth="1.8"
-                      />
-                    </svg>
-                  </span>
-                  <input
-                    className="h-11 w-full rounded-lg border border-[#e4e7ec] bg-white pl-11 pr-24 text-sm text-[#344054] outline-none transition placeholder:text-[#98a2b3] focus:border-[#465fff] focus:ring-4 focus:ring-[#ecf3ff]"
-                    placeholder="Search part, model, supplier"
-                    type="search"
-                  />
-                  <span className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-[#e4e7ec] px-2 py-1 text-xs font-medium text-[#98a2b3] md:block">
-                    ⌘ K
-                  </span>
-                </label>
+                <div className="min-w-0">
+                  <h1 className="truncate text-base font-semibold text-[#101828]">
+                    {pageHeader.title}
+                  </h1>
+                  <p className="truncate text-xs font-medium text-[#667085]">
+                    {pageHeader.subtitle}
+                  </p>
+                </div>
               </div>
 
               <div className="flex shrink-0 items-center gap-2">
-                {[
-                  // {
-                  //   label: "Toggle theme",
-                  //   icon: (
-                  //     <path
-                  //       d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.8 6.8 0 0 0 9.8 9.8Z"
-                  //       fill="none"
-                  //       stroke="currentColor"
-                  //       strokeLinejoin="round"
-                  //       strokeWidth="1.8"
-                  //     />
-                  //   ),
-                  // },
-                  {
-                    label: "Notifications",
-                    icon: (
+                <button
+                  aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+                  aria-pressed={isDarkMode}
+                  className="relative grid size-10 place-items-center rounded-full border border-[#e4e7ec] bg-white text-[#667085] transition hover:bg-[#f9fafb] hover:text-[#101828]"
+                  type="button"
+                  onClick={toggleTheme}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
+                    {isDarkMode ? (
+                      <path
+                        d="M12 4.25V3m0 18v-1.25M5.52 5.52l-.88-.88m14.72 14.72-.88-.88M4.25 12H3m18 0h-1.25M5.52 18.48l-.88.88M19.36 4.64l-.88.88M16.25 12a4.25 4.25 0 1 1-8.5 0 4.25 4.25 0 0 1 8.5 0Z"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="1.8"
+                      />
+                    ) : (
+                      <path
+                        d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.8 6.8 0 0 0 9.8 9.8Z"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeLinejoin="round"
+                        strokeWidth="1.8"
+                      />
+                    )}
+                  </svg>
+                </button>
+
+                <button
+                  aria-label="Notifications"
+                  className="relative grid size-10 place-items-center rounded-full border border-[#e4e7ec] bg-white text-[#667085] transition hover:bg-[#f9fafb] hover:text-[#101828]"
+                  type="button"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
                       <path
                         d="M18 9.75a6 6 0 0 0-12 0c0 6-2 6.5-2 6.5h16s-2-.5-2-6.5ZM10 19h4"
                         fill="none"
@@ -141,75 +317,107 @@ export default function DefaultLayout({ children }: DefaultLayoutProps) {
                         strokeLinejoin="round"
                         strokeWidth="1.8"
                       />
-                    ),
-                  },
-                  // {
-                  //   label: "Messages",
-                  //   icon: (
-                  //     <path
-                  //       d="M5.5 18.5h9.8l3.2 2.2v-2.2h.5a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2H5.5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2Z"
-                  //       fill="none"
-                  //       stroke="currentColor"
-                  //       strokeLinecap="round"
-                  //       strokeLinejoin="round"
-                  //       strokeWidth="1.8"
-                  //     />
-                  //   ),
-                  // },
-                ].map((action) => (
-                  <button
-                    key={action.label}
-                    aria-label={action.label}
-                    className="relative grid size-10 place-items-center rounded-full border border-[#e4e7ec] bg-white text-[#667085] transition hover:bg-[#f9fafb] hover:text-[#101828]"
-                    type="button"
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
-                      {action.icon}
-                    </svg>
-                    {action.label === "Notifications" ? (
-                      <span className="absolute right-2 top-2 size-2 rounded-full bg-[#f04438] ring-2 ring-white" />
-                    ) : null}
-                  </button>
-                ))}
-
-                <button
-                  className="ml-1 flex h-11 items-center gap-3 rounded-full border border-[#e4e7ec] bg-white py-1 pl-1 pr-3 transition hover:bg-[#f9fafb]"
-                  type="button"
-                >
-                  <span className="grid size-9 place-items-center rounded-full bg-[#101828] text-xs font-semibold text-white">
-                    AD
-                  </span>
-                  <span className="hidden text-left sm:block">
-                    <span className="block text-sm font-medium leading-4 text-[#101828]">
-                      Admin CCR
-                    </span>
-                    <span className="mt-0.5 block text-xs text-[#667085]">
-                      PPIC Team
-                    </span>
-                  </span>
-                  <svg
-                    viewBox="0 0 20 20"
-                    aria-hidden="true"
-                    className="hidden size-4 text-[#667085] sm:block"
-                  >
-                    <path
-                      d="m5 7.5 5 5 5-5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="1.7"
-                    />
                   </svg>
+                  <span className="absolute right-2 top-2 size-2 rounded-full bg-[#f04438] ring-2 ring-white" />
                 </button>
+
+                <div className="relative ml-1">
+                  {isProfileMenuOpen ? (
+                    <button
+                      className="fixed inset-0 z-40 cursor-default"
+                      type="button"
+                      aria-label="Close profile menu"
+                      onClick={() => setIsProfileMenuOpen(false)}
+                    />
+                  ) : null}
+
+                  <button
+                    className="relative z-50 flex h-11 items-center gap-3 rounded-full border border-[#e4e7ec] bg-white py-1 pl-1 pr-3 transition hover:bg-[#f9fafb]"
+                    type="button"
+                    onClick={() => setIsProfileMenuOpen((current) => !current)}
+                    aria-expanded={isProfileMenuOpen}
+                    aria-haspopup="menu"
+                  >
+                    <span className="grid size-9 place-items-center rounded-full bg-[#101828] text-xs font-semibold text-white">
+                      {userInitials}
+                    </span>
+                    <span className="hidden text-left sm:block">
+                      <span className="block text-sm font-medium leading-4 text-[#101828]">
+                        {userName}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-[#667085]">
+                        {userEmail}
+                      </span>
+                    </span>
+                    <svg
+                      viewBox="0 0 20 20"
+                      aria-hidden="true"
+                      className={`hidden size-4 text-[#667085] transition-transform sm:block ${
+                        isProfileMenuOpen ? "rotate-180" : ""
+                      }`}
+                    >
+                      <path
+                        d="m5 7.5 5 5 5-5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="1.7"
+                      />
+                    </svg>
+                  </button>
+
+                  {isProfileMenuOpen ? (
+                    <div
+                      className="absolute right-0 top-13 z-50 w-72 overflow-hidden rounded-xl border border-[#e4e7ec] bg-white shadow-lg"
+                      role="menu"
+                    >
+                      <div className="border-b border-[#e4e7ec] p-4">
+                        <div className="flex items-center gap-3">
+                          <span className="grid size-10 place-items-center rounded-full bg-[#101828] text-xs font-semibold text-white">
+                            {userInitials}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-[#101828]">
+                              {userName}
+                            </p>
+                            <p className="mt-0.5 truncate text-xs text-[#667085]">
+                              {userEmail}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-2">
+                        <button
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[#b42318] transition hover:bg-[#fef3f2]"
+                          type="button"
+                          role="menuitem"
+                          onClick={handleLogout}
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                            className="size-5"
+                          >
+                            <path
+                              d="M9.75 6.75V5.5a1.75 1.75 0 0 1 1.75-1.75h5A1.75 1.75 0 0 1 18.25 5.5v13a1.75 1.75 0 0 1-1.75 1.75h-5a1.75 1.75 0 0 1-1.75-1.75v-1.25M4.75 12h9M11 8.75 14.25 12 11 15.25"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="1.8"
+                            />
+                          </svg>
+                          Logout
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
 
-            <div className="mt-4 lg:hidden">
-              <div className="rounded-lg border border-[#e4e7ec] bg-[#f9fafb] p-2">
-                <DashboardNavigation compact />
-              </div>
-            </div>
           </header>
 
           <main>
