@@ -339,6 +339,118 @@ function OeeGauge({ value, trend }: { value: number; trend: Trend }) {
   );
 }
 
+function ProductionPlanCard({
+  actual,
+  plan,
+  trend,
+}: {
+  actual: number;
+  plan: number;
+  trend: Trend;
+}) {
+  const progress = plan > 0 ? Math.min(Math.max((actual / plan) * 100, 0), 120) : 0;
+  const isAchieved = plan > 0 && actual >= plan;
+
+  return (
+    <article className="rounded-2xl border border-[#e4e7ec] bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-[#101828]">Production</h2>
+          <p className="mt-1 text-xs font-medium text-[#667085]">
+            Actual vs plan units
+          </p>
+        </div>
+        <span
+          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+            isAchieved ? "bg-[#ecfdf3] text-[#027a48]" : "bg-[#f2f4f7] text-[#344054]"
+          }`}
+        >
+          {isAchieved ? "OK" : "Info"}
+        </span>
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-[#f9fafb] p-3">
+          <p className="text-xs font-medium text-[#667085]">Actual</p>
+          <p className="mt-1 text-2xl font-semibold tracking-tight text-[#101828]">
+            {formatNumberAuto(actual)}
+          </p>
+        </div>
+        <div className="rounded-xl bg-[#f9fafb] p-3">
+          <p className="text-xs font-medium text-[#667085]">Plan</p>
+          <p className="mt-1 text-2xl font-semibold tracking-tight text-[#101828]">
+            {formatNumber(plan)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <div className="h-2 overflow-hidden rounded-full bg-[#eef2f6]">
+          <div
+            className={`h-full rounded-full ${
+              isAchieved ? "bg-[#12b76a]" : "bg-[#465fff]"
+            }`}
+            style={{ width: `${Math.min(progress, 100)}%` }}
+          />
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <span className="text-xs font-semibold text-[#667085]">
+            {formatNumberAuto(progress)}% achieved
+          </span>
+          <TrendBadge trend={trend} />
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function BalanceCard({ balance }: { balance: number }) {
+  const isBehind = balance < 0;
+  const balanceLabel = isBehind ? "Behind plan" : "Ahead / on plan";
+  const absBalance = Math.abs(balance);
+  const helperText = isBehind
+    ? "Needs recovery in the next production window."
+    : "No recovery action needed for this selection.";
+
+  return (
+    <article className="rounded-2xl border border-[#e4e7ec] bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-[#101828]">Balance</h2>
+          <p className="mt-1 text-xs font-medium text-[#667085]">
+            Production gap to plan
+          </p>
+        </div>
+        <span
+          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+            isBehind ? "bg-[#fef3f2] text-[#b42318]" : "bg-[#ecfdf3] text-[#027a48]"
+          }`}
+        >
+          {isBehind ? "Watch" : "OK"}
+        </span>
+      </div>
+
+      <div className="mt-5 rounded-xl bg-[#f9fafb] p-4">
+        <p className="text-xs font-medium text-[#667085]">{balanceLabel}</p>
+        <p
+          className={`mt-1 text-3xl font-semibold tracking-tight ${
+            isBehind ? "text-[#b42318]" : "text-[#027a48]"
+          }`}
+        >
+          {isBehind ? "-" : "+"}
+          {formatNumberAuto(absBalance)}
+        </p>
+        <p className="mt-1 text-xs font-medium text-[#667085]">units</p>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-[#e4e7ec] px-3 py-3">
+        <p className="text-xs font-medium text-[#667085]">Action status</p>
+        <p className="mt-1 text-sm font-semibold text-[#101828]">{helperText}</p>
+      </div>
+    </article>
+  );
+}
+
 function FilterSelect({
   label,
   value,
@@ -516,56 +628,78 @@ export default function ProductionPage() {
 
   return (
     <DefaultLayout>
+      <section className="rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <label className="grid gap-1.5 text-sm font-medium text-[#344054]">
+            Date
+            <input
+              type="date"
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+              className="h-10 rounded-lg border border-[#d0d5dd] px-3 text-sm font-medium outline-none transition focus:border-[#465fff] focus:ring-2 focus:ring-[#ecf3ff]"
+            />
+          </label>
+          <FilterSelect
+            label="Line"
+            value={line}
+            options={lineOptions.map((option) => option.value)}
+            onChange={setLine}
+            includeAll={false}
+          />
+          <FilterSelect
+            label="Shift"
+            value={shift}
+            options={filterOptions.shifts}
+            onChange={setShift}
+          />
+          <FilterSelect
+            label="Day / Night"
+            value={shift2}
+            options={filterOptions.shift2s}
+            onChange={setShift2}
+          />
+        </div>
+      </section>
+
       {error ? (
-        <div className="mb-4 rounded-xl border border-[#fecdca] bg-[#fef3f2] px-4 py-3 text-sm font-medium text-[#b42318]">
+        <div className="mt-4 rounded-xl border border-[#fecdca] bg-[#fef3f2] px-4 py-3 text-sm font-medium text-[#b42318]">
           {error}
         </div>
       ) : null}
 
-      <section className="grid gap-4 xl:grid-cols-[1fr_360px]">
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <KpiCard
-            label="AV"
-            value={formatPercent(totals.av)}
-            caption="Availability"
-            trend={trends.av}
-            tone={normalizePercent(totals.av) >= 85 ? "good" : "warn"}
-          />
-          <KpiCard
-            label="PE"
-            value={formatPercent(totals.pe)}
-            caption="Performance"
-            trend={trends.pe}
-            tone={normalizePercent(totals.pe) >= 85 ? "good" : "warn"}
-          />
-          <KpiCard
-            label="RQ"
-            value={formatPercent(totals.rq)}
-            caption="Quality"
-            trend={trends.rq}
-            tone={normalizePercent(totals.rq) >= 85 ? "good" : "warn"}
-          />
-          <KpiCard
-            label="Production"
-            value={`${formatNumberAuto(totals.prodAct)} / ${formatNumber(
-              totals.prodPlan,
-            )}`}
-            caption="Actual vs plan units"
-            className="xl:col-span-2"
-            trend={trends.prodAct}
-            tone={
-              totals.prodAct >= totals.prodPlan && totals.prodPlan > 0
-                ? "good"
-                : "neutral"
-            }
-          />
-          <KpiCard
-            label="Balance"
-            value={formatNumberAuto(totals.balance)}
-            caption="Total plan balance"
-            showTrend={false}
-            tone={totals.balance < 0 ? "warn" : "good"}
-          />
+      <section className="mt-6 grid gap-4 xl:grid-cols-[1fr_360px]">
+        <div className="grid gap-4">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <KpiCard
+              label="AV"
+              value={formatPercent(totals.av)}
+              caption="Availability"
+              trend={trends.av}
+              tone={normalizePercent(totals.av) >= 85 ? "good" : "warn"}
+            />
+            <KpiCard
+              label="PE"
+              value={formatPercent(totals.pe)}
+              caption="Performance"
+              trend={trends.pe}
+              tone={normalizePercent(totals.pe) >= 85 ? "good" : "warn"}
+            />
+            <KpiCard
+              label="RQ"
+              value={formatPercent(totals.rq)}
+              caption="Quality"
+              trend={trends.rq}
+              tone={normalizePercent(totals.rq) >= 85 ? "good" : "warn"}
+            />
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <ProductionPlanCard
+              actual={totals.prodAct}
+              plan={totals.prodPlan}
+              trend={trends.prodAct}
+            />
+            <BalanceCard balance={totals.balance} />
+          </div>
         </div>
         <OeeGauge value={totals.oee} trend={trends.oee} />
       </section>
@@ -576,39 +710,6 @@ export default function ProductionPage() {
         </div>
       ) : (
         <>
-          <section className="mt-6 rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <label className="grid gap-1.5 text-sm font-medium text-[#344054]">
-                Date
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(event) => setDate(event.target.value)}
-                  className="h-10 rounded-lg border border-[#d0d5dd] px-3 text-sm font-medium outline-none transition focus:border-[#465fff] focus:ring-2 focus:ring-[#ecf3ff]"
-                />
-              </label>
-              <FilterSelect
-                label="Line"
-                value={line}
-                options={lineOptions.map((option) => option.value)}
-                onChange={setLine}
-                includeAll={false}
-              />
-              <FilterSelect
-                label="Shift"
-                value={shift}
-                options={filterOptions.shifts}
-                onChange={setShift}
-              />
-              <FilterSelect
-                label="Day / Night"
-                value={shift2}
-                options={filterOptions.shift2s}
-                onChange={setShift2}
-              />
-            </div>
-          </section>
-
           <section className="mt-6">
             <article className="overflow-hidden rounded-2xl border border-[#e4e7ec] bg-white shadow-sm">
               <div className="border-b border-[#e4e7ec] px-5 py-4">
