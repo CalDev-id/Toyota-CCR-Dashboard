@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { getReportPrisma } from "@/lib/report-prisma";
 import type {
   PlanningColumn,
   PlanningPartKey,
@@ -94,7 +94,7 @@ function getInputType(type: string): PlanningColumn["inputType"] {
 }
 
 export async function getPlanningColumns(part: PlanningPartKey) {
-  const columns = await prisma.$queryRawUnsafe<RawColumn[]>(
+  const columns = await getReportPrisma().$queryRawUnsafe<RawColumn[]>(
     `SHOW COLUMNS FROM ${quotedTable(part)}`,
   );
 
@@ -148,7 +148,7 @@ export async function getPlanningSummaries(month: string) {
       const oneTrColumn = findColumnByName(columns, "f1tr");
       const twoTrColumn = findColumnByName(columns, "f2tr");
       const { start, end } = getMonthRange(month);
-      const rows = await prisma.$queryRawUnsafe<
+      const rows = await getReportPrisma().$queryRawUnsafe<
         {
           count: bigint | number;
           one_tr_total: string | number | null;
@@ -184,7 +184,7 @@ export async function getPlanningRows(part: PlanningPartKey, columns: PlanningCo
   const primary = columns.find((column) => column.isPrimary);
   const orderBy = primary ? ` ORDER BY ${quotedColumn(primary.field)} DESC` : "";
 
-  return prisma.$queryRawUnsafe<PlanningRow[]>(
+  return getReportPrisma().$queryRawUnsafe<PlanningRow[]>(
     `SELECT * FROM ${quotedTable(part)}${orderBy} LIMIT 200`,
   );
 }
@@ -251,7 +251,7 @@ export async function getFilteredPlanningRows(
     primary ? `, ${quotedColumn(primary.field)} ASC` : ""
   }`;
 
-  return prisma.$queryRawUnsafe<PlanningRow[]>(
+  return getReportPrisma().$queryRawUnsafe<PlanningRow[]>(
     `SELECT * FROM ${quotedTable(part)}${where}${orderBy} LIMIT 200`,
     ...values,
   );
@@ -264,7 +264,7 @@ export async function getPlanningFilterOptions(
 ) {
   const { dateColumn, shiftColumn, groupColumn } = getConflictColumns(columns);
   const { start, end } = getMonthRange(month);
-  const rows = await prisma.$queryRawUnsafe<Record<string, string | number | null>[]>(
+  const rows = await getReportPrisma().$queryRawUnsafe<Record<string, string | number | null>[]>(
     `SELECT DISTINCT ${quotedColumn(shiftColumn.field)} AS shift_value, ${quotedColumn(
       groupColumn.field,
     )} AS group_value FROM ${quotedTable(part)} WHERE ${quotedColumn(
@@ -346,7 +346,7 @@ export async function insertPlanningRows(
     writableColumns.map((column) => normalizeValue(row[column.field], column)),
   );
 
-  await prisma.$executeRawUnsafe(sql, ...values);
+  await getReportPrisma().$executeRawUnsafe(sql, ...values);
   return rows.length;
 }
 
@@ -365,7 +365,7 @@ export async function updatePlanningRow(
   }
 
   const assignments = entries.map(([field]) => `${quotedColumn(field)} = ?`).join(", ");
-  await prisma.$executeRawUnsafe(
+  await getReportPrisma().$executeRawUnsafe(
     `UPDATE ${quotedTable(part)} SET ${assignments} WHERE ${quotedColumn(
       primary.field,
     )} = ?`,
@@ -381,7 +381,7 @@ export async function deletePlanningRow(
 ) {
   const primary = getPrimaryColumn(columns);
 
-  await prisma.$executeRawUnsafe(
+  await getReportPrisma().$executeRawUnsafe(
     `DELETE FROM ${quotedTable(part)} WHERE ${quotedColumn(primary.field)} = ?`,
     id,
   );
@@ -447,7 +447,7 @@ export async function findExistingBatches(
   const existing: { date: string; shift: string; group: string }[] = [];
 
   for (const key of keys) {
-    const result = await prisma.$queryRawUnsafe<{ count: bigint | number }[]>(
+    const result = await getReportPrisma().$queryRawUnsafe<{ count: bigint | number }[]>(
       `SELECT COUNT(*) AS count FROM ${quotedTable(part)} WHERE DATE(${quotedColumn(
         dateColumn.field,
       )}) = ? AND ${quotedColumn(shiftColumn.field)} = ? AND ${quotedColumn(
@@ -477,7 +477,7 @@ export async function replaceExistingBatches(
   } = getBatchKeys(rows, columns);
 
   for (const key of keys) {
-    await prisma.$executeRawUnsafe(
+    await getReportPrisma().$executeRawUnsafe(
       `DELETE FROM ${quotedTable(part)} WHERE DATE(${quotedColumn(
         dateColumn.field,
       )}) = ? AND ${quotedColumn(shiftColumn.field)} = ? AND ${quotedColumn(

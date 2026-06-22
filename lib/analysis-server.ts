@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { getReportPrisma } from "@/lib/report-prisma";
 
 type AnalysisLineKey = "cylblock" | "cylhead" | "camshaft" | "crankshaft";
 
@@ -51,9 +51,9 @@ export type AnalysisGapSeriesRow = {
 
 const analysisLines: AnalysisLine[] = [
   { key: "cylblock", label: "Cyl Block", tableName: "v_cylblock_summary" },
-  { key: "cylhead", label: "Cyl Head", tableName: "v_cylblock_summary" },
-  { key: "camshaft", label: "Camshaft", tableName: "v_cylblock_summary" },
-  { key: "crankshaft", label: "Crankshaft", tableName: "v_cylblock_summary" },
+  { key: "cylhead", label: "Cyl Head", tableName: "v_cylhead_summary" },
+  { key: "camshaft", label: "Camshaft", tableName: "v_camshaft_summary" },
+  { key: "crankshaft", label: "Crankshaft", tableName: "v_crankshaft_summary" },
 ];
 
 function quoteIdentifier(value: string) {
@@ -123,7 +123,7 @@ function normalizeShift(value: string | null) {
 }
 
 async function getLineRows(line: AnalysisLine, start: string, endExclusive: string) {
-  return prisma.$queryRawUnsafe<RawOeeRow[]>(
+  return getReportPrisma().$queryRawUnsafe<RawOeeRow[]>(
     `SELECT
       \`DATE\` AS date,
       SHIFT AS shift,

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { getReportPrisma } from "@/lib/report-prisma";
 
 type LineKey = "cylblock" | "cylhead" | "camshaft" | "crankshaft";
 
@@ -66,9 +66,9 @@ export type HomeDashboard = {
 
 const lineConfigs: LineConfig[] = [
   { key: "cylblock", label: "Cyl Block", tableName: "v_cylblock_summary" },
-  { key: "cylhead", label: "Cyl Head", tableName: "v_cylblock_summary" },
-  { key: "camshaft", label: "Camshaft", tableName: "v_cylblock_summary" },
-  { key: "crankshaft", label: "Crankshaft", tableName: "v_cylblock_summary" },
+  { key: "cylhead", label: "Cyl Head", tableName: "v_cylhead_summary" },
+  { key: "camshaft", label: "Camshaft", tableName: "v_camshaft_summary" },
+  { key: "crankshaft", label: "Crankshaft", tableName: "v_crankshaft_summary" },
 ];
 
 const metricLabels: Record<HomeMetricKey, string> = {
@@ -145,7 +145,7 @@ function getPreviousMonthRange() {
 }
 
 async function getLineRows(line: LineConfig, start: string, endExclusive: string) {
-  return prisma.$queryRawUnsafe<RawHomeRow[]>(
+  return getReportPrisma().$queryRawUnsafe<RawHomeRow[]>(
     `SELECT
       \`DATE\` AS date,
       AV AS av,
