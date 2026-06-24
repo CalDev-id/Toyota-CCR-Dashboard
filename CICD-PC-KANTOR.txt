@@ -1,0 +1,80 @@
+SETUP CI/CD PC KANTOR
+
+Tujuan:
+Setiap push ke branch main, PC kantor otomatis build ulang dan menjalankan app via Docker Compose.
+
+1. Di PC kantor, install:
+- Git
+- Docker Desktop
+
+2. Clone repo di PC kantor:
+git clone <URL_REPO_GITHUB>
+cd toyota-ccr
+
+3. Buat file .env di root project PC kantor:
+MARIADB_ROOT_PASSWORD="toyota_root_password"
+MARIADB_DATABASE="toyota_ccr"
+MARIADB_PORT=3306
+REPORT_DATABASE_URL="mysql://USER:PASSWORD@10.1.1.2:3306/db_tmmin_trace_regrinding"
+APP_PORT=3000
+AUTH_SECRET="isi-secret-production"
+AUTH_TRUST_HOST=true
+SEED_USER_NAME="Admin CCR"
+SEED_USER_EMAIL="admin@example.com"
+SEED_USER_PASSWORD="admin12345"
+
+4. Test manual sekali di PC kantor:
+docker compose up --build -d
+
+Buka:
+http://localhost:3000
+
+5. Setup GitHub self-hosted runner:
+- Buka GitHub repo
+- Settings
+- Actions
+- Runners
+- New self-hosted runner
+- Pilih OS PC kantor
+- Ikuti command yang diberikan GitHub di PC kantor
+
+6. Buat workflow di repo:
+Path file:
+.github/workflows/deploy-office.yml
+
+Isi file:
+name: Deploy Office PC
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy with Docker Compose
+        run: |
+          docker compose down
+          docker compose up --build -d
+
+7. Commit dan push workflow:
+git add .github/workflows/deploy-office.yml
+git commit -m "Add office PC deployment workflow"
+git push
+
+8. Setelah itu alurnya:
+- Ubah code di laptop
+- Test: npm run build
+- Commit
+- Push ke main
+- PC kantor otomatis deploy
+
+Catatan penting:
+- Jangan commit file .env.
+- REPORT_DATABASE_URL di PC kantor harus arah ke database LAN kantor.
+- DATABASE_URL tidak perlu ditulis di .env Docker Compose, karena sudah dibuat di compose.yaml.
+- Pastikan Docker Desktop dan GitHub runner selalu running di PC kantor.
