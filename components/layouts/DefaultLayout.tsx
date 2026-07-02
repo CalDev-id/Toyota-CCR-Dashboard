@@ -6,9 +6,13 @@ import { useState } from "react";
 
 type DefaultLayoutProps = {
   children: React.ReactNode;
+  contentClassName?: string;
 };
 
-export default function DefaultLayout({ children }: DefaultLayoutProps) {
+export default function DefaultLayout({
+  children,
+  contentClassName = "mx-auto max-w-screen-2xl p-3 md:p-4 2xl:p-5",
+}: DefaultLayoutProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -31,9 +35,7 @@ export default function DefaultLayout({ children }: DefaultLayoutProps) {
           />
 
           <main>
-            <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
-              {children}
-            </div>
+            <div className={contentClassName}>{children}</div>
           </main>
         </div>
       </div>
