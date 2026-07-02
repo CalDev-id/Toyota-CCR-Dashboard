@@ -12,6 +12,7 @@ type LineConfig = {
 
 type RawSummaryRow = {
   variant: string | null;
+  tt: string | null;
   prodPlan: string | number | null;
   prodAct: string | number | null;
   balance: string | number | null;
@@ -51,6 +52,8 @@ export type ProductionAchievementCard = {
   prodPlan: number;
   prodAct: number;
   oee: number | null;
+  tt: string;
+  oeeTarget: number | null;
   balance: number;
   problems: ProductionAchievementProblem[];
   variants: ProductionAchievementVariant[];
@@ -78,18 +81,18 @@ const lineConfigs: LineConfig[] = [
     imageSrc: "/images/ch.png",
   },
   {
-    key: "camshaft",
-    label: "Camshaft",
-    summaryView: "v_camshaft_summary",
-    detailProblemView: "v_camshaft_detail_problem",
-    imageSrc: "/images/cam.png",
-  },
-  {
     key: "crankshaft",
     label: "Crankshaft",
     summaryView: "v_crankshaft_summary",
     detailProblemView: "v_crankshaft_detail_problem",
     imageSrc: "/images/crank.png",
+  },
+  {
+    key: "camshaft",
+    label: "Camshaft",
+    summaryView: "v_camshaft_summary",
+    detailProblemView: "v_camshaft_detail_problem",
+    imageSrc: "/images/cam.png",
   },
 ];
 
@@ -149,6 +152,7 @@ async function getSummaryRows(line: LineConfig, date: string, shift: string) {
   return getReportPrisma().$queryRawUnsafe<RawSummaryRow[]>(
     `SELECT
       Variant AS variant,
+      TT AS tt,
       Prod_plan AS prodPlan,
       Prod_act AS prodAct,
       Balance AS balance,
@@ -286,6 +290,8 @@ function buildLineCard(
     prodPlan: summaryRows.reduce((total, row) => total + toNumber(row.prodPlan), 0),
     prodAct: summaryRows.reduce((total, row) => total + toNumber(row.prodAct), 0),
     oee: average(summaryRows.map((row) => toNumber(row.oee))),
+    tt: summaryRows.find((row) => String(row.tt ?? "").trim())?.tt ?? "",
+    oeeTarget: 90,
     balance: summaryRows.reduce((total, row) => total + toNumber(row.balance), 0),
     problems: buildProblems(line, problemRows),
     variants: line.key === "cylblock" ? buildVariants(summaryRows) : [],
@@ -296,10 +302,12 @@ function buildAssyCard() {
   return {
     key: "assy",
     label: "Assy",
-    imageSrc: "/images/tr.png",
+    imageSrc: "/images/2tr.png",
     prodPlan: 0,
     prodAct: 0,
     oee: null,
+    tt: "",
+    oeeTarget: null,
     balance: 0,
     problems: [],
     variants: [],
