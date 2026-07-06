@@ -6,6 +6,7 @@ import {
   type ProductionAchievementCard,
 } from "@/lib/production-achievement-server";
 import Image from "next/image";
+import type { ReactNode } from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -42,12 +43,27 @@ function formatTt(value: string) {
   return value.trim() || "-";
 }
 
+function formatStopTime(value: number) {
+  return `${formatNumberAuto(value)} min`;
+}
+
 function meetsOeeTarget(value: number | null) {
   if (value === null) {
     return false;
   }
 
   return (Math.abs(value) <= 1 ? value * 100 : value) >= 90;
+}
+
+function getOeeTargetClass(value: number | null, target: number | null) {
+  if (value === null || target === null) {
+    return "text-[#b42318]";
+  }
+
+  const normalizedValue = Math.abs(value) <= 1 ? value * 100 : value;
+  const normalizedTarget = Math.abs(target) <= 1 ? target * 100 : target;
+
+  return normalizedValue >= normalizedTarget ? "text-[#027a48]" : "text-[#b42318]";
 }
 
 function getBalanceClass(value: number) {
@@ -68,7 +84,7 @@ function MetricTile({
   valueClassName = "text-[#101828]",
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   valueClassName?: string;
 }) {
   return (
@@ -78,6 +94,23 @@ function MetricTile({
       </p>
       <p className={`mt-1 text-base font-semibold ${valueClassName}`}>{value}</p>
     </div>
+  );
+}
+
+function OeeMetricValue({
+  value,
+  target,
+}: {
+  value: number | null;
+  target: number | null;
+}) {
+  return (
+    <span className="whitespace-nowrap">
+      {formatPercent(value)}
+      <span className="ml-1 text-xs font-semibold opacity-75">
+        / {formatPercent(target)}
+      </span>
+    </span>
   );
 }
 
@@ -170,15 +203,6 @@ function ProductionAchievementCardView({
         />
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <span className="rounded-md bg-[#f9fafb] px-2 py-1 text-[11px] font-semibold text-[#667085] dark:bg-[#162033] dark:text-[#a7b0c0]">
-          TT {formatTt(card.tt)}
-        </span>
-        <span className="rounded-md bg-[#ecf3ff] px-2 py-1 text-[11px] font-semibold text-[#465fff] dark:bg-[#14245a] dark:text-[#8da2ff]">
-          OEE Target {formatPercent(card.oeeTarget)}
-        </span>
-      </div>
-
       <div className="mt-4 grid gap-2">
         <div className="grid grid-cols-2 gap-2">
           <MetricTile label="Prod Plan" value={formatNumber(card.prodPlan)} />
@@ -190,7 +214,15 @@ function ProductionAchievementCardView({
             value={formatNumberAuto(card.balance)}
             valueClassName={getBalanceClass(card.balance)}
           />
-          <MetricTile label="OEE" value={formatPercent(card.oee)} />
+          <MetricTile
+            label="OEE"
+            value={<OeeMetricValue value={card.oee} target={card.oeeTarget} />}
+            valueClassName={getOeeTargetClass(card.oee, card.oeeTarget)}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <MetricTile label="TT" value={formatTt(card.tt)} />
+          <MetricTile label="Stop Time" value={formatStopTime(card.stopTime)} />
         </div>
       </div>
 
@@ -246,7 +278,7 @@ function ProductionAchievementCardView({
       </div>
 
       <div
-        className={`mt-5 rounded-xl border px-3 py-3 ${
+        className={`mt-5 min-h-[122px] rounded-xl border px-3 py-3 ${
           hasProblems
             ? "border-[#fecdca] bg-[#fffbfa] dark:border-[#7a271a] dark:bg-[#3b1111]"
             : "border-[#e4e7ec] bg-[#f9fafb] dark:border-[#273449] dark:bg-[#162033]"
@@ -284,7 +316,7 @@ function ProductionAchievementCardView({
             })}
           </ol>
         ) : (
-          <p className="mt-1 text-sm font-medium text-[#344054] dark:text-[#d4dae5]">
+          <p className="mt-8 text-center text-sm font-medium text-[#344054] dark:text-[#d4dae5]">
             No problem data
           </p>
         )}

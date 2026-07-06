@@ -55,6 +55,7 @@ export type ProductionAchievementCard = {
   tt: string;
   oeeTarget: number | null;
   balance: number;
+  stopTime: number;
   problems: ProductionAchievementProblem[];
   variants: ProductionAchievementVariant[];
 };
@@ -251,6 +252,13 @@ function buildProblems(line: LineConfig, rows: RawProblemRow[]) {
   return problem ? [problem] : [];
 }
 
+function buildStopTime(rows: RawProblemRow[]) {
+  return rows.reduce(
+    (total, row) => total + toNumber(row.lsAvMin) + toNumber(row.lsPeMin),
+    0,
+  );
+}
+
 function buildVariants(rows: RawSummaryRow[]) {
   const grouped = new Map<string, ProductionAchievementVariant>();
 
@@ -293,6 +301,7 @@ function buildLineCard(
     tt: summaryRows.find((row) => String(row.tt ?? "").trim())?.tt ?? "",
     oeeTarget: 90,
     balance: summaryRows.reduce((total, row) => total + toNumber(row.balance), 0),
+    stopTime: buildStopTime(problemRows),
     problems: buildProblems(line, problemRows),
     variants: line.key === "cylblock" ? buildVariants(summaryRows) : [],
   };
@@ -309,6 +318,7 @@ function buildAssyCard() {
     tt: "",
     oeeTarget: null,
     balance: 0,
+    stopTime: 0,
     problems: [],
     variants: [],
   } satisfies ProductionAchievementCard;
