@@ -1,6 +1,12 @@
 "use client";
 
 import DefaultLayout from "@/components/layouts/DefaultLayout";
+import {
+  createPlanningRowAction,
+  deletePlanningRowAction,
+  importPlanningRowsAction,
+  updatePlanningRowAction,
+} from "@/features/planning/actions/planning.actions";
 import PlanningSummaryCards from "@/features/planning/components/PlanningSummaryCards";
 import PlanningTable from "@/features/planning/components/PlanningTable";
 import PlanningToolbar from "@/features/planning/components/PlanningToolbar";
@@ -238,13 +244,7 @@ export default function PlanningPage() {
     setIsSaving(true);
 
     try {
-      await readResponse(
-        await fetch(`/api/planning/${activePart}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(editing[id] ?? {}),
-        }),
-      );
+      await createPlanningRowAction(activePart, editing[id] ?? {});
       showToast(`Data ${getPartLabel(activePart)} berhasil diinput.`, "success");
       setDraftRows((current) => current.filter((row) => row.id !== id));
       await loadPlanning(activePart);
@@ -262,13 +262,7 @@ export default function PlanningPage() {
 
   async function updateRow(id: string) {
     try {
-      await readResponse(
-        await fetch(`/api/planning/${activePart}/${encodeURIComponent(id)}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(editing[id] ?? {}),
-        }),
-      );
+      await updatePlanningRowAction(activePart, id, editing[id] ?? {});
       showToast(`Data ${getPartLabel(activePart)} berhasil diupdate.`, "success");
       await loadPlanning(activePart);
     } catch (updateError) {
@@ -290,11 +284,7 @@ export default function PlanningPage() {
     const partLabel = getPartLabel(part);
 
     try {
-      await readResponse(
-        await fetch(`/api/planning/${part}/${encodeURIComponent(id)}`, {
-          method: "DELETE",
-        }),
-      );
+      await deletePlanningRowAction(part, id);
       showToast(`Data ${partLabel} berhasil dihapus.`, "success");
       setDeleteTarget(null);
       if (part === activePart) {
@@ -330,12 +320,15 @@ export default function PlanningPage() {
       formData.append("file", file);
       formData.append("overwrite", String(overwrite));
 
-      const response = await fetch(`/api/planning/${part}/import`, {
-        method: "POST",
-        body: formData,
-      });
+      const body = await importPlanningRowsAction(part, formData);
 
-      const body = await readResponse(response);
+      if ("error" in body) {
+        const error = new Error(body.error) as ApiError;
+        error.status = body.status;
+        error.conflicts = body.conflicts;
+        throw error;
+      }
+
       showToast(
         `Data ${getPartLabel(part)} berhasil diimport (${body.data.inserted} rows).`,
         "success",

@@ -40,33 +40,68 @@ export default function AnalysisPage() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const dateInputRef = useRef<HTMLInputElement>(null);
+  const isRefreshingRef = useRef(false);
 
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
+  const loadData = useCallback(async (options?: {
+    showLoading?: boolean;
+    silent?: boolean;
+  }) => {
+    if (isRefreshingRef.current) {
+      return;
+    }
+
+    const showLoading = options?.showLoading ?? true;
+    const silent = options?.silent ?? false;
+    isRefreshingRef.current = true;
+
+    if (showLoading) {
+      setIsLoading(true);
+    }
+
+    if (!silent) {
+      setError(null);
+    }
 
     try {
       const params = new URLSearchParams({ date });
       const body = await readResponse(
-        await fetch(`/api/analysis/oee?${params.toString()}`),
+        await fetch(`/api/analysis/oee?${params.toString()}`, {
+          cache: "no-store",
+        }),
       );
       setData(body.data as AnalysisResponse);
     } catch (loadError) {
-      setError(
-        loadError instanceof Error ? loadError.message : "Unable to load OEE analysis",
-      );
-      setData(null);
+      if (!silent) {
+        setError(
+          loadError instanceof Error ? loadError.message : "Unable to load OEE analysis",
+        );
+        setData(null);
+      }
     } finally {
-      setIsLoading(false);
+      isRefreshingRef.current = false;
+
+      if (showLoading) {
+        setIsLoading(false);
+      }
     }
   }, [date]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      void loadData();
+      void loadData({ showLoading: true });
     }, 0);
 
     return () => window.clearTimeout(timeout);
+  }, [loadData]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadData({ showLoading: false, silent: true });
+      }
+    }, 60000);
+
+    return () => window.clearInterval(interval);
   }, [loadData]);
 
   const lines = useMemo(

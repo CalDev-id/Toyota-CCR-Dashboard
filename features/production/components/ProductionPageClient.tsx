@@ -19,7 +19,7 @@ import type {
   ProductionSummaryRow as SummaryRow,
   ProductionTrend as Trend,
 } from "@/features/production/types";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const emptyOptions: FilterOptions = {
   shifts: [],
@@ -157,6 +157,7 @@ export default function ProductionPage() {
   const [filterOptions, setFilterOptions] = useState(emptyOptions);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const isRefreshingRef = useRef(false);
   const shop = useMemo(
     () => resolveShopValue(line, filterOptions.shops),
     [filterOptions.shops, line],
@@ -185,43 +186,86 @@ export default function ProductionPage() {
     return `/api/production/summary?${params.toString()}`;
   }, [date, line, shift, shift2, shop]);
 
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
+  const loadData = useCallback(async (options?: {
+    includeMonthly?: boolean;
+    showLoading?: boolean;
+    silent?: boolean;
+  }) => {
+    if (isRefreshingRef.current) {
+      return;
+    }
+
+    const includeMonthly = options?.includeMonthly ?? true;
+    const showLoading = options?.showLoading ?? true;
+    const silent = options?.silent ?? false;
+    isRefreshingRef.current = true;
+
+    if (showLoading) {
+      setIsLoading(true);
+    }
+
+    if (!silent) {
+      setError(null);
+    }
 
     try {
       const [body, monthlyBody] = await Promise.all([
-        readResponse(await fetch(url)),
-        fetch(monthlyUrl)
-          .then(readResponse)
-          .catch(() => ({ data: { rows: [] } })),
+        fetch(url, { cache: "no-store" }).then(readResponse),
+        includeMonthly
+          ? fetch(monthlyUrl, { cache: "no-store" })
+              .then(readResponse)
+              .catch(() => ({ data: { rows: [] } }))
+          : Promise.resolve(null),
       ]);
       const data = body.data as SummaryResponse;
-      const monthlyData = monthlyBody.data as Partial<SummaryResponse>;
       setRows(data.rows);
-      setMonthlyRows(monthlyData.rows ?? []);
       setProblemRows(data.problemRows ?? []);
       setFilterOptions(data.filterOptions);
+
+      if (monthlyBody) {
+        const monthlyData = monthlyBody.data as Partial<SummaryResponse>;
+        setMonthlyRows(monthlyData.rows ?? []);
+      }
     } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Unable to load production summary",
-      );
-      setRows([]);
-      setMonthlyRows([]);
-      setProblemRows([]);
+      if (!silent) {
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load production summary",
+        );
+        setRows([]);
+        setMonthlyRows([]);
+        setProblemRows([]);
+      }
     } finally {
-      setIsLoading(false);
+      isRefreshingRef.current = false;
+
+      if (showLoading) {
+        setIsLoading(false);
+      }
     }
   }, [monthlyUrl, url]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      void loadData();
+      void loadData({ includeMonthly: true, showLoading: true });
     }, 0);
 
     return () => window.clearTimeout(timeout);
+  }, [loadData]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadData({
+          includeMonthly: false,
+          showLoading: false,
+          silent: true,
+        });
+      }
+    }, 30000);
+
+    return () => window.clearInterval(interval);
   }, [loadData]);
 
   const totals = useMemo(

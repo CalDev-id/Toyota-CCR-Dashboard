@@ -1,65 +1,28 @@
 "use client";
 
 import DefaultLayout from "@/components/layouts/DefaultLayout";
+import {
+  createUserAction,
+  deleteUserAction,
+  updateUserAction,
+} from "@/features/users/actions/users.actions";
 import CreateUserForm from "@/features/users/components/CreateUserForm";
 import UserModals from "@/features/users/components/UserModals";
 import UsersTable from "@/features/users/components/UsersTable";
 import type { UserItem, UserToast as Toast } from "@/features/users/types";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 
-async function readResponse(response: Response) {
-  const body = await response.json().catch(() => ({}));
+type UsersPageProps = {
+  initialUsers: UserItem[];
+};
 
-  if (!response.ok) {
-    throw new Error(body.error ?? "Request failed");
-  }
-
-  return body;
-}
-
-export default function UsersPage() {
-  const [users, setUsers] = useState<UserItem[]>([]);
+export default function UsersPage({ initialUsers }: UsersPageProps) {
+  const [users, setUsers] = useState<UserItem[]>(initialUsers);
   const [toast, setToast] = useState<Toast | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const isLoading = false;
   const [isSaving, setIsSaving] = useState(false);
   const [editingUser, setEditingUser] = useState<UserItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UserItem | null>(null);
-
-  useEffect(() => {
-    let isActive = true;
-
-    fetch("/api/users")
-      .then(readResponse)
-      .then((body) => {
-        if (!isActive) {
-          return;
-        }
-
-        setUsers(body.data as UserItem[]);
-      })
-      .catch((error) => {
-        if (!isActive) {
-          return;
-        }
-
-        setToast({
-          type: "error",
-          message:
-            error instanceof Error ? error.message : "Unable to load users",
-        });
-      })
-      .finally(() => {
-        if (!isActive) {
-          return;
-        }
-
-        setIsLoading(false);
-      });
-
-    return () => {
-      isActive = false;
-    };
-  }, []);
 
   async function handleCreateUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -70,21 +33,9 @@ export default function UsersPage() {
     const formData = new FormData(form);
 
     try {
-      const body = await readResponse(
-        await fetch("/api/users", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name: formData.get("name"),
-            email: formData.get("email"),
-            password: formData.get("password"),
-          }),
-        }),
-      );
+      const body = await createUserAction(formData);
 
-      setUsers((current) => [body.data as UserItem, ...current]);
+      setUsers((current) => [body.data, ...current]);
       form.reset();
       setToast({ type: "success", message: "User berhasil dibuat." });
     } catch (error) {
@@ -112,20 +63,16 @@ export default function UsersPage() {
     const formData = new FormData(form);
 
     try {
-      const body = await readResponse(
-        await fetch(`/api/users/${editingUser.id}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name: formData.get("editName"),
-            email: formData.get("editEmail"),
-            password: formData.get("editPassword"),
-          }),
-        }),
+      const actionFormData = new FormData();
+      actionFormData.set("name", String(formData.get("editName") ?? ""));
+      actionFormData.set("email", String(formData.get("editEmail") ?? ""));
+      actionFormData.set(
+        "password",
+        String(formData.get("editPassword") ?? ""),
       );
-      const updatedUser = body.data as UserItem;
+
+      const body = await updateUserAction(editingUser.id, actionFormData);
+      const updatedUser = body.data;
 
       setUsers((current) =>
         current.map((user) =>
@@ -154,11 +101,7 @@ export default function UsersPage() {
     setIsSaving(true);
 
     try {
-      await readResponse(
-        await fetch(`/api/users/${deleteTarget.id}`, {
-          method: "DELETE",
-        }),
-      );
+      await deleteUserAction(deleteTarget.id);
 
       setUsers((current) =>
         current.filter((user) => user.id !== deleteTarget.id),
