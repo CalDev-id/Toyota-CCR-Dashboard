@@ -1,64 +1,12 @@
-import { getReportPrisma } from "@/lib/report-prisma";
-
-type AnalysisLineKey = "cylblock" | "cylhead" | "camshaft" | "crankshaft";
-
-type AnalysisLine = {
-  key: AnalysisLineKey;
-  label: string;
-  tableName: string;
-};
-
-type RawOeeRow = {
-  date: Date | string | null;
-  shift: string | null;
-  av: string | number | null;
-  pe: string | number | null;
-  rq: string | number | null;
-  oee: string | number | null;
-  balance: string | number | null;
-  otPlan: string | number | null;
-  otAct: string | number | null;
-};
-
-export type AnalysisOeeCard = {
-  key: AnalysisLineKey;
-  line: string;
-  r: number | null;
-  w: number | null;
-  ave: number | null;
-  monthly: number | null;
-  balance: number;
-  balanceMonthly: number;
-  otDay: number;
-  otNight: number;
-  cumR: number;
-  cumW: number;
-  gapCumR: number;
-  gapCumW: number;
-};
-
-export type AnalysisOeeSeriesRow = {
-  date: string;
-} & Record<AnalysisLineKey, number | null>;
-
-export type AnalysisShiftSeriesRow = {
-  date: string;
-} & Record<`${AnalysisLineKey}R` | `${AnalysisLineKey}W`, number | null>;
-
-export type AnalysisGapSeriesRow = {
-  date: string;
-} & Record<`${AnalysisLineKey}R` | `${AnalysisLineKey}W`, number | null>;
-
-const analysisLines: AnalysisLine[] = [
-  { key: "cylblock", label: "Cyl Block", tableName: "v_cylblock_summary" },
-  { key: "cylhead", label: "Cyl Head", tableName: "v_cylhead_summary" },
-  { key: "camshaft", label: "Camshaft", tableName: "v_camshaft_summary" },
-  { key: "crankshaft", label: "Crankshaft", tableName: "v_crankshaft_summary" },
-];
-
-function quoteIdentifier(value: string) {
-  return `\`${value.replaceAll("`", "``")}\``;
-}
+import { analysisLines, getAnalysisLineRows } from "@/features/analysis/queries/analysis.query";
+import type {
+  AnalysisGapSeriesRow,
+  AnalysisLine,
+  AnalysisOeeCard,
+  AnalysisOeeSeriesRow,
+  AnalysisShiftSeriesRow,
+  RawAnalysisOeeRow,
+} from "@/features/analysis/types";
 
 function toNumber(value: unknown) {
   const numeric = Number(value ?? 0);
@@ -122,27 +70,7 @@ function normalizeShift(value: string | null) {
   return String(value ?? "").trim().toUpperCase();
 }
 
-async function getLineRows(line: AnalysisLine, start: string, endExclusive: string) {
-  return getReportPrisma().$queryRawUnsafe<RawOeeRow[]>(
-    `SELECT
-      \`DATE\` AS date,
-      SHIFT AS shift,
-      AV AS av,
-      PE AS pe,
-      RQ AS rq,
-      OEE AS oee,
-      Balance AS balance,
-      OT_plan AS otPlan,
-      OT_act AS otAct
-     FROM ${quoteIdentifier(line.tableName)}
-     WHERE \`DATE\` >= ? AND \`DATE\` < ?
-     ORDER BY \`DATE\` ASC, SHIFT ASC`,
-    start,
-    endExclusive,
-  );
-}
-
-function buildCard(line: AnalysisLine, rows: RawOeeRow[], selectedDate: string): AnalysisOeeCard {
+function buildCard(line: AnalysisLine, rows: RawAnalysisOeeRow[], selectedDate: string): AnalysisOeeCard {
   const selectedRows = rows.filter((row) => toDateKey(row.date) === selectedDate);
   const selectedRRows = selectedRows.filter((row) => normalizeShift(row.shift) === "R");
   const selectedWRows = selectedRows.filter((row) => normalizeShift(row.shift) === "W");
@@ -172,7 +100,7 @@ function buildCard(line: AnalysisLine, rows: RawOeeRow[], selectedDate: string):
   };
 }
 
-function buildDailyAverage(rows: RawOeeRow[], key: "oee" | "av" | "pe" | "rq") {
+function buildDailyAverage(rows: RawAnalysisOeeRow[], key: "oee" | "av" | "pe" | "rq") {
   const grouped = new Map<string, number[]>();
 
   for (const row of rows) {
@@ -190,7 +118,7 @@ function buildDailyAverage(rows: RawOeeRow[], key: "oee" | "av" | "pe" | "rq") {
   );
 }
 
-function buildDailyShiftAverage(rows: RawOeeRow[], key: "oee" | "av" | "pe" | "rq") {
+function buildDailyShiftAverage(rows: RawAnalysisOeeRow[], key: "oee" | "av" | "pe" | "rq") {
   const grouped = new Map<string, { r: number[]; w: number[] }>();
 
   for (const row of rows) {
@@ -224,7 +152,7 @@ function buildDailyShiftAverage(rows: RawOeeRow[], key: "oee" | "av" | "pe" | "r
   );
 }
 
-function buildDailyGap(rows: RawOeeRow[]) {
+function buildDailyGap(rows: RawAnalysisOeeRow[]) {
   const grouped = new Map<
     string,
     {
@@ -275,7 +203,7 @@ export async function getAnalysisOee(dateParam: string | null) {
   const entries = await Promise.all(
     analysisLines.map(async (line) => ({
       line,
-      rows: await getLineRows(line, range.start, range.endExclusive),
+      rows: await getAnalysisLineRows(line, range.start, range.endExclusive),
     })),
   );
   const cards = entries.map((entry) => buildCard(entry.line, entry.rows, range.date));

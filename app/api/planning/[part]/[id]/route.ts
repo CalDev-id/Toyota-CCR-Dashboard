@@ -3,7 +3,7 @@ import {
   getPlanningColumns,
   requirePlanningPart,
   updatePlanningRow,
-} from "@/lib/planning-server";
+} from "@/features/planning/services/planning.service";
 
 export async function PATCH(
   request: Request,

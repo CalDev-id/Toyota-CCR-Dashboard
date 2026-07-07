@@ -4,7 +4,7 @@ import type {
   PlanningPartKey,
   PlanningPartSummary,
   PlanningRow,
-} from "@/lib/planning-types";
+} from "@/features/planning/types";
 
 export const planningParts: Record<
   PlanningPartKey,

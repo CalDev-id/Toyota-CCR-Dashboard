@@ -5,7 +5,7 @@ import {
   getPlanningSummaries,
   parsePlanningPart,
   planningParts,
-} from "@/lib/planning-server";
+} from "@/features/planning/services/planning.service";
 
 export const dynamic = "force-dynamic";
 

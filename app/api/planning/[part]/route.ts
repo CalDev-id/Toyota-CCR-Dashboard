@@ -3,7 +3,7 @@ import {
   getPlanningColumns,
   insertPlanningRows,
   requirePlanningPart,
-} from "@/lib/planning-server";
+} from "@/features/planning/services/planning.service";
 
 export async function POST(
   request: Request,

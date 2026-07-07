@@ -28,7 +28,7 @@ const pageHeaders = [
   {
     href: "/production",
     title: "Production",
-    subtitle: "Cylblock OEE, production attainment, overtime, and shift performance",
+    subtitle: "Production OEE, attainment, overtime, and shift performance",
   },
   {
     href: "/analysis",

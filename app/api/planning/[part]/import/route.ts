@@ -4,7 +4,7 @@ import {
   insertPlanningRows,
   replaceExistingBatches,
   requirePlanningPart,
-} from "@/lib/planning-server";
+} from "@/features/planning/services/planning.service";
 import * as XLSX from "xlsx";
 
 export async function POST(

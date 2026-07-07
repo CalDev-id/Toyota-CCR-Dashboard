@@ -1,75 +1,12 @@
-import { getReportPrisma } from "@/lib/report-prisma";
-
-type LineKey = "cylblock" | "cylhead" | "camshaft" | "crankshaft";
-
-type LineConfig = {
-  key: LineKey;
-  label: string;
-  tableName: string;
-};
-
-type RawHomeRow = {
-  date: Date | string | null;
-  av: string | number | null;
-  pe: string | number | null;
-  rq: string | number | null;
-  oee: string | number | null;
-  prodPlan: string | number | null;
-  prodAct: string | number | null;
-  balance: string | number | null;
-};
-
-export type HomeMetricKey = "av" | "pe" | "rq" | "oee";
-
-export type HomeMetric = {
-  key: HomeMetricKey;
-  label: string;
-  value: number | null;
-  trend: number | null;
-};
-
-export type HomeProductionDay = {
-  date: string;
-  plan: number;
-  actual: number;
-  balance: number;
-};
-
-export type HomeTarget = {
-  plan: number;
-  actual: number;
-  balance: number;
-  progress: number | null;
-};
-
-export type HomeLinePerformance = {
-  key: LineKey;
-  label: string;
-  oee: number | null;
-};
-
-export type HomeLineGap = {
-  line: string;
-  plan: number;
-  actual: number;
-  gap: number;
-  status: "Achieved" | "Not Achieved";
-};
-
-export type HomeDashboard = {
-  metrics: HomeMetric[];
-  productionDays: HomeProductionDay[];
-  target: HomeTarget;
-  linePerformance: HomeLinePerformance[];
-  lineGaps: HomeLineGap[];
-};
-
-const lineConfigs: LineConfig[] = [
-  { key: "cylblock", label: "Cyl Block", tableName: "v_cylblock_summary" },
-  { key: "cylhead", label: "Cyl Head", tableName: "v_cylhead_summary" },
-  { key: "camshaft", label: "Camshaft", tableName: "v_camshaft_summary" },
-  { key: "crankshaft", label: "Crankshaft", tableName: "v_crankshaft_summary" },
-];
+import { getHomeLineRows, homeLineConfigs } from "@/features/home/queries/home.query";
+import type {
+  HomeDashboard,
+  HomeLineGap,
+  HomeLineConfig,
+  HomeMetricKey,
+  HomeTarget,
+  RawHomeRow,
+} from "@/features/home/types";
 
 const metricLabels: Record<HomeMetricKey, string> = {
   av: "AV",
@@ -77,10 +14,6 @@ const metricLabels: Record<HomeMetricKey, string> = {
   rq: "RQ",
   oee: "OEE",
 };
-
-function quoteIdentifier(value: string) {
-  return `\`${value.replaceAll("`", "``")}\``;
-}
 
 function toNumber(value: unknown) {
   const numeric = Number(value ?? 0);
@@ -144,25 +77,6 @@ function getPreviousMonthRange() {
   return { start, endExclusive };
 }
 
-async function getLineRows(line: LineConfig, start: string, endExclusive: string) {
-  return getReportPrisma().$queryRawUnsafe<RawHomeRow[]>(
-    `SELECT
-      \`DATE\` AS date,
-      AV AS av,
-      PE AS pe,
-      RQ AS rq,
-      OEE AS oee,
-      Prod_plan AS prodPlan,
-      Prod_act AS prodAct,
-      Balance AS balance
-     FROM ${quoteIdentifier(line.tableName)}
-     WHERE \`DATE\` >= ? AND \`DATE\` < ?
-     ORDER BY \`DATE\` ASC`,
-    start,
-    endExclusive,
-  );
-}
-
 function metricAverage(rows: RawHomeRow[], key: HomeMetricKey) {
   return average(rows.map((row) => normalizePercent(toNumber(row[key]))));
 }
@@ -219,7 +133,7 @@ function buildTarget(rows: RawHomeRow[]): HomeTarget {
   };
 }
 
-function buildLineGaps(entries: Array<{ line: LineConfig; rows: RawHomeRow[] }>) {
+function buildLineGaps(entries: Array<{ line: HomeLineConfig; rows: RawHomeRow[] }>) {
   return entries
     .map((entry) => {
       const target = buildTarget(entry.rows);
@@ -240,10 +154,14 @@ export async function getHomeDashboard(): Promise<HomeDashboard> {
   const currentRange = getCurrentRange();
   const previousRange = getPreviousMonthRange();
   const entries = await Promise.all(
-    lineConfigs.map(async (line) => ({
+    homeLineConfigs.map(async (line) => ({
       line,
-      rows: await getLineRows(line, currentRange.start, currentRange.endExclusive),
-      previousRows: await getLineRows(line, previousRange.start, previousRange.endExclusive),
+      rows: await getHomeLineRows(line, currentRange.start, currentRange.endExclusive),
+      previousRows: await getHomeLineRows(
+        line,
+        previousRange.start,
+        previousRange.endExclusive,
+      ),
     })),
   );
   const currentRows = entries[0]?.rows ?? [];
