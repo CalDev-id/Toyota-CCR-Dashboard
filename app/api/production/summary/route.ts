@@ -1,7 +1,7 @@
 import {
   getProductionSummary,
   parseProductionSummaryFilters,
-} from "@/features/production/services/production-summary.service";
+} from "@/features/production/server/production-summary";
 
 export const dynamic = "force-dynamic";
 

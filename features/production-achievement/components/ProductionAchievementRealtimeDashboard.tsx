@@ -30,6 +30,25 @@ export default function ProductionAchievementRealtimeDashboard({
   const [dashboard, setDashboard] =
     useState<ProductionAchievementDashboard>(initialDashboard);
 
+  async function handleFilterChange(next: { date?: string; shift?: string }) {
+    const nextDate = next.date ?? dashboard.date;
+    const nextShift = next.shift ?? dashboard.shift;
+    const params = new URLSearchParams({ date: nextDate, shift: nextShift });
+
+    window.history.replaceState(
+      null,
+      "",
+      `/production-achievement?${params.toString()}`,
+    );
+
+    try {
+      const nextDashboard = await fetchDashboard(nextDate, nextShift);
+      setDashboard(nextDashboard);
+    } catch {
+      // Keep the last successful snapshot visible if a filter refresh fails.
+    }
+  }
+
   useEffect(() => {
     let isActive = true;
 
@@ -73,6 +92,9 @@ export default function ProductionAchievementRealtimeDashboard({
         <ProductionAchievementFilters
           date={dashboard.date}
           shift={dashboard.shift}
+          onFilterChange={(next) => {
+            void handleFilterChange(next);
+          }}
         />
       </div>
 

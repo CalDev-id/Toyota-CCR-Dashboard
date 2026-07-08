@@ -5,7 +5,7 @@ import {
   createUserAction,
   deleteUserAction,
   updateUserAction,
-} from "@/features/users/actions/users.actions";
+} from "@/features/users/server/users";
 import CreateUserForm from "@/features/users/components/CreateUserForm";
 import UserModals from "@/features/users/components/UserModals";
 import UsersTable from "@/features/users/components/UsersTable";

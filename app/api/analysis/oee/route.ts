@@ -1,4 +1,4 @@
-import { getAnalysisOee } from "@/features/analysis/services/analysis.service";
+import { getAnalysisOee } from "@/features/analysis/server/analysis-data";
 
 export const dynamic = "force-dynamic";
 

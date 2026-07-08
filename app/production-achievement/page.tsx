@@ -1,6 +1,6 @@
 import DefaultLayout from "@/components/layouts/DefaultLayout";
 import ProductionAchievementRealtimeDashboard from "@/features/production-achievement/components/ProductionAchievementRealtimeDashboard";
-import { getProductionAchievementDashboard } from "@/features/production-achievement/services/production-achievement.service";
+import { getProductionAchievementDashboard } from "@/features/production-achievement/server/achievement-data";
 
 export const dynamic = "force-dynamic";
 

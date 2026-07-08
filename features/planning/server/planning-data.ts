@@ -1,10 +1,10 @@
-import { getReportPrisma } from "@/lib/report-prisma";
 import type {
   PlanningColumn,
   PlanningPartKey,
   PlanningPartSummary,
   PlanningRow,
 } from "@/features/planning/types";
+import { getReportPrisma } from "@/lib/report-prisma";
 
 export const planningParts: Record<
   PlanningPartKey,
@@ -37,6 +37,12 @@ type RawColumn = {
   Extra: string;
 };
 
+export type PlanningFilters = {
+  month: string;
+  shift: string;
+  group: string;
+};
+
 const dateCandidates = ["date", "fdate", "plan_date", "production_date", "tanggal"];
 const shiftCandidates = ["shift", "fshift"];
 const groupCandidates = ["group", "fgroup", "group_name", "grp"];
@@ -57,7 +63,7 @@ export function requirePlanningPart(value: string) {
   throw new Error("Invalid planning part");
 }
 
-function quoteIdentifier(value: string) {
+export function quoteIdentifier(value: string) {
   return `\`${value.replaceAll("`", "``")}\``;
 }
 
@@ -65,7 +71,7 @@ export function quotedTable(part: PlanningPartKey) {
   return quoteIdentifier(planningParts[part].tableName);
 }
 
-function quotedColumn(field: string) {
+export function quotedColumn(field: string) {
   return quoteIdentifier(field);
 }
 
@@ -139,6 +145,39 @@ function findColumnByName(columns: PlanningColumn[], name: string) {
   return columns.find((column) => column.field.toLowerCase() === name.toLowerCase());
 }
 
+export function getMonthRange(month: string) {
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    throw new Error("Month filter must use YYYY-MM format");
+  }
+
+  const [year, monthNumber] = month.split("-").map(Number);
+  const start = `${month}-01`;
+  const endDate = new Date(Date.UTC(year, monthNumber, 1));
+  const end = endDate.toISOString().slice(0, 10);
+
+  return { start, end };
+}
+
+function findColumn(columns: PlanningColumn[], candidates: string[]) {
+  return candidates
+    .map((candidate) =>
+      columns.find((column) => column.field.toLowerCase() === candidate.toLowerCase()),
+    )
+    .find(Boolean);
+}
+
+export function getConflictColumns(columns: PlanningColumn[]) {
+  const dateColumn = findColumn(columns, dateCandidates);
+  const shiftColumn = findColumn(columns, shiftCandidates);
+  const groupColumn = findColumn(columns, groupCandidates);
+
+  if (!dateColumn || !shiftColumn || !groupColumn) {
+    throw new Error("Unable to detect date, shift, and group columns for import");
+  }
+
+  return { dateColumn, shiftColumn, groupColumn };
+}
+
 export async function getPlanningSummaries(month: string) {
   const entries = await Promise.all(
     Object.entries(planningParts).map(async ([key, part]) => {
@@ -178,34 +217,6 @@ export async function getPlanningSummaries(month: string) {
   );
 
   return entries;
-}
-
-export async function getPlanningRows(part: PlanningPartKey, columns: PlanningColumn[]) {
-  const primary = columns.find((column) => column.isPrimary);
-  const orderBy = primary ? ` ORDER BY ${quotedColumn(primary.field)} DESC` : "";
-
-  return getReportPrisma().$queryRawUnsafe<PlanningRow[]>(
-    `SELECT * FROM ${quotedTable(part)}${orderBy} LIMIT 200`,
-  );
-}
-
-export type PlanningFilters = {
-  month: string;
-  shift: string;
-  group: string;
-};
-
-function getMonthRange(month: string) {
-  if (!/^\d{4}-\d{2}$/.test(month)) {
-    throw new Error("Month filter must use YYYY-MM format");
-  }
-
-  const [year, monthNumber] = month.split("-").map(Number);
-  const start = `${month}-01`;
-  const endDate = new Date(Date.UTC(year, monthNumber, 1));
-  const end = endDate.toISOString().slice(0, 10);
-
-  return { start, end };
 }
 
 function buildPlanningFilterWhere(columns: PlanningColumn[], filters: PlanningFilters) {
@@ -292,200 +303,4 @@ export async function getPlanningFilterOptions(
       ),
     ),
   };
-}
-
-function normalizeValue(value: unknown, column: PlanningColumn) {
-  if (value === undefined || value === "") {
-    return column.nullable || column.defaultValue !== null ? null : "";
-  }
-
-  if (column.inputType === "number") {
-    const numberValue = Number(value);
-    return Number.isFinite(numberValue) ? numberValue : null;
-  }
-
-  return value;
-}
-
-export function buildPayload(
-  body: Record<string, unknown>,
-  columns: PlanningColumn[],
-  mode: "create" | "update",
-) {
-  const editableColumns = getEditableColumns(columns, mode);
-  const payload: Record<string, unknown> = {};
-
-  for (const column of editableColumns) {
-    if (Object.prototype.hasOwnProperty.call(body, column.field)) {
-      payload[column.field] = normalizeValue(body[column.field], column);
-    }
-  }
-
-  return payload;
-}
-
-export async function insertPlanningRows(
-  part: PlanningPartKey,
-  columns: PlanningColumn[],
-  rows: Record<string, unknown>[],
-) {
-  const writableColumns = getEditableColumns(columns, "create").filter((column) =>
-    rows.some((row) => Object.prototype.hasOwnProperty.call(row, column.field)),
-  );
-
-  if (writableColumns.length === 0 || rows.length === 0) {
-    return 0;
-  }
-
-  const fields = writableColumns.map((column) => quotedColumn(column.field)).join(", ");
-  const placeholders = `(${writableColumns.map(() => "?").join(", ")})`;
-  const sql = `INSERT INTO ${quotedTable(part)} (${fields}) VALUES ${rows
-    .map(() => placeholders)
-    .join(", ")}`;
-  const values = rows.flatMap((row) =>
-    writableColumns.map((column) => normalizeValue(row[column.field], column)),
-  );
-
-  await getReportPrisma().$executeRawUnsafe(sql, ...values);
-  return rows.length;
-}
-
-export async function updatePlanningRow(
-  part: PlanningPartKey,
-  columns: PlanningColumn[],
-  id: string,
-  body: Record<string, unknown>,
-) {
-  const primary = getPrimaryColumn(columns);
-  const payload = buildPayload(body, columns, "update");
-  const entries = Object.entries(payload);
-
-  if (entries.length === 0) {
-    throw new Error("No editable fields provided");
-  }
-
-  const assignments = entries.map(([field]) => `${quotedColumn(field)} = ?`).join(", ");
-  await getReportPrisma().$executeRawUnsafe(
-    `UPDATE ${quotedTable(part)} SET ${assignments} WHERE ${quotedColumn(
-      primary.field,
-    )} = ?`,
-    ...entries.map(([, value]) => value),
-    id,
-  );
-}
-
-export async function deletePlanningRow(
-  part: PlanningPartKey,
-  columns: PlanningColumn[],
-  id: string,
-) {
-  const primary = getPrimaryColumn(columns);
-
-  await getReportPrisma().$executeRawUnsafe(
-    `DELETE FROM ${quotedTable(part)} WHERE ${quotedColumn(primary.field)} = ?`,
-    id,
-  );
-}
-
-function findColumn(columns: PlanningColumn[], candidates: string[]) {
-  return candidates
-    .map((candidate) =>
-      columns.find((column) => column.field.toLowerCase() === candidate.toLowerCase()),
-    )
-    .find(Boolean);
-}
-
-export function getConflictColumns(columns: PlanningColumn[]) {
-  const dateColumn = findColumn(columns, dateCandidates);
-  const shiftColumn = findColumn(columns, shiftCandidates);
-  const groupColumn = findColumn(columns, groupCandidates);
-
-  if (!dateColumn || !shiftColumn || !groupColumn) {
-    throw new Error("Unable to detect date, shift, and group columns for import");
-  }
-
-  return { dateColumn, shiftColumn, groupColumn };
-}
-
-function dateKey(value: unknown) {
-  if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
-  }
-
-  return String(value ?? "").slice(0, 10);
-}
-
-export function getBatchKeys(rows: Record<string, unknown>[], columns: PlanningColumn[]) {
-  const { dateColumn, shiftColumn, groupColumn } = getConflictColumns(columns);
-  const keys = new Map<string, { date: string; shift: string; group: string }>();
-
-  for (const row of rows) {
-    const date = dateKey(row[dateColumn.field]);
-    const shift = String(row[shiftColumn.field] ?? "").trim();
-    const group = String(row[groupColumn.field] ?? "").trim();
-
-    if (date && shift && group) {
-      keys.set(`${date}||${shift}||${group}`, { date, shift, group });
-    }
-  }
-
-  return {
-    columns: { dateColumn, shiftColumn, groupColumn },
-    keys: Array.from(keys.values()),
-  };
-}
-
-export async function findExistingBatches(
-  part: PlanningPartKey,
-  columns: PlanningColumn[],
-  rows: Record<string, unknown>[],
-) {
-  const {
-    columns: { dateColumn, shiftColumn, groupColumn },
-    keys,
-  } = getBatchKeys(rows, columns);
-  const existing: { date: string; shift: string; group: string }[] = [];
-
-  for (const key of keys) {
-    const result = await getReportPrisma().$queryRawUnsafe<{ count: bigint | number }[]>(
-      `SELECT COUNT(*) AS count FROM ${quotedTable(part)} WHERE DATE(${quotedColumn(
-        dateColumn.field,
-      )}) = ? AND ${quotedColumn(shiftColumn.field)} = ? AND ${quotedColumn(
-        groupColumn.field,
-      )} = ?`,
-      key.date,
-      key.shift,
-      key.group,
-    );
-
-    if (Number(result[0]?.count ?? 0) > 0) {
-      existing.push(key);
-    }
-  }
-
-  return existing;
-}
-
-export async function replaceExistingBatches(
-  part: PlanningPartKey,
-  columns: PlanningColumn[],
-  rows: Record<string, unknown>[],
-) {
-  const {
-    columns: { dateColumn, shiftColumn, groupColumn },
-    keys,
-  } = getBatchKeys(rows, columns);
-
-  for (const key of keys) {
-    await getReportPrisma().$executeRawUnsafe(
-      `DELETE FROM ${quotedTable(part)} WHERE DATE(${quotedColumn(
-        dateColumn.field,
-      )}) = ? AND ${quotedColumn(shiftColumn.field)} = ? AND ${quotedColumn(
-        groupColumn.field,
-      )} = ?`,
-      key.date,
-      key.shift,
-      key.group,
-    );
-  }
 }

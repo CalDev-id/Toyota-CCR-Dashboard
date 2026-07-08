@@ -1,23 +1,26 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 type ProductionAchievementFiltersProps = {
   date: string;
   shift: string;
+  onFilterChange: (next: { date?: string; shift?: string }) => void;
 };
 
 export default function ProductionAchievementFilters({
   date,
   shift,
+  onFilterChange,
 }: ProductionAchievementFiltersProps) {
-  const router = useRouter();
+  const [draftDate, setDraftDate] = useState(date);
+  const [draftShift, setDraftShift] = useState(shift);
 
   function updateFilter(next: { date?: string; shift?: string }) {
-    const params = new URLSearchParams();
-    params.set("date", next.date ?? date);
-    params.set("shift", next.shift ?? shift);
-    router.replace(`/production-achievement?${params.toString()}`);
+    onFilterChange({
+      date: next.date ?? draftDate,
+      shift: next.shift ?? draftShift,
+    });
   }
 
   return (
@@ -28,8 +31,17 @@ export default function ProductionAchievementFilters({
           className="h-10 rounded-lg border border-[#d0d5dd] bg-white px-3 text-sm font-medium text-[#101828] outline-none transition focus:border-[#465fff] focus:ring-2 focus:ring-[#ecf3ff] dark:border-[#384860] dark:bg-[#111827] dark:text-[#f8fafc] dark:focus:ring-[#14245a]"
           name="date"
           type="date"
-          value={date}
-          onChange={(event) => updateFilter({ date: event.target.value })}
+          value={draftDate}
+          onBlur={(event) => updateFilter({ date: event.target.value })}
+          onChange={(event) => {
+            setDraftDate(event.target.value);
+            updateFilter({ date: event.target.value });
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              updateFilter({ date: event.currentTarget.value });
+            }
+          }}
         />
       </label>
 
@@ -39,8 +51,11 @@ export default function ProductionAchievementFilters({
           <select
             className="h-10 w-full appearance-none rounded-lg border border-[#d0d5dd] bg-white py-0 pl-3 pr-10 text-sm font-medium text-[#101828] outline-none transition focus:border-[#465fff] focus:ring-2 focus:ring-[#ecf3ff] dark:border-[#384860] dark:bg-[#111827] dark:text-[#f8fafc] dark:focus:ring-[#14245a]"
             name="shift"
-            value={shift}
-            onChange={(event) => updateFilter({ shift: event.target.value })}
+            value={draftShift}
+            onChange={(event) => {
+              setDraftShift(event.target.value);
+              updateFilter({ shift: event.target.value });
+            }}
           >
             <option value="all">All Shift</option>
             <option value="R">R</option>

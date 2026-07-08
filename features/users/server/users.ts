@@ -1,10 +1,14 @@
-import { prisma } from "@/lib/prisma";
+"use server";
+
+import { auth } from "@/auth";
 import type { UserItem, UserPayload } from "@/features/users/types";
+import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { revalidatePath } from "next/cache";
 
 const minPasswordLength = 8;
 
-export function parseUserId(value: string) {
+function parseUserId(value: string) {
   const id = Number(value);
 
   if (!Number.isInteger(id) || id <= 0) {
@@ -14,7 +18,7 @@ export function parseUserId(value: string) {
   return id;
 }
 
-export function parseUserPayload(payload: unknown, mode: "create" | "update"): UserPayload {
+function parseUserPayload(payload: unknown, mode: "create" | "update"): UserPayload {
   if (!payload || typeof payload !== "object") {
     throw new Error("Invalid request body");
   }
@@ -42,6 +46,20 @@ export function parseUserPayload(payload: unknown, mode: "create" | "update"): U
   return { name, email, password };
 }
 
+function requireUserPayload(formData: FormData, mode: "create" | "update") {
+  return parseUserPayload(Object.fromEntries(formData), mode);
+}
+
+async function requireSession() {
+  const session = await auth();
+
+  if (!session?.user) {
+    throw new Error("Unauthenticated");
+  }
+
+  return session;
+}
+
 function serializeUser(user: { id: number; name: string; email: string }): UserItem {
   return {
     id: user.id,
@@ -63,7 +81,7 @@ export async function getUsers() {
   return users.map(serializeUser);
 }
 
-export async function createUser(payload: UserPayload) {
+async function createUser(payload: UserPayload) {
   const existingUser = await prisma.user.findUnique({
     where: { email: payload.email },
     select: { id: true },
@@ -90,7 +108,7 @@ export async function createUser(payload: UserPayload) {
   return serializeUser(user);
 }
 
-export async function updateUser(id: number, payload: UserPayload) {
+async function updateUser(id: number, payload: UserPayload) {
   const existingUser = await prisma.user.findFirst({
     where: {
       email: payload.email,
@@ -122,10 +140,48 @@ export async function updateUser(id: number, payload: UserPayload) {
   return serializeUser(user);
 }
 
-export async function deleteUser(id: number) {
+async function deleteUser(id: number) {
   await prisma.user.delete({
     where: { id },
   });
 
   return { id };
+}
+
+export async function createUserAction(formData: FormData) {
+  await requireSession();
+
+  const payload = requireUserPayload(formData, "create");
+  const user = await createUser(payload);
+
+  revalidatePath("/users");
+
+  return { data: user };
+}
+
+export async function updateUserAction(id: number, formData: FormData) {
+  await requireSession();
+
+  const userId = parseUserId(String(id));
+  const payload = requireUserPayload(formData, "update");
+  const user = await updateUser(userId, payload);
+
+  revalidatePath("/users");
+
+  return { data: user };
+}
+
+export async function deleteUserAction(id: number) {
+  const session = await requireSession();
+  const userId = parseUserId(String(id));
+
+  if (session.user.id === String(userId)) {
+    throw new Error("You cannot delete your own active account");
+  }
+
+  const deletedUser = await deleteUser(userId);
+
+  revalidatePath("/users");
+
+  return { data: deletedUser };
 }

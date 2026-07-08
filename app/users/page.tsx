@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import UsersPageClient from "@/features/users/components/UsersPageClient";
-import { getUsers } from "@/features/users/services/users.service";
+import { getUsers } from "@/features/users/server/users";
 import { redirect } from "next/navigation";
 
 export default async function UsersPage() {

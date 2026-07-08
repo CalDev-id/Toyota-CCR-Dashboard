@@ -1,5 +1,5 @@
 import HomeDashboard from "@/features/home/components/HomeDashboard";
-import { getHomeDashboard } from "@/features/home/services/home.service";
+import { getHomeDashboard } from "@/features/home/server/home-data";
 
 export const dynamic = "force-dynamic";
 
