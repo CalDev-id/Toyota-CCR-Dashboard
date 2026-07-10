@@ -4,15 +4,36 @@ import type {
   AnalysisOeeCard,
   AnalysisOeeSeriesRow,
   AnalysisShiftSeriesRow,
+  RawAnalysisProblemRow,
   RawAnalysisOeeRow,
 } from "@/features/analysis/types";
 import { getReportPrisma } from "@/lib/report-prisma";
 
 export const analysisLines: AnalysisLine[] = [
-  { key: "cylblock", label: "Cyl Block", tableName: "v_cylblock_summary" },
-  { key: "cylhead", label: "Cyl Head", tableName: "v_cylhead_summary" },
-  { key: "camshaft", label: "Camshaft", tableName: "v_camshaft_summary" },
-  { key: "crankshaft", label: "Crankshaft", tableName: "v_crankshaft_summary" },
+  {
+    key: "cylblock",
+    label: "Cyl Block",
+    tableName: "v_cylblock_summary",
+    problemTableName: "v_cylblock_detail_problem",
+  },
+  {
+    key: "cylhead",
+    label: "Cyl Head",
+    tableName: "v_cylhead_summary",
+    problemTableName: "v_cylhead_detail_problem",
+  },
+  {
+    key: "crankshaft",
+    label: "Crankshaft",
+    tableName: "v_crankshaft_summary",
+    problemTableName: "v_crankshaft_detail_problem",
+  },
+  {
+    key: "camshaft",
+    label: "Camshaft",
+    tableName: "v_camshaft_summary",
+    problemTableName: "v_camshaft_detail_problem",
+  },
 ];
 
 function quoteIdentifier(value: string) {
@@ -28,19 +49,43 @@ export async function getAnalysisLineRows(
     `SELECT
       \`DATE\` AS date,
       SHIFT AS shift,
+      SHIFT2 AS shift2,
       AV AS av,
       PE AS pe,
       RQ AS rq,
       OEE AS oee,
       Balance AS balance,
       OT_plan AS otPlan,
-      OT_act AS otAct
+      OT_act AS otAct,
+      OT_diff AS otDiff
      FROM ${quoteIdentifier(line.tableName)}
      WHERE \`DATE\` >= ? AND \`DATE\` < ?
      ORDER BY \`DATE\` ASC, SHIFT ASC`,
     start,
     endExclusive,
   );
+}
+
+export async function getAnalysisProblemRows(
+  line: AnalysisLine,
+  selectedDate: string,
+  endExclusive: string,
+) {
+  return getReportPrisma()
+    .$queryRawUnsafe<RawAnalysisProblemRow[]>(
+      `SELECT
+        SHIFT2 AS shift2,
+        Problem_AV AS problemAv,
+        LS_AV_min AS lsAvMin,
+        Problem_PE AS problemPe,
+        LS_PE_min AS lsPeMin
+       FROM ${quoteIdentifier(line.problemTableName)}
+       WHERE \`DATE\` >= ? AND \`DATE\` < ?
+       ORDER BY SHIFT2 ASC, LS_AV_min DESC, LS_PE_min DESC`,
+      selectedDate,
+      endExclusive,
+    )
+    .catch(() => []);
 }
 
 function toNumber(value: unknown) {
@@ -105,17 +150,101 @@ function normalizeShift(value: string | null) {
   return String(value ?? "").trim().toUpperCase();
 }
 
-function buildCard(line: AnalysisLine, rows: RawAnalysisOeeRow[], selectedDate: string): AnalysisOeeCard {
+function sumAverageOtByGroup(
+  rows: RawAnalysisOeeRow[],
+  getGroupKey: (row: RawAnalysisOeeRow) => string,
+) {
+  const grouped = new Map<string, number[]>();
+
+  for (const row of rows) {
+    const groupKey = getGroupKey(row);
+
+    if (!groupKey) {
+      continue;
+    }
+
+    grouped.set(groupKey, [...(grouped.get(groupKey) ?? []), toNumber(row.otAct)]);
+  }
+
+  return Array.from(grouped.values()).reduce((total, values) => {
+    return total + (average(values) ?? 0);
+  }, 0);
+}
+
+function sumAverageByGroup(
+  rows: RawAnalysisOeeRow[],
+  getGroupKey: (row: RawAnalysisOeeRow) => string,
+  getValue: (row: RawAnalysisOeeRow) => number,
+) {
+  const grouped = new Map<string, number[]>();
+
+  for (const row of rows) {
+    const groupKey = getGroupKey(row);
+
+    if (!groupKey) {
+      continue;
+    }
+
+    grouped.set(groupKey, [...(grouped.get(groupKey) ?? []), getValue(row)]);
+  }
+
+  return Array.from(grouped.values()).reduce((total, values) => {
+    return total + (average(values) ?? 0);
+  }, 0);
+}
+
+function buildProblemNote(rows: RawAnalysisProblemRow[]) {
+  const grouped = {
+    day: [] as Array<{ label: string; value: number; type: "AV" | "PE" }>,
+    night: [] as Array<{ label: string; value: number; type: "AV" | "PE" }>,
+  };
+
+  for (const row of rows) {
+    const shift2 = normalizeShift(row.shift2);
+    const target = shift2 === "DAY" ? grouped.day : shift2 === "NIGHT" ? grouped.night : null;
+
+    if (!target) {
+      continue;
+    }
+
+    const avValue = toNumber(row.lsAvMin);
+    const peValue = toNumber(row.lsPeMin);
+    const avLabel = String(row.problemAv ?? "").trim();
+    const peLabel = String(row.problemPe ?? "").trim();
+
+    if (avLabel && avValue > 0) {
+      target.push({ label: avLabel, value: avValue, type: "AV" });
+    }
+
+    if (peLabel && peValue > 0) {
+      target.push({ label: peLabel, value: peValue, type: "PE" });
+    }
+  }
+
+  return {
+    day: grouped.day.sort((a, b) => b.value - a.value)[0] ?? null,
+    night: grouped.night.sort((a, b) => b.value - a.value)[0] ?? null,
+  };
+}
+
+function buildCard(
+  line: AnalysisLine,
+  rows: RawAnalysisOeeRow[],
+  problemRows: RawAnalysisProblemRow[],
+  selectedDate: string,
+): AnalysisOeeCard {
   const selectedRows = rows.filter((row) => toDateKey(row.date) === selectedDate);
   const selectedRRows = selectedRows.filter((row) => normalizeShift(row.shift) === "R");
   const selectedWRows = selectedRows.filter((row) => normalizeShift(row.shift) === "W");
+  const selectedDayRows = selectedRows.filter((row) => normalizeShift(row.shift2) === "DAY");
+  const selectedNightRows = selectedRows.filter((row) => normalizeShift(row.shift2) === "NIGHT");
   const dailyR = average(selectedRRows.map((row) => toNumber(row.oee)));
   const dailyW = average(selectedWRows.map((row) => toNumber(row.oee)));
   const dailyAverage = average([dailyR, dailyW].filter((value) => value !== null));
   const allValues = rows.map((row) => toNumber(row.oee));
   const monthlyRRows = rows.filter((row) => normalizeShift(row.shift) === "R");
   const monthlyWRows = rows.filter((row) => normalizeShift(row.shift) === "W");
-  const dailyGap = buildDailyGap(rows);
+  const balanceDivisor = line.key === "camshaft" ? 2 : 1;
 
   return {
     key: line.key,
@@ -124,14 +253,38 @@ function buildCard(line: AnalysisLine, rows: RawAnalysisOeeRow[], selectedDate: 
     w: dailyW,
     ave: dailyAverage,
     monthly: average(allValues),
-    balance: selectedRows.reduce((total, row) => total + toNumber(row.balance), 0),
-    balanceMonthly: rows.reduce((total, row) => total + toNumber(row.balance), 0),
-    otDay: selectedRRows.reduce((total, row) => total + toNumber(row.otAct), 0),
-    otNight: selectedWRows.reduce((total, row) => total + toNumber(row.otAct), 0),
-    cumR: monthlyRRows.reduce((total, row) => total + toNumber(row.otAct), 0),
-    cumW: monthlyWRows.reduce((total, row) => total + toNumber(row.otAct), 0),
-    gapCumR: Array.from(dailyGap.values()).reduce((total, value) => total + value.r, 0),
-    gapCumW: Array.from(dailyGap.values()).reduce((total, value) => total + value.w, 0),
+    balance:
+      selectedRows.reduce((total, row) => total + toNumber(row.balance), 0) /
+      balanceDivisor,
+    balanceMonthly:
+      rows.reduce((total, row) => total + toNumber(row.balance), 0) / balanceDivisor,
+    otDay: sumAverageOtByGroup(
+      selectedDayRows,
+      (row) => `${toDateKey(row.date)}:${normalizeShift(row.shift2)}`,
+    ),
+    otNight: sumAverageOtByGroup(
+      selectedNightRows,
+      (row) => `${toDateKey(row.date)}:${normalizeShift(row.shift2)}`,
+    ),
+    cumR: sumAverageOtByGroup(
+      monthlyRRows,
+      (row) => `${toDateKey(row.date)}:${normalizeShift(row.shift)}`,
+    ),
+    cumW: sumAverageOtByGroup(
+      monthlyWRows,
+      (row) => `${toDateKey(row.date)}:${normalizeShift(row.shift)}`,
+    ),
+    gapCumR: sumAverageByGroup(
+      monthlyRRows,
+      (row) => `${toDateKey(row.date)}:${normalizeShift(row.shift)}`,
+      (row) => toNumber(row.otDiff),
+    ),
+    gapCumW: sumAverageByGroup(
+      monthlyWRows,
+      (row) => `${toDateKey(row.date)}:${normalizeShift(row.shift)}`,
+      (row) => toNumber(row.otDiff),
+    ),
+    note: buildProblemNote(problemRows),
   };
 }
 
@@ -188,13 +341,7 @@ function buildDailyShiftAverage(rows: RawAnalysisOeeRow[], key: "oee" | "av" | "
 }
 
 function buildDailyGap(rows: RawAnalysisOeeRow[]) {
-  const grouped = new Map<
-    string,
-    {
-      r: { plan: number; actual: number };
-      w: { plan: number; actual: number };
-    }
-  >();
+  const grouped = new Map<string, { r: number[]; w: number[] }>();
 
   for (const row of rows) {
     const date = toDateKey(row.date);
@@ -203,19 +350,14 @@ function buildDailyGap(rows: RawAnalysisOeeRow[]) {
       continue;
     }
 
-    const current = grouped.get(date) ?? {
-      r: { plan: 0, actual: 0 },
-      w: { plan: 0, actual: 0 },
-    };
+    const current = grouped.get(date) ?? { r: [], w: [] };
 
     if (normalizeShift(row.shift) === "R") {
-      current.r.plan = Math.max(current.r.plan, toNumber(row.otPlan));
-      current.r.actual += toNumber(row.otAct);
+      current.r.push(toNumber(row.otDiff));
     }
 
     if (normalizeShift(row.shift) === "W") {
-      current.w.plan = Math.max(current.w.plan, toNumber(row.otPlan));
-      current.w.actual += toNumber(row.otAct);
+      current.w.push(toNumber(row.otDiff));
     }
 
     grouped.set(date, current);
@@ -225,8 +367,8 @@ function buildDailyGap(rows: RawAnalysisOeeRow[]) {
     Array.from(grouped.entries()).map(([date, value]) => [
       date,
       {
-        r: value.r.actual - value.r.plan,
-        w: value.w.actual - value.w.plan,
+        r: average(value.r) ?? 0,
+        w: average(value.w) ?? 0,
       },
     ]),
   );
@@ -236,12 +378,18 @@ export async function getAnalysisOee(dateParam: string | null) {
   const range = parseDate(dateParam);
   const days = getRangeDays(range.year, range.month, range.dayCount);
   const entries = await Promise.all(
-    analysisLines.map(async (line) => ({
-      line,
-      rows: await getAnalysisLineRows(line, range.start, range.endExclusive),
-    })),
+    analysisLines.map(async (line) => {
+      const [rows, problemRows] = await Promise.all([
+        getAnalysisLineRows(line, range.start, range.endExclusive),
+        getAnalysisProblemRows(line, range.date, range.endExclusive),
+      ]);
+
+      return { line, rows, problemRows };
+    }),
   );
-  const cards = entries.map((entry) => buildCard(entry.line, entry.rows, range.date));
+  const cards = entries.map((entry) =>
+    buildCard(entry.line, entry.rows, entry.problemRows, range.date),
+  );
   const dailyByLine = new Map(
     entries.map((entry) => [entry.line.key, buildDailyAverage(entry.rows, "oee")]),
   );

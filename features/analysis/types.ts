@@ -4,11 +4,13 @@ export type AnalysisLine = {
   key: AnalysisLineKey;
   label: string;
   tableName: string;
+  problemTableName: string;
 };
 
 export type RawAnalysisOeeRow = {
   date: Date | string | null;
   shift: string | null;
+  shift2: string | null;
   av: string | number | null;
   pe: string | number | null;
   rq: string | number | null;
@@ -16,6 +18,26 @@ export type RawAnalysisOeeRow = {
   balance: string | number | null;
   otPlan: string | number | null;
   otAct: string | number | null;
+  otDiff: string | number | null;
+};
+
+export type RawAnalysisProblemRow = {
+  shift2: string | null;
+  problemAv: string | null;
+  lsAvMin: string | number | null;
+  problemPe: string | null;
+  lsPeMin: string | number | null;
+};
+
+export type AnalysisProblemNoteItem = {
+  label: string;
+  value: number;
+  type: "AV" | "PE";
+};
+
+export type AnalysisProblemNote = {
+  day: AnalysisProblemNoteItem | null;
+  night: AnalysisProblemNoteItem | null;
 };
 
 export type AnalysisOeeCard = {
@@ -33,6 +55,7 @@ export type AnalysisOeeCard = {
   cumW: number;
   gapCumR: number;
   gapCumW: number;
+  note: AnalysisProblemNote;
 };
 
 export type AnalysisOeeSeriesRow = {

@@ -12,8 +12,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 const lineLabels: Record<LineKey, string> = {
   cylblock: "Cyl Block",
   cylhead: "Cyl Head",
-  camshaft: "Camshaft",
   crankshaft: "Crankshaft",
+  camshaft: "Camshaft",
 };
 
 function todayKey() {

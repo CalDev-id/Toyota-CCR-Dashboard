@@ -9,6 +9,19 @@ import DailyGapChart from "@/features/analysis/components/DailyGapChart";
 import DailyShiftPercentChart from "@/features/analysis/components/DailyShiftPercentChart";
 import { buildShiftPath, formatDayLabel, formatMonthLabel, formatNumber, formatPercent, formatUnit, getChartMinWidth, getShiftChartRows, normalizePercent } from "@/features/analysis/components/analysisChartUtils";
 
+function ProblemBadge({ type }: { type: "AV" | "PE" }) {
+  const className =
+    type === "AV"
+      ? "bg-[#fef3f2] text-[#b42318]"
+      : "bg-[#fffaeb] text-[#b54708]";
+
+  return (
+    <span className={`grid h-5 min-w-6 place-items-center rounded px-1.5 text-[10px] font-bold ${className}`}>
+      {type}
+    </span>
+  );
+}
+
 export function OeeLineChart({
   series,
   shiftSeries,
@@ -200,7 +213,7 @@ export function OeeLineChart({
                     <div key={label} className="min-w-0 flex-1 rounded-xl bg-[#f9fafb] p-2.5">
                       <p className="text-[10px] font-medium text-[#667085]">{label}</p>
                       <p className="mt-1 whitespace-nowrap text-sm font-semibold text-[#101828]">
-                        {formatUnit(value as number)}
+                        {formatNumber(value as number)}
                       </p>
                     </div>
                   ))}
@@ -232,7 +245,28 @@ export function OeeLineChart({
               <article className="rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm">
                 <h3 className="text-sm font-semibold text-[#101828]">Note</h3>
                 <p className="mt-0.5 text-xs font-medium text-[#667085]">{line.label}</p>
-                <div className="mt-3 min-h-[96px] rounded-xl bg-[#f9fafb]" />
+                <div className="mt-3 grid min-h-[96px] gap-2 rounded-xl bg-[#f9fafb] p-3">
+                  {[
+                    ["Day", card?.note.day],
+                    ["Night", card?.note.night],
+                  ].map(([shiftLabel, problem]) => (
+                    <div key={shiftLabel as string} className="grid min-w-0 grid-cols-[48px_32px_minmax(0,1fr)] items-center gap-2">
+                      <p className="text-xs font-semibold text-[#344054]">
+                        {shiftLabel}
+                      </p>
+                      {problem ? (
+                        <>
+                          <ProblemBadge type={problem.type} />
+                          <p className="min-w-0 truncate text-xs font-medium text-[#344054]" title={problem.label}>
+                            {problem.label}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="col-span-2 text-xs font-medium text-[#98a2b3]">No problem data</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </article>
 
               <DailyShiftPercentChart

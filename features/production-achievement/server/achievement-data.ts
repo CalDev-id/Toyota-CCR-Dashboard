@@ -213,11 +213,32 @@ function buildStopTime(rows: RawProductionAchievementProblemRow[]) {
   );
 }
 
-function buildVariants(rows: RawProductionAchievementSummaryRow[]) {
+function buildVariantName(line: ProductionAchievementLineConfig, value: string | null) {
+  const name = String(value ?? "").trim();
+
+  if (line.key !== "camshaft") {
+    return name;
+  }
+
+  if (name === "1TR") {
+    return "01";
+  }
+
+  if (name === "2TR") {
+    return "02";
+  }
+
+  return name;
+}
+
+function buildVariants(
+  line: ProductionAchievementLineConfig,
+  rows: RawProductionAchievementSummaryRow[],
+) {
   const grouped = new Map<string, ProductionAchievementVariant>();
 
   for (const row of rows) {
-    const name = String(row.variant ?? "").trim();
+    const name = buildVariantName(line, row.variant);
 
     if (!name) {
       continue;
@@ -245,19 +266,28 @@ function buildLineCard(
   summaryRows: RawProductionAchievementSummaryRow[],
   problemRows: RawProductionAchievementProblemRow[],
 ): ProductionAchievementCard {
+  const balanceDivisor = line.key === "camshaft" ? 2 : 1;
+  const pairDivisor = line.key === "camshaft" ? 2 : 1;
+
   return {
     key: line.key,
     label: line.label,
     imageSrc: line.imageSrc,
-    prodPlan: summaryRows.reduce((total, row) => total + toNumber(row.prodPlan), 0),
-    prodAct: summaryRows.reduce((total, row) => total + toNumber(row.prodAct), 0),
+    prodPlan:
+      summaryRows.reduce((total, row) => total + toNumber(row.prodPlan), 0) /
+      pairDivisor,
+    prodAct:
+      summaryRows.reduce((total, row) => total + toNumber(row.prodAct), 0) /
+      pairDivisor,
     oee: average(summaryRows.map((row) => toNumber(row.oee))),
     tt: summaryRows.find((row) => String(row.tt ?? "").trim())?.tt ?? "",
     oeeTarget: 90,
-    balance: summaryRows.reduce((total, row) => total + toNumber(row.balance), 0),
+    balance:
+      summaryRows.reduce((total, row) => total + toNumber(row.balance), 0) /
+      balanceDivisor,
     stopTime: buildStopTime(problemRows),
     problems: buildProblems(line, problemRows),
-    variants: line.key === "cylblock" ? buildVariants(summaryRows) : [],
+    variants: buildVariants(line, summaryRows),
   };
 }
 

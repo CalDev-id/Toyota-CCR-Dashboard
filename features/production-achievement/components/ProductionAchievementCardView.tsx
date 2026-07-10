@@ -184,6 +184,7 @@ export default function ProductionAchievementCardView({
           alt={`${card.label} production part`}
           width={220}
           height={150}
+          loading="eager"
           className="max-h-32 w-auto max-w-[88%] object-contain"
         />
       </div>
@@ -218,7 +219,7 @@ export default function ProductionAchievementCardView({
               <thead className="bg-[#f9fafb] text-[#667085] dark:bg-[#162033] dark:text-[#a7b0c0]">
                 <tr>
                   <th className="w-[34%] px-3 py-2.5 text-left font-semibold">
-                    Variant
+                    Type
                   </th>
                   <th className="w-[22%] px-2 py-2.5 text-right font-semibold">
                     Plan
