@@ -247,10 +247,10 @@ export function OeeLineChart({
                 <p className="mt-0.5 text-xs font-medium text-[#667085]">{line.label}</p>
                 <div className="mt-3 grid min-h-[96px] gap-2 rounded-xl bg-[#f9fafb] p-3">
                   {[
-                    ["Day", card?.note.day],
-                    ["Night", card?.note.night],
-                  ].map(([shiftLabel, problem]) => (
-                    <div key={shiftLabel as string} className="grid min-w-0 grid-cols-[48px_32px_minmax(0,1fr)] items-center gap-2">
+                    { shiftLabel: "Day", problem: card?.note.day },
+                    { shiftLabel: "Night", problem: card?.note.night },
+                  ].map(({ shiftLabel, problem }) => (
+                    <div key={shiftLabel} className="grid min-w-0 grid-cols-[48px_32px_minmax(0,1fr)] items-center gap-2">
                       <p className="text-xs font-semibold text-[#344054]">
                         {shiftLabel}
                       </p>
