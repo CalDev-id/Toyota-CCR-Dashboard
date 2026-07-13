@@ -1,11 +1,36 @@
-import { prisma } from "@/lib/prisma";
+import { getReportPrisma } from "@/lib/report-prisma";
 
 export type CylblockFilters = {
+  line: SummaryLineKey;
   month: string;
   date: string;
   shift: string;
   shift2: string;
   shop: string;
+};
+
+type SummaryLineKey = "cylblock" | "cylhead" | "camshaft" | "crankshaft";
+
+const summaryLines: Record<
+  SummaryLineKey,
+  { summaryView: string; detailProblemView: string }
+> = {
+  cylblock: {
+    summaryView: "v_cylblock_summary",
+    detailProblemView: "v_cylblock_detail_problem",
+  },
+  cylhead: {
+    summaryView: "v_cylhead_summary",
+    detailProblemView: "v_cylhead_detail_problem",
+  },
+  camshaft: {
+    summaryView: "v_camshaft_summary",
+    detailProblemView: "v_camshaft_detail_problem",
+  },
+  crankshaft: {
+    summaryView: "v_crankshaft_summary",
+    detailProblemView: "v_crankshaft_detail_problem",
+  },
 };
 
 type RawSummaryRow = {
@@ -132,6 +157,30 @@ function getCurrentMonth() {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function quoteIdentifier(value: string) {
+  return `\`${value.replaceAll("`", "``")}\``;
+}
+
+function parseSummaryLine(value: string | null) {
+  const normalized = String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+  if (normalized.includes("cylhead") || normalized.includes("cylinderhead")) {
+    return "cylhead";
+  }
+
+  if (normalized.includes("camshaft")) {
+    return "camshaft";
+  }
+
+  if (normalized.includes("crankshaft")) {
+    return "crankshaft";
+  }
+
+  return "cylblock";
+}
+
 function getMonthRange(month: string) {
   if (!/^\d{4}-\d{2}$/.test(month)) {
     throw new Error("Month filter must use YYYY-MM format");
@@ -149,6 +198,7 @@ export function parseCylblockFilters(url: URL): CylblockFilters {
   const date = url.searchParams.get("date") ?? "";
 
   return {
+    line: parseSummaryLine(url.searchParams.get("line")),
     month: url.searchParams.get("month") || date.slice(0, 7) || getCurrentMonth(),
     date,
     shift: url.searchParams.get("shift") || "all",
@@ -261,15 +311,18 @@ function normalizeFilterOptions(
 }
 
 async function getSummaryFilterOptions(filters: CylblockFilters) {
+  const line = summaryLines[filters.line];
   const { start, end } = getMonthRange(filters.month);
-  const rows = await prisma.$queryRawUnsafe<
+  const rows = await getReportPrisma().$queryRawUnsafe<
     Array<{
       shift: string | null;
       shift2: string | null;
       shop: string | null;
     }>
   >(
-    "SELECT DISTINCT SHIFT AS shift, SHIFT2 AS shift2, SHOP AS shop FROM v_cylblock_summary WHERE `DATE` >= ? AND `DATE` < ? ORDER BY SHIFT, SHIFT2, SHOP",
+    `SELECT DISTINCT SHIFT AS shift, SHIFT2 AS shift2, SHOP AS shop FROM ${quoteIdentifier(
+      line.summaryView,
+    )} WHERE \`DATE\` >= ? AND \`DATE\` < ? ORDER BY SHIFT, SHIFT2, SHOP`,
     start,
     end,
   );
@@ -278,9 +331,10 @@ async function getSummaryFilterOptions(filters: CylblockFilters) {
 }
 
 export async function getCylblockSummary(filters: CylblockFilters) {
+  const line = summaryLines[filters.line];
   const { where, values } = buildSummaryWhere(filters);
   const problemWhere = buildProblemWhere(filters);
-  const rows = await prisma.$queryRawUnsafe<RawSummaryRow[]>(
+  const rows = await getReportPrisma().$queryRawUnsafe<RawSummaryRow[]>(
     `SELECT
       \`DATE\` AS date,
       PLANT AS plant,
@@ -302,12 +356,12 @@ export async function getCylblockSummary(filters: CylblockFilters) {
       RQ AS rq,
       OEE AS oee,
       fdate_modified AS modifiedAt
-    FROM v_cylblock_summary${where}
+    FROM ${quoteIdentifier(line.summaryView)}${where}
     ORDER BY \`DATE\` ASC, SHIFT ASC, SHOP ASC
     LIMIT 500`,
     ...values,
   );
-  const problemRows = await prisma
+  const problemRows = await getReportPrisma()
     .$queryRawUnsafe<RawProblemRow[]>(
       `SELECT
         \`DATE\` AS date,
@@ -329,7 +383,7 @@ export async function getCylblockSummary(filters: CylblockFilters) {
         Defect_C_min AS defectCMin,
         Defect_M_min AS defectMMin,
         fdate_modified AS modifiedAt
-      FROM v_cylblock_detail_problem${problemWhere.where}
+      FROM ${quoteIdentifier(line.detailProblemView)}${problemWhere.where}
       ORDER BY \`DATE\` ASC, SHIFT ASC, JAM ASC, SHOP ASC
       LIMIT 300`,
       ...problemWhere.values,

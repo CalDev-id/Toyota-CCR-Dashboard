@@ -8,6 +8,7 @@ RUN npm ci
 
 FROM deps AS builder
 COPY . .
+ENV DATABASE_URL="mysql://root:password@localhost:3306/toyota_ccr"
 RUN npm run prisma:generate
 RUN npm run build
 

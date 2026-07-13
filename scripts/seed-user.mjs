@@ -1,8 +1,11 @@
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { existsSync } from "node:fs";
 
-process.loadEnvFile?.(".env");
+if (existsSync(".env")) {
+  process.loadEnvFile?.(".env");
+}
 
 const name = process.env.SEED_USER_NAME?.trim() || "Admin CCR";
 const email = process.env.SEED_USER_EMAIL?.trim().toLowerCase();

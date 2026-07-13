@@ -517,6 +517,7 @@ export default function ProductionPage() {
 
   const url = useMemo(() => {
     const params = new URLSearchParams({
+      line,
       date,
       month: date.slice(0, 7) || currentMonth(),
       shift,
@@ -524,17 +525,18 @@ export default function ProductionPage() {
       shop,
     });
     return `/api/cylblock/summary?${params.toString()}`;
-  }, [date, shift, shift2, shop]);
+  }, [date, line, shift, shift2, shop]);
 
   const monthlyUrl = useMemo(() => {
     const params = new URLSearchParams({
+      line,
       month: date.slice(0, 7) || currentMonth(),
       shift,
       shift2,
       shop,
     });
     return `/api/cylblock/summary?${params.toString()}`;
-  }, [date, shift, shift2, shop]);
+  }, [date, line, shift, shift2, shop]);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);

@@ -164,6 +164,7 @@ function DailyGapChart({ series, lineKey }: { series: GapSeriesRow[]; lineKey: L
   const chartRows = series.filter(
     (row) => row[`${lineKey}R`] !== null || row[`${lineKey}W`] !== null,
   );
+  const hasSparseRows = chartRows.length > 0 && chartRows.length <= 7;
   const maxValue =
     Math.max(
       1,
@@ -180,7 +181,11 @@ function DailyGapChart({ series, lineKey }: { series: GapSeriesRow[]; lineKey: L
         <div className="px-4" style={{ minWidth: chartMinWidth }}>
           <div className="relative mt-5 h-56">
             <div className="absolute left-0 right-0 top-1/2 border-t border-dashed border-[#98a2b3]" />
-            <div className="flex h-full items-stretch gap-2">
+            <div
+              className={`flex h-full items-stretch gap-2 ${
+                hasSparseRows ? "justify-around" : ""
+              }`}
+            >
               {chartRows.map((row) => {
                 const rValue = row[`${lineKey}R`] ?? 0;
                 const wValue = row[`${lineKey}W`] ?? 0;
@@ -190,7 +195,12 @@ function DailyGapChart({ series, lineKey }: { series: GapSeriesRow[]; lineKey: L
                 ];
 
                 return (
-                  <div key={row.date} className="flex min-w-0 flex-1 flex-col">
+                  <div
+                    key={row.date}
+                    className={`flex flex-col ${
+                      hasSparseRows ? "w-6 flex-none sm:w-7" : "min-w-0 flex-1"
+                    }`}
+                  >
                     <div className="relative h-full">
                       {bars.map((bar) => {
                         const height = Math.min((Math.abs(bar.value) / maxValue) * 50, 50);
@@ -230,9 +240,16 @@ function DailyGapChart({ series, lineKey }: { series: GapSeriesRow[]; lineKey: L
             </div>
           </div>
 
-          <div className="mt-2 flex justify-between text-[10px] font-medium text-[#667085]">
+          <div
+            className={`mt-2 flex gap-2 text-[10px] font-medium text-[#667085] ${
+              hasSparseRows ? "justify-around" : "justify-between"
+            }`}
+          >
             {chartRows.map((row, index) => (
-              <span key={`${row.date}-${index}`} className="min-w-0 text-center">
+              <span
+                key={`${row.date}-${index}`}
+                className={`min-w-0 text-center ${hasSparseRows ? "w-6 flex-none sm:w-7" : ""}`}
+              >
                 {formatDayLabel(row.date)}
               </span>
             ))}
