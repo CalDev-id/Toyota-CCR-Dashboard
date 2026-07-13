@@ -11,6 +11,10 @@ import { getReportPrisma } from "@/lib/report-prisma";
 
 export const analysisLines: AnalysisLine[] = [
   {
+    key: "assyline",
+    label: "Assy Line",
+  },
+  {
     key: "cylblock",
     label: "Cyl Block",
     tableName: "v_cylblock_summary",
@@ -45,6 +49,10 @@ export async function getAnalysisLineRows(
   start: string,
   endExclusive: string,
 ) {
+  if (!line.tableName) {
+    return [];
+  }
+
   return getReportPrisma().$queryRawUnsafe<RawAnalysisOeeRow[]>(
     `SELECT
       \`DATE\` AS date,
@@ -71,6 +79,10 @@ export async function getAnalysisProblemRows(
   selectedDate: string,
   endExclusive: string,
 ) {
+  if (!line.problemTableName) {
+    return [];
+  }
+
   return getReportPrisma()
     .$queryRawUnsafe<RawAnalysisProblemRow[]>(
       `SELECT

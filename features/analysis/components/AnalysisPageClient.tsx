@@ -10,6 +10,7 @@ import OeeSummaryCard from "@/features/analysis/components/OeeSummaryCard";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const lineLabels: Record<LineKey, string> = {
+  assyline: "Assy Line",
   cylblock: "Cyl Block",
   cylhead: "Cyl Head",
   crankshaft: "Crankshaft",
@@ -155,7 +156,7 @@ export default function AnalysisPage() {
         </div>
       ) : (
         <>
-          <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
             {data?.cards.length ? (
               data.cards.map((card) => <OeeSummaryCard key={card.key} card={card} />)
             ) : (

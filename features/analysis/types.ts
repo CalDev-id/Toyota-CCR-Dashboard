@@ -1,10 +1,10 @@
-export type AnalysisLineKey = "cylblock" | "cylhead" | "camshaft" | "crankshaft";
+export type AnalysisLineKey = "assyline" | "cylblock" | "cylhead" | "camshaft" | "crankshaft";
 
 export type AnalysisLine = {
   key: AnalysisLineKey;
   label: string;
-  tableName: string;
-  problemTableName: string;
+  tableName?: string;
+  problemTableName?: string;
 };
 
 export type RawAnalysisOeeRow = {
