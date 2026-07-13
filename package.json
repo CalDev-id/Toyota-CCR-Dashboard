@@ -7,7 +7,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "import:cylblock-detail-problem": "node scripts/import-cylblock-detail-problem.mjs",
     "seed:user": "node scripts/seed-user.mjs",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
