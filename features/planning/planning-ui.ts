@@ -75,7 +75,29 @@ export function getPartLabel(part: PlanningPartKey) {
 }
 
 export function formatColumnLabel(field: string) {
+  const labels: Record<string, string> = {
+    ftt: "TT",
+    foee: "OEE",
+    fratio: "Ratio",
+    f1tr: "1TR",
+    f2tr: "2TR",
+  };
+
+  if (labels[field.toLowerCase()]) {
+    return labels[field.toLowerCase()];
+  }
+
   return /^f/i.test(field) ? field.slice(1) : field;
+}
+
+export function sortVisibleColumns(columns: PlanningColumn[]) {
+  return [...columns].sort((left, right) => {
+    const leftIsRemark = ["remark", "fremarks"].includes(left.field.toLowerCase());
+    const rightIsRemark = ["remark", "fremarks"].includes(right.field.toLowerCase());
+
+    if (leftIsRemark === rightIsRemark) return 0;
+    return leftIsRemark ? 1 : -1;
+  });
 }
 
 export function makeEmptyForm(columns: PlanningColumn[]) {

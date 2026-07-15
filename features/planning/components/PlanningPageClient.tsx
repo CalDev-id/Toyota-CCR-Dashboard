@@ -25,6 +25,7 @@ import {
   isVisibleColumn,
   makeEditing,
   makeEmptyForm,
+  sortVisibleColumns,
 } from "@/features/planning/planning-ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -106,7 +107,7 @@ export default function PlanningPage() {
   );
   const updateColumns = useMemo(() => columns.filter(isUpdateField), [columns]);
   const visibleColumns = useMemo(
-    () => columns.filter(isVisibleColumn),
+    () => sortVisibleColumns(columns.filter(isVisibleColumn)),
     [columns],
   );
   const activePartSummary = useMemo(

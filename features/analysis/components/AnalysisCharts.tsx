@@ -74,7 +74,7 @@ export function OeeLineChart({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
         {lines.map((line) => {
           const card = cards.find((item) => item.key === line.key);
           return (

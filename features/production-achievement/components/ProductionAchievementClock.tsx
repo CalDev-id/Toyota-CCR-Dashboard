@@ -22,7 +22,7 @@ export default function ProductionAchievementClock() {
   }, []);
 
   return (
-    <span className="grid min-h-[48px] place-items-center rounded-lg border border-[#e4e7ec] bg-white px-3.5 text-lg font-semibold tabular-nums tracking-tight text-[#101828] dark:border-[#273449] dark:bg-[#111827] dark:text-[#f8fafc]">
+    <span className="grid min-h-[60px] place-items-center rounded-lg border border-[#e4e7ec] bg-white px-4 text-2xl font-semibold tabular-nums tracking-tight text-[#101828] dark:border-[#273449] dark:bg-[#111827] dark:text-[#f8fafc] md:min-h-[68px] md:px-5 md:text-3xl">
       {time}
     </span>
   );

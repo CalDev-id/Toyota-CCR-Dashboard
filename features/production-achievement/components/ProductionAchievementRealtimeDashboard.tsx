@@ -76,26 +76,29 @@ export default function ProductionAchievementRealtimeDashboard({
 
   return (
     <section>
-      <div className="mb-4 flex flex-col gap-3 pl-2 lg:flex-row lg:items-end lg:justify-between">
-        <div className="flex items-stretch gap-5">
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight text-[#101828] dark:text-[#f8fafc]">
-              Production Achievement
-            </h1>
-            <p className="mt-1 text-sm font-semibold text-[#667085] dark:text-[#a7b0c0]">
-              {dashboard.date}
-            </p>
-          </div>
-          <ProductionAchievementClock />
+      <div className="mb-4 grid gap-3 py-3 pl-2 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
+        <div className="flex justify-start">
+          <ProductionAchievementFilters
+            date={dashboard.date}
+            shift={dashboard.shift}
+            onFilterChange={(next) => {
+              void handleFilterChange(next);
+            }}
+          />
         </div>
 
-        <ProductionAchievementFilters
-          date={dashboard.date}
-          shift={dashboard.shift}
-          onFilterChange={(next) => {
-            void handleFilterChange(next);
-          }}
-        />
+        <div className="text-center">
+          <h1 className="text-2xl font-semibold tracking-tight text-[#101828] dark:text-[#f8fafc] md:text-3xl">
+            Production Achievement
+          </h1>
+          <p className="mt-1 text-lg font-semibold text-[#667085] dark:text-[#a7b0c0] md:text-xl">
+            {dashboard.date}
+          </p>
+        </div>
+
+        <div className="flex justify-start lg:justify-end">
+          <ProductionAchievementClock />
+        </div>
       </div>
 
       <div className="overflow-x-auto pb-2 [scrollbar-gutter:stable] xl:overflow-visible xl:pb-0">

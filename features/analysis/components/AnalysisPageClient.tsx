@@ -121,10 +121,10 @@ export default function AnalysisPage() {
   }
 
   return (
-    <DefaultLayout>
-      <section className="flex flex-col gap-4 rounded-2xl border border-[#e4e7ec] bg-white p-5 shadow-sm md:flex-row md:items-center md:justify-between">
+    <DefaultLayout contentClassName="w-full max-w-none p-4 md:p-5 2xl:p-5">
+      <section className="flex flex-col gap-4 rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-[#101828]">Production Analysis</h2>
+          <h2 className="text-lg font-semibold text-[#101828]">Asakai Board</h2>
           <p className="mt-1 text-sm text-[#667085]">
             Line comparison from the first day of the month to selected date
           </p>
@@ -145,18 +145,18 @@ export default function AnalysisPage() {
       </section>
 
       {error ? (
-        <div className="mt-4 rounded-xl border border-[#fecdca] bg-[#fef3f2] px-4 py-3 text-sm font-medium text-[#b42318]">
+        <div className="mt-3 rounded-xl border border-[#fecdca] bg-[#fef3f2] px-4 py-3 text-sm font-medium text-[#b42318]">
           {error}
         </div>
       ) : null}
 
       {isLoading ? (
-        <div className="mt-6 grid h-40 place-items-center rounded-2xl border border-[#e4e7ec] bg-white text-sm font-medium text-[#667085]">
+        <div className="mt-4 grid h-40 place-items-center rounded-2xl border border-[#e4e7ec] bg-white text-sm font-medium text-[#667085]">
           Loading OEE analysis...
         </div>
       ) : (
         <>
-          <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+          <section className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
             {data?.cards.length ? (
               data.cards.map((card) => <OeeSummaryCard key={card.key} card={card} />)
             ) : (
@@ -166,7 +166,7 @@ export default function AnalysisPage() {
             )}
           </section>
 
-          <section className="mt-6">
+          <section className="mt-4">
             <OeeLineChart
               series={data?.series ?? []}
               shiftSeries={data?.shiftSeries ?? []}

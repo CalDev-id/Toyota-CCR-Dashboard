@@ -17,13 +17,13 @@ const themeChangeEvent = "toyota-ccr-theme-change";
 const pageHeaders = [
   {
     href: "/planning",
-    title: "Planning",
+    title: "Monthly Planning",
     subtitle: "Monthly production planning by part, period, shift, and group",
   },
   {
     href: "/production-achievement",
-    title: "Production Achievement",
-    subtitle: "Production achievement overview",
+    title: "Prod Acv Machining",
+    subtitle: "Production achievement overview for machining",
   },
   {
     href: "/production",
@@ -32,13 +32,23 @@ const pageHeaders = [
   },
   {
     href: "/analysis",
-    title: "Analysis",
+    title: "Asakai Board",
     subtitle: "PPIC performance, material readiness, and inventory trends",
   },
   {
     href: "/users",
     title: "Users",
     subtitle: "Manage dashboard login accounts",
+  },
+  {
+    href: "/packom",
+    title: "Prod Acv Packom",
+    subtitle: "Production achievement overview for packom",
+  },
+  {
+    href: "/daily-planning",
+    title: "Daily Planning",
+    subtitle: "Daily production planning workspace",
   },
   {
     href: "/",
