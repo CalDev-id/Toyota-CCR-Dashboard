@@ -1,4 +1,5 @@
-import type { AnalysisLineKey as LineKey, AnalysisShiftSeriesRow as ShiftSeriesRow } from "@/features/analysis/types";
+import type { AnalysisShiftSeriesRow as ShiftSeriesRow } from "@/features/analysis/types";
+import type { AnalysisChartLine } from "@/features/analysis/components/analysisChartUtils";
 import PercentLineCanvasChart from "@/features/analysis/components/PercentLineCanvasChart";
 
 export default function DailyShiftPercentChart({
@@ -8,7 +9,7 @@ export default function DailyShiftPercentChart({
   monthLabel,
 }: {
   title: string;
-  line: { key: LineKey; label: string };
+  line: AnalysisChartLine;
   series: ShiftSeriesRow[];
   monthLabel: string;
 }) {

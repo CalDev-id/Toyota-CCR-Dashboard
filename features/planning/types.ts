@@ -1,4 +1,5 @@
 export type PlanningPartKey =
+  | "assy"
   | "cylblock"
   | "cylhead"
   | "camshaft"

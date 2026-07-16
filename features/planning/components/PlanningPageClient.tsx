@@ -21,6 +21,7 @@ import {
   defaultPart,
   getCurrentMonth,
   getPartLabel,
+  isGroupColumn,
   isUpdateField,
   isVisibleColumn,
   makeEditing,
@@ -133,8 +134,13 @@ export default function PlanningPage() {
       .filter((id) => hasEditingChanges(editing[id], initialEditing[id], updateColumns));
   }, [draftRows, editing, initialEditing, primaryColumn, rows, updateColumns]);
   const visibleColumns = useMemo(
-    () => sortVisibleColumns(columns.filter(isVisibleColumn)),
-    [columns],
+    () =>
+      sortVisibleColumns(
+        columns.filter(
+          (column) => isVisibleColumn(column) && (activePart !== "assy" || !isGroupColumn(column)),
+        ),
+      ),
+    [activePart, columns],
   );
   const activePartSummary = useMemo(
     () => parts.find((part) => part.key === activePart),
@@ -147,7 +153,7 @@ export default function PlanningPage() {
         part,
         month: filterMonth,
         shift: filterShift,
-        group: filterGroup,
+        group: part === "assy" ? "all" : filterGroup,
       });
 
       return `/api/planning?${params.toString()}`;

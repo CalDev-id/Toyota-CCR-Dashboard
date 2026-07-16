@@ -8,6 +8,7 @@ export function getCurrentMonth() {
 }
 
 export const partIcons: Record<PlanningPartKey, string> = {
+  assy: "AS",
   cylblock: "CB",
   cylhead: "CH",
   camshaft: "CA",
@@ -15,6 +16,7 @@ export const partIcons: Record<PlanningPartKey, string> = {
 };
 
 export const partLabels: Record<PlanningPartKey, string> = {
+  assy: "Assy",
   cylblock: "Cylblock",
   cylhead: "Cylhead",
   camshaft: "Camshaft",
@@ -22,6 +24,7 @@ export const partLabels: Record<PlanningPartKey, string> = {
 };
 
 export const importLineOptions: Array<{ key: PlanningPartKey; label: string }> = [
+  { key: "assy", label: "Assy" },
   { key: "cylblock", label: "Cylinder block" },
   { key: "cylhead", label: "Cylinder head" },
   { key: "camshaft", label: "Camshaft" },
@@ -30,6 +33,20 @@ export const importLineOptions: Array<{ key: PlanningPartKey; label: string }> =
 
 export const shiftOptions = ["1", "2"];
 export const groupOptions = ["R", "W"];
+
+export function formatShiftLabel(value: unknown) {
+  const text = String(value ?? "").trim();
+
+  if (text === "1") {
+    return "Day";
+  }
+
+  if (text === "2") {
+    return "Night";
+  }
+
+  return text;
+}
 
 export function formatInputValue(value: unknown, column: PlanningColumn) {
   if (value === null || value === undefined) {

@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import type { AnalysisLineKey as LineKey, AnalysisShiftSeriesRow as ShiftSeriesRow } from "@/features/analysis/types";
-import { formatDayLabel, formatPercent, getShiftChartRows, normalizePercent } from "@/features/analysis/components/analysisChartUtils";
+import type { AnalysisShiftSeriesRow as ShiftSeriesRow } from "@/features/analysis/types";
+import {
+  type AnalysisChartLine,
+  formatDayLabel,
+  formatPercent,
+  getShiftChartRows,
+  isSingleShiftLine,
+  normalizePercent,
+} from "@/features/analysis/components/analysisChartUtils";
 
 const CHART_HEIGHT = 176;
 const PLOT_TOP = 28;
@@ -71,12 +78,12 @@ export default function PercentLineCanvasChart({
   monthLabel,
   ariaLabel,
 }: {
-  line: { key: LineKey; label: string };
+  line: AnalysisChartLine;
   series: ShiftSeriesRow[];
   monthLabel: string;
   ariaLabel: string;
 }) {
-  const rows = getShiftChartRows(series, line.key);
+  const rows = getShiftChartRows(series, line);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
@@ -175,7 +182,9 @@ export default function PercentLineCanvasChart({
 
     const labelPoints: ChartPoint[] = [];
 
-    (["R", "W"] as const).forEach((shift) => {
+    const shifts = isSingleShiftLine(line) ? (["R"] as const) : (["R", "W"] as const);
+
+    shifts.forEach((shift) => {
       const color = shift === "R" ? colors.redLine : colors.whiteLine;
       const points = rows
         .map((row, index) => {
@@ -222,7 +231,7 @@ export default function PercentLineCanvasChart({
       ctx.fillStyle = colors.dateLabel;
       ctx.fillText(formatDayLabel(row.date), getPointX(index), CHART_HEIGHT - 14);
     });
-  }, [canvasWidth, isDarkMode, line.key, rows]);
+  }, [canvasWidth, isDarkMode, line, rows]);
 
   return (
     <>

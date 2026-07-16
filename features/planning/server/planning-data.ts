@@ -10,6 +10,10 @@ export const planningParts: Record<
   PlanningPartKey,
   { label: string; tableName: string }
 > = {
+  assy: {
+    label: "Assy",
+    tableName: "t_plan_daily_production_assy",
+  },
   cylblock: {
     label: "Cylblock",
     tableName: "t_plan_daily_production_cylblock",
@@ -298,10 +302,19 @@ export async function getFilteredPlanningRows(
     primary ? `, ${quotedColumn(primary.field)} ASC` : ""
   }`;
 
-  return getReportPrisma().$queryRawUnsafe<PlanningRow[]>(
+  const rows = await getReportPrisma().$queryRawUnsafe<Record<string, unknown>[]>(
     `SELECT * FROM ${quotedTable(part)}${where}${orderBy} LIMIT 200`,
     ...values,
   );
+
+  return rows.map((row) =>
+    Object.fromEntries(
+      Object.entries(row).map(([key, value]) => [
+        key,
+        typeof value === "bigint" ? value.toString() : value,
+      ]),
+    ),
+  ) as PlanningRow[];
 }
 
 export async function getPlanningFilterOptions(

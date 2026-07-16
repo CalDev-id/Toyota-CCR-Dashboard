@@ -1,6 +1,5 @@
 import type {
   AnalysisGapSeriesRow as GapSeriesRow,
-  AnalysisLineKey as LineKey,
   AnalysisOeeCard as OeeCard,
   AnalysisOeeSeriesRow as SeriesRow,
   AnalysisShiftSeriesRow as ShiftSeriesRow,
@@ -8,7 +7,14 @@ import type {
 import DailyGapChart from "@/features/analysis/components/DailyGapChart";
 import DailyShiftPercentChart from "@/features/analysis/components/DailyShiftPercentChart";
 import PercentLineCanvasChart from "@/features/analysis/components/PercentLineCanvasChart";
-import { formatMonthLabel, formatNumber, formatUnit } from "@/features/analysis/components/analysisChartUtils";
+import {
+  type AnalysisChartLine,
+  formatMonthLabel,
+  formatNumber,
+  formatUnit,
+  getPrimaryShiftLabel,
+  isSingleShiftLine,
+} from "@/features/analysis/components/analysisChartUtils";
 
 function ProblemBadge({ type }: { type: "AV" | "PE" }) {
   const className =
@@ -28,7 +34,7 @@ function DailyEfficiencyChart({
   series,
   monthLabel,
 }: {
-  line: { key: LineKey; label: string };
+  line: AnalysisChartLine;
   series: ShiftSeriesRow[];
   monthLabel: string;
 }) {
@@ -67,7 +73,7 @@ export function OeeLineChart({
   peShiftSeries: ShiftSeriesRow[];
   rqShiftSeries: ShiftSeriesRow[];
   gapSeries: GapSeriesRow[];
-  lines: Array<{ key: LineKey; label: string }>;
+  lines: AnalysisChartLine[];
   cards: OeeCard[];
 }) {
   const monthLabel = formatMonthLabel(series);
@@ -77,6 +83,19 @@ export function OeeLineChart({
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
         {lines.map((line) => {
           const card = cards.find((item) => item.key === line.key);
+          const isSingleShift = isSingleShiftLine(line);
+          const primaryShiftLabel = getPrimaryShiftLabel(line);
+          const overTimeItems = isSingleShift
+            ? [
+                ["OT Day", card?.otDay ?? 0],
+                [`Cum. ${primaryShiftLabel}`, card?.cumR ?? 0],
+              ]
+            : [
+                ["OT Day", card?.otDay ?? 0],
+                ["OT Night", card?.otNight ?? 0],
+                ["Cum. R", card?.cumR ?? 0],
+                ["Cum. W", card?.cumW ?? 0],
+              ];
           return (
             <div key={line.key} className="flex min-w-0 flex-col gap-4">
               <DailyEfficiencyChart
@@ -109,12 +128,7 @@ export function OeeLineChart({
                 <h3 className="text-sm font-semibold text-[#101828]">Prod. Over Time</h3>
                 <p className="mt-0.5 text-xs font-medium text-[#667085]">{line.label}</p>
                 <div className="mt-3 flex gap-2">
-                  {[
-                    ["OT Day", card?.otDay ?? 0],
-                    ["OT Night", card?.otNight ?? 0],
-                    ["Cum. R", card?.cumR ?? 0],
-                    ["Cum. W", card?.cumW ?? 0],
-                  ].map(([label, value]) => (
+                  {overTimeItems.map(([label, value]) => (
                     <div key={label} className="min-w-0 flex-1 rounded-xl bg-[#f9fafb] p-2.5">
                       <p className="text-[10px] font-medium text-[#667085]">{label}</p>
                       <p className="mt-1 whitespace-nowrap text-sm font-semibold text-[#101828]">
@@ -135,16 +149,24 @@ export function OeeLineChart({
                   </div>
                   <div className="flex gap-4 text-right text-xs font-semibold">
                     <div>
-                      <p className="text-[#f04438]">Cum. R</p>
+                      <p className="text-[#f04438]">
+                        {isSingleShift ? `Cum. ${primaryShiftLabel}` : "Cum. R"}
+                      </p>
                       <p className="mt-1 text-[#b42318]">{formatNumber(card?.gapCumR ?? 0, 1)}</p>
                     </div>
-                    <div>
-                      <p className="text-[#667085]">Cum. W</p>
-                      <p className="mt-1 text-[#344054]">{formatNumber(card?.gapCumW ?? 0, 1)}</p>
-                    </div>
+                    {isSingleShift ? null : (
+                      <div>
+                        <p className="text-[#667085]">Cum. W</p>
+                        <p className="mt-1 text-[#344054]">{formatNumber(card?.gapCumW ?? 0, 1)}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <DailyGapChart series={gapSeries} lineKey={line.key} />
+                <DailyGapChart
+                  series={gapSeries}
+                  lineKey={line.key}
+                  singleShift={isSingleShift}
+                />
               </article>
 
               <article className="rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm">

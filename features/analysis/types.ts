@@ -5,6 +5,9 @@ export type AnalysisLine = {
   label: string;
   tableName?: string;
   problemTableName?: string;
+  shiftMode?: "single" | "dual";
+  sourceShift?: string;
+  displayShiftLabel?: string;
 };
 
 export type RawAnalysisOeeRow = {
@@ -84,5 +87,10 @@ export type AnalysisResponse = {
   rqSeries: AnalysisOeeSeriesRow[];
   rqShiftSeries: AnalysisShiftSeriesRow[];
   gapSeries: AnalysisGapSeriesRow[];
-  lines: Array<{ key: AnalysisLineKey; label: string }>;
+  lines: Array<{
+    key: AnalysisLineKey;
+    label: string;
+    shiftMode?: "single" | "dual";
+    displayShiftLabel?: string;
+  }>;
 };

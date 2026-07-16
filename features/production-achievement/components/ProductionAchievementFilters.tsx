@@ -58,8 +58,8 @@ export default function ProductionAchievementFilters({
             }}
           >
             <option value="all">All Shift</option>
-            <option value="R">R</option>
-            <option value="W">W</option>
+            <option value="DAY">Day</option>
+            <option value="NIGHT">Night</option>
           </select>
           <svg
             viewBox="0 0 20 20"

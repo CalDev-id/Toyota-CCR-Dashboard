@@ -4,6 +4,17 @@ import Image from "next/image";
 
 const fallbackParts: PlanningPartSummary[] = [
   {
+    key: "assy",
+    label: "Assy",
+    tableName: "",
+    count: 0,
+    oneTrTotal: 0,
+    twoTrTotal: 0,
+    ratioText: null,
+    oneTrRatioPercentage: null,
+    twoTrRatioPercentage: null,
+  },
+  {
     key: "cylblock",
     label: "Cylblock",
     tableName: "",
@@ -50,6 +61,7 @@ const fallbackParts: PlanningPartSummary[] = [
 ];
 
 const partIconImages: Record<PlanningPartSummary["key"], string> = {
+  assy: "/images/icon/assyicon.png",
   cylblock: "/images/icon/chicon.png",
   cylhead: "/images/icon/cbicon.png",
   camshaft: "/images/icon/camicon.png",
@@ -68,6 +80,16 @@ const partTone: Record<
     bar: string;
   }
 > = {
+  assy: {
+    accent: "border-[#d8f3df] dark:border-[#1f5b3f]",
+    surface: "bg-[#eaf8ee] text-[#137333] dark:bg-[#062b1b] dark:text-[#75e0a7]",
+    panel:
+      "bg-[linear-gradient(90deg,#ffffff_0%,#ffffff_44%,#fbfefc_70%,#f3faf5_100%)] dark:bg-[linear-gradient(90deg,#111827_0%,#111827_44%,#09281b_74%,#071f16_100%)]",
+    panelGlow: "bg-[#aee8bd]/18 dark:bg-[#16a34a]/16",
+    text: "text-[#027a48] dark:text-[#75e0a7]",
+    softText: "text-[#6bbf86] dark:text-[#75e0a7]",
+    bar: "bg-[#16a34a] dark:bg-[#75e0a7]",
+  },
   cylblock: {
     accent: "border-[#d6e4ff] dark:border-[#2f4d8f]",
     surface: "bg-[#eff4ff] text-[#2f5fc7] dark:bg-[#14245a] dark:text-[#a6b6ff]",
@@ -120,7 +142,11 @@ function PlanningSummaryCard({ part }: { part: PlanningPartSummary }) {
   const hasRatio = Boolean(part.ratioText);
   const tone = partTone[part.key];
   const imageSizeClass =
-    part.key === "camshaft" ? "h-[92px] w-[92px]" : "h-[124px] w-[124px]";
+    part.key === "camshaft"
+      ? "h-[92px] w-[92px]"
+      : part.key === "assy"
+        ? "h-[112px] w-[112px]"
+        : "h-[124px] w-[124px]";
 
   return (
     <article className="rounded-2xl border border-[#e4e7ec] bg-white p-3.5 shadow-sm dark:border-[#273449] dark:bg-[#111827]">
@@ -140,11 +166,6 @@ function PlanningSummaryCard({ part }: { part: PlanningPartSummary }) {
             </p>
           </div>
         </div>
-        <span
-          className={`shrink-0 rounded-lg border px-2.5 py-1 text-xs font-semibold ${tone.accent} ${tone.surface}`}
-        >
-          Active
-        </span>
       </div>
 
       <div
@@ -168,7 +189,7 @@ function PlanningSummaryCard({ part }: { part: PlanningPartSummary }) {
         <Image
           alt=""
           aria-hidden="true"
-          className={`absolute right-4 top-1/2 ${imageSizeClass} -translate-y-1/2 object-contain opacity-60 ${part.key === "camshaft" ? "rotate-[-28deg]" : ""} dark:opacity-48`}
+          className={`absolute -right-2 top-1/2 ${imageSizeClass} -translate-y-1/2 object-contain opacity-60 ${part.key === "camshaft" ? "rotate-[-28deg]" : ""} dark:opacity-48`}
           height={96}
           loading="eager"
           src={partIconImages[part.key]}
@@ -225,7 +246,7 @@ export default function PlanningSummaryCards({ parts }: { parts: PlanningPartSum
   const renderedParts = parts.length > 0 ? parts : fallbackParts;
 
   return (
-    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
       {renderedParts.map((part) => (
         <PlanningSummaryCard key={part.key} part={part} />
       ))}

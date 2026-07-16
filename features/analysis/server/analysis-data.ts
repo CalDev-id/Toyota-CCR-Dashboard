@@ -13,6 +13,11 @@ export const analysisLines: AnalysisLine[] = [
   {
     key: "assyline",
     label: "Assy Line",
+    tableName: "v_assy_summary",
+    problemTableName: "v_assy_detail_problem",
+    shiftMode: "single",
+    sourceShift: "N",
+    displayShiftLabel: "N",
   },
   {
     key: "cylblock",
@@ -162,6 +167,14 @@ function normalizeShift(value: string | null) {
   return String(value ?? "").trim().toUpperCase();
 }
 
+function getPrimaryShift(line: AnalysisLine) {
+  return normalizeShift(line.sourceShift ?? "R");
+}
+
+function getSecondaryShift(line: AnalysisLine) {
+  return line.shiftMode === "single" ? null : "W";
+}
+
 function sumAverageOtByGroup(
   rows: RawAnalysisOeeRow[],
   getGroupKey: (row: RawAnalysisOeeRow) => string,
@@ -246,16 +259,22 @@ function buildCard(
   selectedDate: string,
 ): AnalysisOeeCard {
   const selectedRows = rows.filter((row) => toDateKey(row.date) === selectedDate);
-  const selectedRRows = selectedRows.filter((row) => normalizeShift(row.shift) === "R");
-  const selectedWRows = selectedRows.filter((row) => normalizeShift(row.shift) === "W");
+  const primaryShift = getPrimaryShift(line);
+  const secondaryShift = getSecondaryShift(line);
+  const selectedRRows = selectedRows.filter((row) => normalizeShift(row.shift) === primaryShift);
+  const selectedWRows = secondaryShift
+    ? selectedRows.filter((row) => normalizeShift(row.shift) === secondaryShift)
+    : [];
   const selectedDayRows = selectedRows.filter((row) => normalizeShift(row.shift2) === "DAY");
   const selectedNightRows = selectedRows.filter((row) => normalizeShift(row.shift2) === "NIGHT");
   const dailyR = average(selectedRRows.map((row) => toNumber(row.oee)));
   const dailyW = average(selectedWRows.map((row) => toNumber(row.oee)));
   const dailyAverage = average([dailyR, dailyW].filter((value) => value !== null));
   const allValues = rows.map((row) => toNumber(row.oee));
-  const monthlyRRows = rows.filter((row) => normalizeShift(row.shift) === "R");
-  const monthlyWRows = rows.filter((row) => normalizeShift(row.shift) === "W");
+  const monthlyRRows = rows.filter((row) => normalizeShift(row.shift) === primaryShift);
+  const monthlyWRows = secondaryShift
+    ? rows.filter((row) => normalizeShift(row.shift) === secondaryShift)
+    : [];
   const balanceDivisor = line.key === "camshaft" ? 2 : 1;
 
   return {
@@ -318,8 +337,14 @@ function buildDailyAverage(rows: RawAnalysisOeeRow[], key: "oee" | "av" | "pe" |
   );
 }
 
-function buildDailyShiftAverage(rows: RawAnalysisOeeRow[], key: "oee" | "av" | "pe" | "rq") {
+function buildDailyShiftAverage(
+  line: AnalysisLine,
+  rows: RawAnalysisOeeRow[],
+  key: "oee" | "av" | "pe" | "rq",
+) {
   const grouped = new Map<string, { r: number[]; w: number[] }>();
+  const primaryShift = getPrimaryShift(line);
+  const secondaryShift = getSecondaryShift(line);
 
   for (const row of rows) {
     const date = toDateKey(row.date);
@@ -330,11 +355,11 @@ function buildDailyShiftAverage(rows: RawAnalysisOeeRow[], key: "oee" | "av" | "
 
     const current = grouped.get(date) ?? { r: [], w: [] };
 
-    if (normalizeShift(row.shift) === "R") {
+    if (normalizeShift(row.shift) === primaryShift) {
       current.r.push(toNumber(row[key]));
     }
 
-    if (normalizeShift(row.shift) === "W") {
+    if (secondaryShift && normalizeShift(row.shift) === secondaryShift) {
       current.w.push(toNumber(row[key]));
     }
 
@@ -352,8 +377,10 @@ function buildDailyShiftAverage(rows: RawAnalysisOeeRow[], key: "oee" | "av" | "
   );
 }
 
-function buildDailyGap(rows: RawAnalysisOeeRow[]) {
+function buildDailyGap(line: AnalysisLine, rows: RawAnalysisOeeRow[]) {
   const grouped = new Map<string, { r: number[]; w: number[] }>();
+  const primaryShift = getPrimaryShift(line);
+  const secondaryShift = getSecondaryShift(line);
 
   for (const row of rows) {
     const date = toDateKey(row.date);
@@ -364,11 +391,11 @@ function buildDailyGap(rows: RawAnalysisOeeRow[]) {
 
     const current = grouped.get(date) ?? { r: [], w: [] };
 
-    if (normalizeShift(row.shift) === "R") {
+    if (normalizeShift(row.shift) === primaryShift) {
       current.r.push(toNumber(row.otDiff));
     }
 
-    if (normalizeShift(row.shift) === "W") {
+    if (secondaryShift && normalizeShift(row.shift) === secondaryShift) {
       current.w.push(toNumber(row.otDiff));
     }
 
@@ -406,28 +433,40 @@ export async function getAnalysisOee(dateParam: string | null) {
     entries.map((entry) => [entry.line.key, buildDailyAverage(entry.rows, "oee")]),
   );
   const dailyShiftByLine = new Map(
-    entries.map((entry) => [entry.line.key, buildDailyShiftAverage(entry.rows, "oee")]),
+    entries.map((entry) => [
+      entry.line.key,
+      buildDailyShiftAverage(entry.line, entry.rows, "oee"),
+    ]),
   );
   const avByLine = new Map(
     entries.map((entry) => [entry.line.key, buildDailyAverage(entry.rows, "av")]),
   );
   const avShiftByLine = new Map(
-    entries.map((entry) => [entry.line.key, buildDailyShiftAverage(entry.rows, "av")]),
+    entries.map((entry) => [
+      entry.line.key,
+      buildDailyShiftAverage(entry.line, entry.rows, "av"),
+    ]),
   );
   const peByLine = new Map(
     entries.map((entry) => [entry.line.key, buildDailyAverage(entry.rows, "pe")]),
   );
   const peShiftByLine = new Map(
-    entries.map((entry) => [entry.line.key, buildDailyShiftAverage(entry.rows, "pe")]),
+    entries.map((entry) => [
+      entry.line.key,
+      buildDailyShiftAverage(entry.line, entry.rows, "pe"),
+    ]),
   );
   const rqByLine = new Map(
     entries.map((entry) => [entry.line.key, buildDailyAverage(entry.rows, "rq")]),
   );
   const rqShiftByLine = new Map(
-    entries.map((entry) => [entry.line.key, buildDailyShiftAverage(entry.rows, "rq")]),
+    entries.map((entry) => [
+      entry.line.key,
+      buildDailyShiftAverage(entry.line, entry.rows, "rq"),
+    ]),
   );
   const gapByLine = new Map(
-    entries.map((entry) => [entry.line.key, buildDailyGap(entry.rows)]),
+    entries.map((entry) => [entry.line.key, buildDailyGap(entry.line, entry.rows)]),
   );
   const series = days.map((date) => {
     const row = { date } as AnalysisOeeSeriesRow;
@@ -535,6 +574,11 @@ export async function getAnalysisOee(dateParam: string | null) {
     peShiftSeries,
     rqSeries,
     rqShiftSeries,
-    lines: analysisLines.map(({ key, label }) => ({ key, label })),
+    lines: analysisLines.map(({ key, label, shiftMode, displayShiftLabel }) => ({
+      key,
+      label,
+      shiftMode,
+      displayShiftLabel,
+    })),
   };
 }

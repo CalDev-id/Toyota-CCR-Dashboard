@@ -1,6 +1,7 @@
 import type { PlanningColumn, PlanningPartKey, PlanningRow } from "@/features/planning/types";
 import {
   formatColumnLabel,
+  formatShiftLabel,
   formatInputValue,
   groupOptions,
   isGroupColumn,
@@ -42,7 +43,9 @@ export default function PlanningTable({
   const isDateField = (column: PlanningColumn) => column.inputType === "date";
   const isRemarkField = (column: PlanningColumn) => column.field.toLowerCase() === "remark";
   const isOtField = (column: PlanningColumn) =>
-    ["ot", "fot", "f2tr"].includes(column.field.toLowerCase());
+    ["ot", "fot"].includes(column.field.toLowerCase());
+  const isTrField = (column: PlanningColumn) =>
+    ["f1tr", "f2tr"].includes(column.field.toLowerCase());
   const isCompactField = (column: PlanningColumn) =>
     ["shift", "fshift", "group", "fgroup", "tt", "ftt", "oee", "foee", "ratio", "fratio", "f1tr", "f2tr"].includes(column.field.toLowerCase());
 
@@ -54,13 +57,13 @@ export default function PlanningTable({
             <tr>
               {visibleColumns.map((column) => (
                 <Fragment key={column.field}>
-                  <th className="px-5 py-3">
+                  <th className="px-3 py-3">
                     {formatColumnLabel(column.field)}
                   </th>
-                  {column.field.toLowerCase() === "f2tr" ? <th className="px-3 py-3 text-center">Total Plan</th> : null}
+                  {column.field.toLowerCase() === "f2tr" ? <th className="px-2 py-3 text-center">Total Plan</th> : null}
                 </Fragment>
               ))}
-              <th className="px-5 py-3 text-right">Actions</th>
+              <th className="px-3 py-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#e4e7ec]">
@@ -101,7 +104,7 @@ export default function PlanningTable({
                   >
                     {visibleColumns.map((column) => (
                       <Fragment key={column.field}>
-                      <td className="px-5 py-4">
+                      <td className="px-3 py-4">
                         {isDraft && column.isPrimary ? (
                           <span className="rounded-full bg-[#fef0c7] px-2.5 py-1 text-xs font-medium text-[#b54708]">
                             New
@@ -114,6 +117,10 @@ export default function PlanningTable({
                                 ? "w-40"
                                 : isDateField(column)
                                   ? "w-36"
+                                  : isShiftColumn(column)
+                                    ? "w-24"
+                                  : isTrField(column)
+                                    ? "w-20"
                                   : isOtField(column)
                                     ? "w-12"
                                   : isCompactField(column)
@@ -135,6 +142,10 @@ export default function PlanningTable({
                                   ? "min-w-40"
                                   : isDateField(column)
                                   ? "min-w-36"
+                                  : isShiftColumn(column)
+                                    ? "min-w-24"
+                                  : isTrField(column)
+                                    ? "min-w-20"
                                   : isOtField(column)
                                     ? "min-w-12"
                                   : isCompactField(column)
@@ -148,7 +159,7 @@ export default function PlanningTable({
                                 : groupOptions
                               ).map((option) => (
                                 <option key={option} value={option}>
-                                  {option}
+                                  {isShiftColumn(column) ? formatShiftLabel(option) : option}
                                 </option>
                               ))}
                             </select>
@@ -182,6 +193,10 @@ export default function PlanningTable({
                                 ? "w-40 min-w-40"
                                 : isDateField(column)
                                   ? "w-36 min-w-36"
+                                  : isShiftColumn(column)
+                                    ? "w-24 min-w-24"
+                                  : isTrField(column)
+                                    ? "w-20 min-w-20"
                                   : isOtField(column)
                                     ? "w-12 min-w-12"
                                   : isCompactField(column)
@@ -197,6 +212,10 @@ export default function PlanningTable({
                                 ? "min-w-40"
                                 : isDateField(column)
                                   ? "min-w-36"
+                                  : isShiftColumn(column)
+                                    ? "min-w-24"
+                                  : isTrField(column)
+                                    ? "min-w-20"
                                   : isOtField(column)
                                     ? "min-w-12"
                                   : isCompactField(column)
@@ -204,20 +223,22 @@ export default function PlanningTable({
                                     : "min-w-24"
                             }`}
                           >
-                            {formatInputValue(row?.[column.field], column)}
+                            {isShiftColumn(column)
+                              ? formatShiftLabel(row?.[column.field])
+                              : formatInputValue(row?.[column.field], column)}
                           </span>
                         )}
                       </td>
                       {column.field.toLowerCase() === "f2tr" ? (
-                        <td className="px-3 py-4 text-center font-semibold text-[#101828]">
-                          <span className="inline-flex h-9 min-w-14 items-center justify-center text-center">
+                        <td className="px-2 py-4 text-center font-semibold text-[#101828]">
+                          <span className="inline-flex h-9 min-w-16 items-center justify-center text-center">
                             {Number(row?.f1tr ?? 0) + Number(row?.f2tr ?? 0)}
                           </span>
                         </td>
                       ) : null}
                       </Fragment>
                     ))}
-                    <td className="px-5 py-4">
+                    <td className="px-3 py-4">
                       <div className="flex justify-end gap-2">
                         {isDraft ? (
                           <button

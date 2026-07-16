@@ -1,9 +1,18 @@
 import type { AnalysisGapSeriesRow as GapSeriesRow, AnalysisLineKey as LineKey } from "@/features/analysis/types";
 import { formatDayLabel, formatNumber, getChartMinWidth } from "@/features/analysis/components/analysisChartUtils";
 
-export default function DailyGapChart({ series, lineKey }: { series: GapSeriesRow[]; lineKey: LineKey }) {
+export default function DailyGapChart({
+  series,
+  lineKey,
+  singleShift = false,
+}: {
+  series: GapSeriesRow[];
+  lineKey: LineKey;
+  singleShift?: boolean;
+}) {
   const chartRows = series.filter(
-    (row) => row[`${lineKey}R`] !== null || row[`${lineKey}W`] !== null,
+    (row) =>
+      singleShift ? row[`${lineKey}R`] !== null : row[`${lineKey}R`] !== null || row[`${lineKey}W`] !== null,
   );
   const hasSparseRows = chartRows.length > 0 && chartRows.length <= 7;
   const maxValue =
@@ -30,10 +39,12 @@ export default function DailyGapChart({ series, lineKey }: { series: GapSeriesRo
               {chartRows.map((row) => {
                 const rValue = row[`${lineKey}R`] ?? 0;
                 const wValue = row[`${lineKey}W`] ?? 0;
-                const bars = [
-                  { key: "r", value: rValue, color: "#f04438", width: "62%", zIndex: 1 },
-                  { key: "w", value: wValue, color: "#ffffff", width: "62%", zIndex: 2 },
-                ];
+                const bars = singleShift
+                  ? [{ key: "r", value: rValue, color: "#f04438", width: "62%", zIndex: 1 }]
+                  : [
+                      { key: "r", value: rValue, color: "#f04438", width: "62%", zIndex: 1 },
+                      { key: "w", value: wValue, color: "#ffffff", width: "62%", zIndex: 2 },
+                    ];
 
                 return (
                   <div

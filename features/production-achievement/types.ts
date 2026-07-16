@@ -1,4 +1,5 @@
 export type ProductionAchievementLineKey =
+  | "assy"
   | "cylblock"
   | "cylhead"
   | "camshaft"
@@ -48,7 +49,7 @@ export type ProductionAchievementProblem = {
 };
 
 export type ProductionAchievementCard = {
-  key: "assy" | ProductionAchievementLineKey;
+  key: ProductionAchievementLineKey;
   label: string;
   imageSrc: string;
   prodPlan: number;

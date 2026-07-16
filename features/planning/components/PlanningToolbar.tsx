@@ -1,5 +1,5 @@
 import type { PlanningPartKey, PlanningPartSummary } from "@/features/planning/types";
-import { groupOptions, shiftOptions } from "@/features/planning/planning-ui";
+import { formatShiftLabel, groupOptions, shiftOptions } from "@/features/planning/planning-ui";
 
 type PlanningToolbarProps = {
   activePart: PlanningPartKey;
@@ -42,6 +42,8 @@ export default function PlanningToolbar({
   hasPendingUpdates,
   isSaving,
 }: PlanningToolbarProps) {
+  const isAssy = activePart === "assy";
+
   return (
     <section className="mt-6">
       <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -120,11 +122,19 @@ export default function PlanningToolbar({
               {activePartSummary?.label ?? "Planning"} Detail
             </h2>
             <p className="mt-1 text-sm text-[#667085]">
-              Monthly planning filtered by period, shift, and group
+              {isAssy
+                ? "Monthly planning filtered by period and shift"
+                : "Monthly planning filtered by period, shift, and group"}
             </p>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-[160px_150px_96px_96px]">
+          <div
+            className={`grid gap-2 ${
+              isAssy
+                ? "sm:grid-cols-[160px_150px_96px]"
+                : "sm:grid-cols-[160px_150px_96px_96px]"
+            }`}
+          >
             <label className="block">
               <span className="sr-only">Month</span>
               <input
@@ -187,7 +197,7 @@ export default function PlanningToolbar({
                   <option value="all">All</option>
                   {shiftOptions.map((shift) => (
                     <option key={shift} value={shift}>
-                      {shift}
+                      {formatShiftLabel(shift)}
                     </option>
                   ))}
                 </select>
@@ -208,6 +218,7 @@ export default function PlanningToolbar({
               </span>
             </label>
 
+            {isAssy ? null : (
             <label className="block">
               <span className="sr-only">Group</span>
               <span className="relative block">
@@ -243,6 +254,7 @@ export default function PlanningToolbar({
                 </svg>
               </span>
             </label>
+            )}
           </div>
         </div>
       </div>
