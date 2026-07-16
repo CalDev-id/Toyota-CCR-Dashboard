@@ -50,7 +50,9 @@ export default function DailyGapChart({ series, lineKey }: { series: GapSeriesRo
                         return (
                           <div
                             key={bar.key}
-                            className="absolute left-1/2 -translate-x-1/2"
+                            className={`absolute left-1/2 -translate-x-1/2 ${
+                              bar.key === "w" ? "ring-1 ring-inset ring-[#d0d5dd] dark:ring-0" : ""
+                            }`}
                             style={{
                               backgroundColor: bar.color,
                               height: `${Math.max(height, bar.value === 0 ? 0 : 7)}%`,
@@ -58,20 +60,34 @@ export default function DailyGapChart({ series, lineKey }: { series: GapSeriesRo
                               width: bar.width,
                               zIndex: bar.zIndex,
                             }}
+                          />
+                        );
+                      })}
+                      {bars.map((bar) => {
+                        if (bar.value === 0) {
+                          return null;
+                        }
+
+                        const height = Math.min((Math.abs(bar.value) / maxValue) * 50, 50);
+                        const isPositive = bar.value >= 0;
+                        const edgeOffset = Math.max(height, 7);
+
+                        return (
+                          <span
+                            key={`${bar.key}-label`}
+                            className={`absolute left-1/2 z-20 -translate-x-1/2 whitespace-nowrap text-[11px] font-semibold ${
+                              bar.key === "r"
+                                ? "text-[#b42318] dark:text-[#ff6b61]"
+                                : "text-[#344054] dark:text-[#d6e4ff]"
+                            }`}
+                            style={{
+                              top: isPositive ? `${50 - edgeOffset}%` : `${50 + edgeOffset}%`,
+                              transform: `translate(-50%, ${isPositive ? "-100%" : "0"})`,
+                              WebkitTextStroke: "0.3px #ffffff",
+                            }}
                           >
-                            {bar.value !== 0 ? (
-                              <span
-                                className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-[11px] font-semibold text-[#101828]"
-                                style={{
-                                  top: isPositive ? "3px" : "auto",
-                                  bottom: isPositive ? "auto" : "3px",
-                                  WebkitTextStroke: "0.35px #101828",
-                                }}
-                              >
-                                {formatNumber(bar.value, 1)}
-                              </span>
-                            ) : null}
-                          </div>
+                            {formatNumber(bar.value, 1)}
+                          </span>
                         );
                       })}
                     </div>

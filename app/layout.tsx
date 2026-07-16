@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import AuthSessionProvider from "@/components/auth/AuthSessionProvider";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -30,17 +31,15 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
+        <Script id="theme-bootstrap" strategy="beforeInteractive">
+          {`
 try {
   if (localStorage.getItem("toyota-ccr-theme") === "dark") {
     document.documentElement.classList.add("dark");
   }
 } catch {}
-            `.trim(),
-          }}
-        />
+          `.trim()}
+        </Script>
       </head>
       <body className="min-h-full">
         <AuthSessionProvider>{children}</AuthSessionProvider>

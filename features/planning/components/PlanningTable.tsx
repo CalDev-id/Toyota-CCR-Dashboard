@@ -17,12 +17,10 @@ type PlanningTableProps = {
   draftRows: Array<{ id: string }>;
   primaryColumn: PlanningColumn | undefined;
   editing: Record<string, Record<string, string>>;
-  updateColumns: PlanningColumn[];
   isSaving: boolean;
   activePart: PlanningPartKey;
   setEditingValue: (id: string, field: string, value: string) => void;
   saveDraftRow: (id: string) => void;
-  updateRow: (id: string) => void;
   setDraftRows: React.Dispatch<React.SetStateAction<Array<{ id: string }>>>;
   setDeleteTarget: React.Dispatch<React.SetStateAction<{ id: string; part: PlanningPartKey } | null>>;
 };
@@ -34,15 +32,20 @@ export default function PlanningTable({
   draftRows,
   primaryColumn,
   editing,
-  updateColumns,
   isSaving,
   activePart,
   setEditingValue,
   saveDraftRow,
-  updateRow,
   setDraftRows,
   setDeleteTarget,
 }: PlanningTableProps) {
+  const isDateField = (column: PlanningColumn) => column.inputType === "date";
+  const isRemarkField = (column: PlanningColumn) => column.field.toLowerCase() === "remark";
+  const isOtField = (column: PlanningColumn) =>
+    ["ot", "fot", "f2tr"].includes(column.field.toLowerCase());
+  const isCompactField = (column: PlanningColumn) =>
+    ["shift", "fshift", "group", "fgroup", "tt", "ftt", "oee", "foee", "ratio", "fratio", "f1tr", "f2tr"].includes(column.field.toLowerCase());
+
   return (
     <section className="overflow-hidden rounded-b-2xl border border-t-0 border-[#e4e7ec] bg-white shadow-sm">
       <div className="overflow-x-auto">
@@ -54,7 +57,7 @@ export default function PlanningTable({
                   <th className="px-5 py-3">
                     {formatColumnLabel(column.field)}
                   </th>
-                  {column.field.toLowerCase() === "f2tr" ? <th className="px-5 py-3">Total Target</th> : null}
+                  {column.field.toLowerCase() === "f2tr" ? <th className="px-3 py-3 text-center">Total Plan</th> : null}
                 </Fragment>
               ))}
               <th className="px-5 py-3 text-right">Actions</th>
@@ -105,7 +108,19 @@ export default function PlanningTable({
                           </span>
                         ) : (isDraft || isUpdateField(column)) &&
                           (isShiftColumn(column) || isGroupColumn(column)) ? (
-                          <span className="relative block w-40">
+                          <span
+                            className={`relative block ${
+                              isRemarkField(column)
+                                ? "w-40"
+                                : isDateField(column)
+                                  ? "w-36"
+                                  : isOtField(column)
+                                    ? "w-12"
+                                  : isCompactField(column)
+                                    ? "w-14"
+                                    : "w-24"
+                            }`}
+                          >
                             <select
                               value={editing[rowId]?.[column.field] ?? ""}
                               onChange={(event) =>
@@ -115,7 +130,17 @@ export default function PlanningTable({
                                   event.target.value,
                                 )
                               }
-                              className="h-10 w-full appearance-none rounded-lg border border-[#e4e7ec] bg-white pl-3 pr-9 text-sm text-[#344054] outline-none focus:border-[#465fff]"
+                              className={`h-9 w-full appearance-none rounded-lg border border-[#e4e7ec] bg-white pl-3 pr-8 text-sm text-[#344054] outline-none focus:border-[#465fff] ${
+                                isRemarkField(column)
+                                  ? "min-w-40"
+                                  : isDateField(column)
+                                  ? "min-w-36"
+                                  : isOtField(column)
+                                    ? "min-w-12"
+                                  : isCompactField(column)
+                                    ? "min-w-14"
+                                    : ""
+                              }`}
                             >
                               <option value="">Pilih</option>
                               {(isShiftColumn(column)
@@ -152,16 +177,44 @@ export default function PlanningTable({
                                 event.target.value,
                               )
                             }
-                            className="h-10 w-40 rounded-lg border border-[#e4e7ec] px-3 text-sm text-[#344054] outline-none focus:border-[#465fff]"
+                            className={`h-9 rounded-lg border border-[#e4e7ec] px-3 text-sm text-[#344054] outline-none focus:border-[#465fff] ${
+                              isRemarkField(column)
+                                ? "w-40 min-w-40"
+                                : isDateField(column)
+                                  ? "w-36 min-w-36"
+                                  : isOtField(column)
+                                    ? "w-12 min-w-12"
+                                  : isCompactField(column)
+                                    ? "w-14 min-w-14"
+                                    : "w-24"
+                            }`}
                             type={column.inputType}
                           />
                         ) : (
-                          <span className="block min-w-24 truncate font-medium text-[#101828]">
+                          <span
+                            className={`block truncate font-medium text-[#101828] ${
+                              isRemarkField(column)
+                                ? "min-w-40"
+                                : isDateField(column)
+                                  ? "min-w-36"
+                                  : isOtField(column)
+                                    ? "min-w-12"
+                                  : isCompactField(column)
+                                    ? "min-w-14"
+                                    : "min-w-24"
+                            }`}
+                          >
                             {formatInputValue(row?.[column.field], column)}
                           </span>
                         )}
                       </td>
-                      {column.field.toLowerCase() === "f2tr" ? <td className="px-5 py-4 font-semibold text-[#101828]">{Number(row?.f1tr ?? 0) + Number(row?.f2tr ?? 0)}</td> : null}
+                      {column.field.toLowerCase() === "f2tr" ? (
+                        <td className="px-3 py-4 text-center font-semibold text-[#101828]">
+                          <span className="inline-flex h-9 min-w-14 items-center justify-center text-center">
+                            {Number(row?.f1tr ?? 0) + Number(row?.f2tr ?? 0)}
+                          </span>
+                        </td>
+                      ) : null}
                       </Fragment>
                     ))}
                     <td className="px-5 py-4">
@@ -175,16 +228,7 @@ export default function PlanningTable({
                           >
                             Save
                           </button>
-                        ) : (
-                          <button
-                            className="h-10 rounded-lg bg-[#465fff] px-3 text-sm font-semibold text-white transition hover:bg-[#3648d9] disabled:cursor-not-allowed disabled:opacity-60"
-                            disabled={!primaryColumn || updateColumns.length === 0}
-                            type="button"
-                            onClick={() => void updateRow(rowId)}
-                          >
-                            Update
-                          </button>
-                        )}
+                        ) : null}
                         <button
                           className="h-10 rounded-lg border border-[#fecdca] px-3 text-sm font-semibold text-[#d92d20] transition hover:bg-[#fef3f2] disabled:cursor-not-allowed disabled:opacity-60"
                           disabled={!isDraft && !primaryColumn}

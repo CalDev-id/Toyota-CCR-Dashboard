@@ -23,6 +23,9 @@ export type PlanningPartSummary = {
   count: number;
   oneTrTotal: number;
   twoTrTotal: number;
+  ratioText: string | null;
+  oneTrRatioPercentage: number | null;
+  twoTrRatioPercentage: number | null;
 };
 
 export type PlanningRow = Record<string, string | number | boolean | null>;

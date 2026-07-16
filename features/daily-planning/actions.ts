@@ -49,14 +49,39 @@ export async function loadDailyPlanning(part: string, date: string, shift: strin
   const existing = await db.$queryRawUnsafe<Slot[]>("SELECT id,slot_order,TIME_FORMAT(start_time,'%H:%i') AS start_time,TIME_FORMAT(end_time,'%H:%i') AS end_time,prod_minutes,slot_type,oee,is_oee_override,total_target,one_tr,two_tr,is_schedule_override FROM t_daily_production_plan_slot WHERE daily_plan_id=? ORDER BY slot_order", plan.id);
   const template = getTemplate(date,shift,otMinutes);
   const [ratioOne, ratioTwo] = parseRatio(ratio);
-  if (existing.length === 0) {
-    for (const slot of template) { const target = targetFor(slot.minutes,tt,monthlyOee); const [oneTr,twoTr] = split(target,ratioOne,ratioTwo); await db.$executeRawUnsafe("INSERT INTO t_daily_production_plan_slot (daily_plan_id,slot_order,start_time,end_time,prod_minutes,slot_type,total_target,one_tr,two_tr) VALUES (?,?,?,?,?,?,?,?,?)",plan.id,slot.order,slot.start,slot.end,slot.minutes,slot.type,target,oneTr,twoTr); }
-  } else {
-    for (const slot of template) {
-      if (!existing.some((row) => row.slot_order === slot.order)) {
-        const target = targetFor(slot.minutes,tt,monthlyOee); const [oneTr,twoTr] = split(target,ratioOne,ratioTwo);
-        await db.$executeRawUnsafe("INSERT INTO t_daily_production_plan_slot (daily_plan_id,slot_order,start_time,end_time,prod_minutes,slot_type,total_target,one_tr,two_tr) VALUES (?,?,?,?,?,?,?,?,?)",plan.id,slot.order,slot.start,slot.end,slot.minutes,slot.type,target,oneTr,twoTr);
-      }
+  const templateOrders = new Set(template.map((slot) => slot.order));
+  const staleSlots = existing.filter((row) => !templateOrders.has(Number(row.slot_order)));
+
+  if (staleSlots.length > 0) {
+    await db.$executeRawUnsafe(
+      `DELETE FROM t_daily_production_plan_slot WHERE id IN (${staleSlots.map(() => "?").join(",")})`,
+      ...staleSlots.map((row) => row.id),
+    );
+  }
+
+  for (const slot of template) {
+    const existingSlot = existing.find((row) => Number(row.slot_order) === slot.order);
+    const oeeForTarget = existingSlot?.is_oee_override ? Number(existingSlot.oee) : monthlyOee;
+    const target = targetFor(slot.minutes,tt,oeeForTarget);
+    const [oneTr,twoTr] = split(target,ratioOne,ratioTwo);
+
+    if (!existingSlot) {
+      await db.$executeRawUnsafe("INSERT INTO t_daily_production_plan_slot (daily_plan_id,slot_order,start_time,end_time,prod_minutes,slot_type,total_target,one_tr,two_tr) VALUES (?,?,?,?,?,?,?,?,?)",plan.id,slot.order,slot.start,slot.end,slot.minutes,slot.type,target,oneTr,twoTr);
+      continue;
+    }
+
+    if (!existingSlot.is_schedule_override) {
+      await db.$executeRawUnsafe(
+        "UPDATE t_daily_production_plan_slot SET start_time=?,end_time=?,prod_minutes=?,slot_type=?,total_target=?,one_tr=?,two_tr=? WHERE id=?",
+        slot.start,
+        slot.end,
+        slot.minutes,
+        slot.type,
+        target,
+        oneTr,
+        twoTr,
+        existingSlot.id,
+      );
     }
   }
   const slots = await db.$queryRawUnsafe<Slot[]>("SELECT id,slot_order,TIME_FORMAT(start_time,'%H:%i') AS start_time,TIME_FORMAT(end_time,'%H:%i') AS end_time,prod_minutes,slot_type,oee,is_oee_override,total_target,one_tr,two_tr,is_schedule_override FROM t_daily_production_plan_slot WHERE daily_plan_id=? ORDER BY slot_order", plan.id);

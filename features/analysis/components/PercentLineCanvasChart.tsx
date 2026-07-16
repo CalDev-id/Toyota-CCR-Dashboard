@@ -8,13 +8,30 @@ const PLOT_BOTTOM = 44;
 const POINT_GAP = 25;
 const SIDE_PADDING = 20;
 const TARGET_LINE_PADDING_X = 20;
-const GRID_COLOR = "rgba(71, 89, 114, 0.42)";
-const TARGET_COLOR = "#f8fafc";
-const RED_LINE_COLOR = "#ff3b30";
-const RED_LABEL_COLOR = "#ff3b30";
-const WHITE_LINE_COLOR = "#eef4ff";
-const WHITE_LABEL_COLOR = "#aab6c9";
-const LABEL_OUTLINE_COLOR = "#101827";
+const DARK_CHART_COLORS = {
+  grid: "rgba(71, 89, 114, 0.42)",
+  target: "#f8fafc",
+  targetShadow: "rgba(255,255,255,0.85)",
+  redLine: "#ff3b30",
+  redLabel: "#ff3b30",
+  whiteLine: "#eef4ff",
+  whiteLabel: "#aab6c9",
+  labelOutline: "#101827",
+  pointFill: "#111827",
+  dateLabel: "#aab6c9",
+};
+const LIGHT_CHART_COLORS = {
+  grid: "rgba(152, 162, 179, 0.32)",
+  target: "#465fff",
+  targetShadow: "rgba(70, 95, 255, 0.16)",
+  redLine: "#d92d20",
+  redLabel: "#b42318",
+  whiteLine: "#465fff",
+  whiteLabel: "#344054",
+  labelOutline: "#ffffff",
+  pointFill: "#ffffff",
+  dateLabel: "#667085",
+};
 
 type ChartPoint = {
   x: number;
@@ -63,6 +80,7 @@ export default function PercentLineCanvasChart({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const canvasWidth = Math.max(viewportWidth, getContentWidth(rows.length));
   const rowDateKey = rows.map((row) => row.date).join("|");
 
@@ -80,6 +98,20 @@ export default function PercentLineCanvasChart({
 
     const observer = new ResizeObserver(updateViewportWidth);
     observer.observe(scroller);
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const updateTheme = () => {
+      setIsDarkMode(root.classList.contains("dark"));
+    };
+
+    updateTheme();
+
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
 
     return () => observer.disconnect();
   }, []);
@@ -113,6 +145,7 @@ export default function PercentLineCanvasChart({
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.font = "700 9.5px Arial, sans-serif";
+    const colors = isDarkMode ? DARK_CHART_COLORS : LIGHT_CHART_COLORS;
 
     const plotHeight = CHART_HEIGHT - PLOT_TOP - PLOT_BOTTOM;
     const axisValues = [100, 75, 50, 25, 0];
@@ -122,7 +155,7 @@ export default function PercentLineCanvasChart({
       ctx.beginPath();
       ctx.moveTo(0, y);
       ctx.lineTo(canvasWidth, y);
-      ctx.strokeStyle = GRID_COLOR;
+      ctx.strokeStyle = colors.grid;
       ctx.lineWidth = 1;
       ctx.stroke();
     });
@@ -132,9 +165,9 @@ export default function PercentLineCanvasChart({
     ctx.setLineDash([8, 5]);
     ctx.moveTo(TARGET_LINE_PADDING_X, targetY);
     ctx.lineTo(Math.max(TARGET_LINE_PADDING_X, canvasWidth - TARGET_LINE_PADDING_X), targetY);
-    ctx.strokeStyle = TARGET_COLOR;
+    ctx.strokeStyle = colors.target;
     ctx.lineWidth = 0.75;
-    ctx.shadowColor = "rgba(255,255,255,0.85)";
+    ctx.shadowColor = colors.targetShadow;
     ctx.shadowBlur = 2;
     ctx.stroke();
     ctx.setLineDash([]);
@@ -143,7 +176,7 @@ export default function PercentLineCanvasChart({
     const labelPoints: ChartPoint[] = [];
 
     (["R", "W"] as const).forEach((shift) => {
-      const color = shift === "R" ? RED_LINE_COLOR : WHITE_LINE_COLOR;
+      const color = shift === "R" ? colors.redLine : colors.whiteLine;
       const points = rows
         .map((row, index) => {
           const value = row[`${line.key}${shift}`];
@@ -161,7 +194,7 @@ export default function PercentLineCanvasChart({
       points.forEach((point) => {
         ctx.beginPath();
         ctx.arc(point.x, point.y, 1.3, 0, Math.PI * 2);
-        ctx.fillStyle = "#111827";
+        ctx.fillStyle = colors.pointFill;
         ctx.fill();
         ctx.strokeStyle = color;
         ctx.lineWidth = 0.85;
@@ -176,9 +209,9 @@ export default function PercentLineCanvasChart({
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.lineWidth = 2.25;
-      ctx.strokeStyle = LABEL_OUTLINE_COLOR;
+      ctx.strokeStyle = colors.labelOutline;
       ctx.strokeText(formatPercent(point.value), point.x, textY);
-      ctx.fillStyle = point.shift === "R" ? RED_LABEL_COLOR : WHITE_LABEL_COLOR;
+      ctx.fillStyle = point.shift === "R" ? colors.redLabel : colors.whiteLabel;
       ctx.fillText(formatPercent(point.value), point.x, textY);
     });
 
@@ -186,10 +219,10 @@ export default function PercentLineCanvasChart({
       ctx.font = "500 11px Arial, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillStyle = WHITE_LABEL_COLOR;
+      ctx.fillStyle = colors.dateLabel;
       ctx.fillText(formatDayLabel(row.date), getPointX(index), CHART_HEIGHT - 14);
     });
-  }, [canvasWidth, line.key, rows]);
+  }, [canvasWidth, isDarkMode, line.key, rows]);
 
   return (
     <>

@@ -47,6 +47,21 @@ const dateCandidates = ["date", "fdate", "plan_date", "production_date", "tangga
 const shiftCandidates = ["shift", "fshift"];
 const groupCandidates = ["group", "fgroup", "group_name", "grp"];
 
+function parseRatioPercentage(value: unknown) {
+  const [one, two] = String(value ?? "")
+    .split(":")
+    .map((part) => Number(part.trim()));
+
+  if (!Number.isFinite(one) || !Number.isFinite(two) || one + two <= 0) {
+    return { oneTrRatioPercentage: null, twoTrRatioPercentage: null };
+  }
+
+  return {
+    oneTrRatioPercentage: Math.round((one / (one + two)) * 100),
+    twoTrRatioPercentage: Math.round((two / (one + two)) * 100),
+  };
+}
+
 export function parsePlanningPart(value: string | null | undefined) {
   if (value && value in planningParts) {
     return value as PlanningPartKey;
@@ -186,24 +201,42 @@ export async function getPlanningSummaries(month: string) {
       const dateColumn = getConflictColumns(columns).dateColumn;
       const oneTrColumn = findColumnByName(columns, "f1tr");
       const twoTrColumn = findColumnByName(columns, "f2tr");
+      const ratioColumn = findColumn(columns, ["fratio", "ratio"]);
       const { start, end } = getMonthRange(month);
       const rows = await getReportPrisma().$queryRawUnsafe<
         {
           count: bigint | number;
           one_tr_total: string | number | null;
           two_tr_total: string | number | null;
+          ratio_text: string | number | null;
         }[]
       >(
         `SELECT COUNT(*) AS count, ${
           oneTrColumn ? `COALESCE(SUM(${quotedColumn(oneTrColumn.field)}), 0)` : "0"
         } AS one_tr_total, ${
           twoTrColumn ? `COALESCE(SUM(${quotedColumn(twoTrColumn.field)}), 0)` : "0"
-        } AS two_tr_total FROM ${quoteIdentifier(part.tableName)} WHERE ${quotedColumn(
+        } AS two_tr_total, ${
+          ratioColumn
+            ? `(SELECT ${quotedColumn(ratioColumn.field)} FROM ${quoteIdentifier(
+                part.tableName,
+              )} WHERE ${quotedColumn(dateColumn.field)} >= ? AND ${quotedColumn(
+                dateColumn.field,
+              )} < ? AND ${quotedColumn(ratioColumn.field)} IS NOT NULL AND ${quotedColumn(
+                ratioColumn.field,
+              )} <> '' ORDER BY ${quotedColumn(dateColumn.field)} DESC LIMIT 1)`
+            : "NULL"
+        } AS ratio_text FROM ${quoteIdentifier(part.tableName)} WHERE ${quotedColumn(
           dateColumn.field,
         )} >= ? AND ${quotedColumn(dateColumn.field)} < ?`,
+        ...(ratioColumn ? [start, end] : []),
         start,
         end,
       );
+      const ratioText =
+        rows[0]?.ratio_text === null || rows[0]?.ratio_text === undefined
+          ? null
+          : String(rows[0].ratio_text);
+      const { oneTrRatioPercentage, twoTrRatioPercentage } = parseRatioPercentage(ratioText);
 
       return {
         key: partKey,
@@ -212,6 +245,9 @@ export async function getPlanningSummaries(month: string) {
         count: Number(rows[0]?.count ?? 0),
         oneTrTotal: Number(rows[0]?.one_tr_total ?? 0),
         twoTrTotal: Number(rows[0]?.two_tr_total ?? 0),
+        ratioText,
+        oneTrRatioPercentage,
+        twoTrRatioPercentage,
       } satisfies PlanningPartSummary;
     }),
   );

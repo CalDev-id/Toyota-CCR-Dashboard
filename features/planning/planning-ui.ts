@@ -59,7 +59,7 @@ export function isUpdateField(column: PlanningColumn) {
 
 export function isVisibleColumn(column: PlanningColumn) {
   const field = column.field.toLowerCase();
-  return field !== "fid" && field !== "fdatetime_modified";
+  return field !== "fid" && field !== "fdatetime_modified" && field !== "fremarks";
 }
 
 export function isShiftColumn(column: PlanningColumn) {
