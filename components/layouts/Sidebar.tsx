@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 type SidebarProps = {
   isCollapsed: boolean;
@@ -29,7 +30,7 @@ const menuItems = [
     ),
   },
   {
-    label: "Analysis",
+    label: "Asakai Board",
     href: "/analysis",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
@@ -75,6 +76,16 @@ const menuItems = [
         />
       </svg>
     ),
+    children: [
+      {
+        label: "Prod Acv Machining",
+        href: "/production-achievement",
+      },
+      {
+        label: "Prod Acv Packom",
+        href: "/packom",
+      },
+    ],
   },
   {
     label: "Planning",
@@ -91,6 +102,16 @@ const menuItems = [
         />
       </svg>
     ),
+    children: [
+      {
+        label: "Monthly Planning",
+        href: "/planning",
+      },
+      {
+        label: "Daily Planning",
+        href: "/daily-planning",
+      },
+    ],
   },
   {
     label: "Users",
@@ -147,41 +168,127 @@ function Menu({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
 
   return (
     <nav className="space-y-1" aria-label="Dashboard navigation">
       {menuItems.map((item) => {
+        const childItems = "children" in item ? item.children : undefined;
         const isActive =
           item.href === "/"
             ? pathname === "/"
-            : pathname === item.href || pathname.startsWith(`${item.href}/`);
+            : pathname === item.href ||
+              pathname.startsWith(`${item.href}/`) ||
+              childItems?.some(
+                (child) =>
+                  pathname === child.href || pathname.startsWith(`${child.href}/`),
+              );
+        const isExpanded = Boolean(
+          childItems?.length && (openMenus[item.href] ?? isActive),
+        );
 
         return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={isActive ? "page" : undefined}
-            title={collapsed ? item.label : undefined}
-            onClick={onNavigate}
-            className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
-              isActive
-                ? "bg-[#ecf3ff] text-[#465fff] dark:bg-[#14245a] dark:text-[#a6b6ff]"
-                : "text-[#667085] hover:bg-[#f9fafb] hover:text-[#101828] dark:text-[#a7b0c0] dark:hover:bg-[#162033] dark:hover:text-[#f8fafc]"
-            }`}
-          >
-            <span
-              className={`grid size-8 shrink-0 place-items-center rounded-lg ${
-                isActive
-                  ? "bg-[#465fff] text-white dark:bg-[#8da2ff] dark:text-[#0b111d]"
-                  : "bg-[#f2f4f7] text-[#667085] group-hover:bg-white dark:bg-[#1f2937] dark:text-[#a7b0c0] dark:group-hover:bg-[#273449]"
-              }`}
-            >
-              {item.icon}
-            </span>
-            <span className={collapsed ? "sr-only" : "whitespace-nowrap"}>
-              {item.label}
-            </span>
-          </Link>
+          <div key={item.href} className="space-y-1">
+            {childItems?.length ? (
+              <button
+                type="button"
+                aria-expanded={isExpanded}
+                title={collapsed ? item.label : undefined}
+                onClick={() =>
+                  setOpenMenus((current) => ({
+                    ...current,
+                    [item.href]: !isExpanded,
+                  }))
+                }
+                className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition ${
+                  isActive
+                    ? "bg-[#ecf3ff] text-[#465fff] dark:bg-[#14245a] dark:text-[#a6b6ff]"
+                    : "text-[#667085] hover:bg-[#f9fafb] hover:text-[#101828] dark:text-[#a7b0c0] dark:hover:bg-[#162033] dark:hover:text-[#f8fafc]"
+                }`}
+              >
+                <span
+                  className={`grid size-8 shrink-0 place-items-center rounded-lg ${
+                    isActive
+                      ? "bg-[#465fff] text-white dark:bg-[#8da2ff] dark:text-[#0b111d]"
+                      : "bg-[#f2f4f7] text-[#667085] group-hover:bg-white dark:bg-[#1f2937] dark:text-[#a7b0c0] dark:group-hover:bg-[#273449]"
+                  }`}
+                >
+                  {item.icon}
+                </span>
+                <span className={collapsed ? "sr-only" : "flex-1 whitespace-nowrap"}>
+                  {item.label}
+                </span>
+                {!collapsed ? (
+                  <svg
+                    viewBox="0 0 20 20"
+                    aria-hidden="true"
+                    className={`size-4 shrink-0 transition-transform ${
+                      isExpanded ? "rotate-180" : ""
+                    }`}
+                  >
+                    <path
+                      d="m5 7.5 5 5 5-5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.8"
+                    />
+                  </svg>
+                ) : null}
+              </button>
+            ) : (
+              <Link
+                href={item.href}
+                aria-current={isActive ? "page" : undefined}
+                title={collapsed ? item.label : undefined}
+                onClick={onNavigate}
+                className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                  isActive
+                    ? "bg-[#ecf3ff] text-[#465fff] dark:bg-[#14245a] dark:text-[#a6b6ff]"
+                    : "text-[#667085] hover:bg-[#f9fafb] hover:text-[#101828] dark:text-[#a7b0c0] dark:hover:bg-[#162033] dark:hover:text-[#f8fafc]"
+                }`}
+              >
+                <span
+                  className={`grid size-8 shrink-0 place-items-center rounded-lg ${
+                    isActive
+                      ? "bg-[#465fff] text-white dark:bg-[#8da2ff] dark:text-[#0b111d]"
+                      : "bg-[#f2f4f7] text-[#667085] group-hover:bg-white dark:bg-[#1f2937] dark:text-[#a7b0c0] dark:group-hover:bg-[#273449]"
+                  }`}
+                >
+                  {item.icon}
+                </span>
+                <span className={collapsed ? "sr-only" : "whitespace-nowrap"}>
+                  {item.label}
+                </span>
+              </Link>
+            )}
+
+            {!collapsed && childItems?.length && isExpanded ? (
+              <div className="ml-11 space-y-1">
+                {childItems.map((child) => {
+                  const isChildActive =
+                    pathname === child.href || pathname.startsWith(`${child.href}/`);
+
+                  return (
+                    <Link
+                      key={child.href}
+                      href={child.href}
+                      aria-current={isChildActive ? "page" : undefined}
+                      onClick={onNavigate}
+                      className={`flex items-center rounded-lg px-3 py-2 text-sm font-medium transition ${
+                        isChildActive
+                          ? "bg-[#eef4ff] text-[#465fff] dark:bg-[#162033] dark:text-[#a6b6ff]"
+                          : "text-[#667085] hover:bg-[#f9fafb] hover:text-[#101828] dark:text-[#a7b0c0] dark:hover:bg-[#162033] dark:hover:text-[#f8fafc]"
+                      }`}
+                    >
+                      {child.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
         );
       })}
     </nav>

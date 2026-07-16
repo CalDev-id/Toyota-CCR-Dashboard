@@ -1,0 +1,5 @@
+ALTER TABLE t_daily_production_plan
+  ADD COLUMN IF NOT EXISTS source_tt DECIMAL(8,3) NULL,
+  ADD COLUMN IF NOT EXISTS source_oee DECIMAL(5,2) NULL,
+  ADD COLUMN IF NOT EXISTS source_ratio VARCHAR(20) NULL,
+  ADD COLUMN IF NOT EXISTS source_ot_minutes INT NULL;

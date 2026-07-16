@@ -29,6 +29,11 @@ const emptyOptions: FilterOptions = {
 
 const lineOptions = [
   {
+    label: "Assy",
+    value: "Assy",
+    aliases: ["assy", "assembly"],
+  },
+  {
     label: "Cylinder Block",
     value: "Cylinder Block",
     aliases: ["cylinder block", "cyl block", "cylblock"],

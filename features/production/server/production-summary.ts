@@ -13,6 +13,10 @@ const productionSummaryLines: Record<
   ProductionSummaryLineKey,
   ProductionSummaryLine
 > = {
+  assy: {
+    summaryView: "v_assy_summary",
+    detailProblemView: "v_assy_detail_problem",
+  },
   cylblock: {
     summaryView: "v_cylblock_summary",
     detailProblemView: "v_cylblock_detail_problem",
@@ -162,6 +166,10 @@ function parseSummaryLine(value: string | null) {
   const normalized = String(value ?? "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
+
+  if (normalized.includes("assy")) {
+    return "assy";
+  }
 
   if (normalized.includes("cylhead") || normalized.includes("cylinderhead")) {
     return "cylhead";

@@ -10,6 +10,25 @@ type ProductionAchievementRealtimeDashboardProps = {
   initialDashboard: ProductionAchievementDashboard;
 };
 
+function parseDashboardDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function formatDisplayDate(value: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(parseDashboardDate(value));
+}
+
+function formatWeekday(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+  }).format(parseDashboardDate(value));
+}
+
 async function fetchDashboard(date: string, shift: string) {
   const params = new URLSearchParams({ date, shift });
   const response = await fetch(`/api/production-achievement?${params.toString()}`, {
@@ -76,26 +95,44 @@ export default function ProductionAchievementRealtimeDashboard({
 
   return (
     <section>
-      <div className="mb-4 flex flex-col gap-3 pl-2 lg:flex-row lg:items-end lg:justify-between">
-        <div className="flex items-stretch gap-5">
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight text-[#101828] dark:text-[#f8fafc]">
+      <div className="mb-4 min-h-[118px] rounded-2xl border border-[#e4e7ec] bg-white px-4 py-5 shadow-sm dark:border-[#273449] dark:bg-[#111827]">
+        <div className="grid gap-4 lg:grid-cols-[minmax(280px,1fr)_auto_auto] lg:items-center">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold tracking-tight text-[#101828] dark:text-[#f8fafc] md:text-3xl">
               Production Achievement
             </h1>
-            <p className="mt-1 text-sm font-semibold text-[#667085] dark:text-[#a7b0c0]">
-              {dashboard.date}
-            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2.5 text-sm font-semibold text-[#667085] dark:text-[#a7b0c0]">
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                className="size-4 shrink-0"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.8"
+              >
+                <path d="M8 2v4" />
+                <path d="M16 2v4" />
+                <path d="M3 10h18" />
+                <rect width="18" height="18" x="3" y="4" rx="2" />
+              </svg>
+              <span>{formatDisplayDate(dashboard.date)}</span>
+              <span className="text-[#d0d5dd] dark:text-[#384860]">•</span>
+              <span>{formatWeekday(dashboard.date)}</span>
+            </div>
           </div>
+
+          <ProductionAchievementFilters
+            date={dashboard.date}
+            shift={dashboard.shift}
+            onFilterChange={(next) => {
+              void handleFilterChange(next);
+            }}
+          />
+
           <ProductionAchievementClock />
         </div>
-
-        <ProductionAchievementFilters
-          date={dashboard.date}
-          shift={dashboard.shift}
-          onFilterChange={(next) => {
-            void handleFilterChange(next);
-          }}
-        />
       </div>
 
       <div className="overflow-x-auto pb-2 [scrollbar-gutter:stable] xl:overflow-visible xl:pb-0">

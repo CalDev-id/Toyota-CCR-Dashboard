@@ -1,4 +1,5 @@
 export type ProductionSummaryLineKey =
+  | "assy"
   | "cylblock"
   | "cylhead"
   | "camshaft"

@@ -67,17 +67,23 @@ function MetricTile({
   label,
   value,
   valueClassName = "text-[#101828]",
+  valueSizeClassName = "text-lg",
 }: {
   label: string;
   value: ReactNode;
   valueClassName?: string;
+  valueSizeClassName?: string;
 }) {
   return (
-    <div className="rounded-lg bg-[#f9fafb] px-3 py-2 dark:bg-[#162033]">
-      <p className="text-[11px] font-medium text-[#667085] dark:text-[#a7b0c0]">
+    <div className="flex min-h-[64px] flex-col justify-between rounded-lg bg-[#f9fafb] px-3 py-2.5 dark:bg-[#162033]">
+      <p className="whitespace-pre-line text-xs font-semibold text-[#667085] dark:text-[#a7b0c0]">
         {label}
       </p>
-      <p className={`mt-1 text-base font-semibold ${valueClassName}`}>{value}</p>
+      <p
+        className={`whitespace-nowrap text-right font-semibold leading-none tracking-normal ${valueSizeClassName} ${valueClassName}`}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -90,7 +96,7 @@ function OeeMetricValue({
   target: number | null;
 }) {
   return (
-    <span className="whitespace-nowrap">
+    <span className="whitespace-nowrap text-lg leading-none">
       {formatPercent(value)}
       <span className="ml-1 text-xs font-semibold opacity-75">
         / {formatPercent(target)}
@@ -152,12 +158,12 @@ export default function ProductionAchievementCardView({
               fill="none"
               aria-hidden="true"
             >
-              <path
-                d="M5 10.5l3.2 3.2L15.5 6"
+              <circle
+                cx="10"
+                cy="10"
+                r="5.75"
                 stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2.4"
+                strokeWidth="2"
               />
             </svg>
           ) : (
@@ -185,30 +191,50 @@ export default function ProductionAchievementCardView({
           width={220}
           height={150}
           loading="eager"
-          className="max-h-32 w-auto max-w-[88%] object-contain"
+          className={`max-h-32 w-auto max-w-[88%] object-contain ${
+            card.key === "cylblock" ? "-scale-x-100" : ""
+          }`}
         />
       </div>
 
       <div className="mt-4 grid gap-2">
         <div className="grid grid-cols-2 gap-2">
-          <MetricTile label="Prod Plan" value={formatNumber(card.prodPlan)} />
-          <MetricTile label="Prod Act" value={formatNumberAuto(card.prodAct)} />
+          <MetricTile
+            label="Plan"
+            value={formatNumber(card.prodPlan)}
+            valueSizeClassName="text-2xl"
+          />
+          <MetricTile
+            label="Act"
+            value={formatNumberAuto(card.prodAct)}
+            valueSizeClassName="text-2xl"
+          />
         </div>
         <div className="grid grid-cols-2 gap-2">
           <MetricTile
             label="Balance"
             value={formatNumberAuto(card.balance)}
             valueClassName={getBalanceClass(card.balance)}
+            valueSizeClassName="text-lg"
           />
           <MetricTile
             label="OEE"
             value={<OeeMetricValue value={card.oee} target={card.oeeTarget} />}
             valueClassName={getOeeTargetClass(card.oee, card.oeeTarget)}
+            valueSizeClassName="text-lg"
           />
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <MetricTile label="TT" value={formatTt(card.tt)} />
-          <MetricTile label="Stop Time" value={formatStopTime(card.stopTime)} />
+          <MetricTile
+            label="TT"
+            value={formatTt(card.tt)}
+            valueSizeClassName="text-lg"
+          />
+          <MetricTile
+            label="Stop Time"
+            value={formatStopTime(card.stopTime)}
+            valueSizeClassName="text-base"
+          />
         </div>
       </div>
 

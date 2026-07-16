@@ -8,6 +8,7 @@ export function getCurrentMonth() {
 }
 
 export const partIcons: Record<PlanningPartKey, string> = {
+  assy: "AS",
   cylblock: "CB",
   cylhead: "CH",
   camshaft: "CA",
@@ -15,6 +16,7 @@ export const partIcons: Record<PlanningPartKey, string> = {
 };
 
 export const partLabels: Record<PlanningPartKey, string> = {
+  assy: "Assy",
   cylblock: "Cylblock",
   cylhead: "Cylhead",
   camshaft: "Camshaft",
@@ -22,6 +24,7 @@ export const partLabels: Record<PlanningPartKey, string> = {
 };
 
 export const importLineOptions: Array<{ key: PlanningPartKey; label: string }> = [
+  { key: "assy", label: "Assy" },
   { key: "cylblock", label: "Cylinder block" },
   { key: "cylhead", label: "Cylinder head" },
   { key: "camshaft", label: "Camshaft" },
@@ -30,6 +33,20 @@ export const importLineOptions: Array<{ key: PlanningPartKey; label: string }> =
 
 export const shiftOptions = ["1", "2"];
 export const groupOptions = ["R", "W"];
+
+export function formatShiftLabel(value: unknown) {
+  const text = String(value ?? "").trim();
+
+  if (text === "1") {
+    return "Day";
+  }
+
+  if (text === "2") {
+    return "Night";
+  }
+
+  return text;
+}
 
 export function formatInputValue(value: unknown, column: PlanningColumn) {
   if (value === null || value === undefined) {
@@ -59,7 +76,7 @@ export function isUpdateField(column: PlanningColumn) {
 
 export function isVisibleColumn(column: PlanningColumn) {
   const field = column.field.toLowerCase();
-  return field !== "fid" && field !== "fdatetime_modified";
+  return field !== "fid" && field !== "fdatetime_modified" && field !== "fremarks";
 }
 
 export function isShiftColumn(column: PlanningColumn) {
@@ -75,7 +92,29 @@ export function getPartLabel(part: PlanningPartKey) {
 }
 
 export function formatColumnLabel(field: string) {
+  const labels: Record<string, string> = {
+    ftt: "TT",
+    foee: "OEE",
+    fratio: "Ratio",
+    f1tr: "1TR",
+    f2tr: "2TR",
+  };
+
+  if (labels[field.toLowerCase()]) {
+    return labels[field.toLowerCase()];
+  }
+
   return /^f/i.test(field) ? field.slice(1) : field;
+}
+
+export function sortVisibleColumns(columns: PlanningColumn[]) {
+  return [...columns].sort((left, right) => {
+    const leftIsRemark = ["remark", "fremarks"].includes(left.field.toLowerCase());
+    const rightIsRemark = ["remark", "fremarks"].includes(right.field.toLowerCase());
+
+    if (leftIsRemark === rightIsRemark) return 0;
+    return leftIsRemark ? 1 : -1;
+  });
 }
 
 export function makeEmptyForm(columns: PlanningColumn[]) {

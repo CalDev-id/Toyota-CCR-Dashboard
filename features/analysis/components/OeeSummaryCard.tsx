@@ -3,6 +3,18 @@ import { formatPercent, meetsOeeTarget, metricTone } from "@/features/analysis/c
 
 export default function OeeSummaryCard({ card }: { card: OeeCard }) {
   const isTargetMet = meetsOeeTarget(card.ave);
+  const metricItems =
+    card.key === "assyline"
+      ? [
+          ["Daily", card.r],
+          ["Monthly", card.monthly],
+        ]
+      : [
+          ["R", card.r],
+          ["W", card.w],
+          ["Ave", card.ave],
+          ["Monthly", card.monthly],
+        ];
 
   return (
     <article className="rounded-2xl border border-[#e4e7ec] bg-white p-5 shadow-sm">
@@ -52,12 +64,7 @@ export default function OeeSummaryCard({ card }: { card: OeeCard }) {
       </div>
 
       <div className="mt-5 flex flex-nowrap items-stretch gap-2">
-        {[
-          ["R", card.r],
-          ["W", card.w],
-          ["Ave", card.ave],
-          ["Monthly", card.monthly],
-        ].map(([label, value]) => (
+        {metricItems.map(([label, value]) => (
           <div key={label} className="min-w-0 flex-1 rounded-xl bg-[#f9fafb] p-2.5">
             <p className="text-xs font-medium text-[#667085]">{label}</p>
             <p className={`mt-1 whitespace-nowrap text-[clamp(0.7rem,0.9vw,0.875rem)] font-semibold ${metricTone(value as number | null)}`}>

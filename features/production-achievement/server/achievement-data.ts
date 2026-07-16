@@ -11,6 +11,13 @@ import { getReportPrisma } from "@/lib/report-prisma";
 
 const productionAchievementLineConfigs: ProductionAchievementLineConfig[] = [
   {
+    key: "assy",
+    label: "Assy",
+    summaryView: "v_assy_summary",
+    detailProblemView: "v_assy_detail_problem",
+    imageSrc: "/images/2tr.png",
+  },
+  {
     key: "cylblock",
     label: "Cylinder Block",
     summaryView: "v_cylblock_summary",
@@ -53,7 +60,7 @@ function buildDateShiftWhere(date: string, shift: string) {
   }
 
   return {
-    where: "WHERE `DATE` = ? AND SHIFT = ?",
+    where: "WHERE `DATE` = ? AND SHIFT2 = ?",
     values: [date, shift],
   };
 }
@@ -113,6 +120,10 @@ function toNumber(value: unknown) {
   return Number.isFinite(numeric) ? numeric : 0;
 }
 
+function toPlainString(value: unknown) {
+  return String(value ?? "");
+}
+
 function getTodayKey() {
   const date = new Date();
 
@@ -137,7 +148,7 @@ function normalizeDate(value: string | null | undefined) {
 function normalizeShift(value: string | null | undefined) {
   const normalized = String(value ?? "all").trim().toUpperCase();
 
-  return normalized === "R" || normalized === "W" ? normalized : "all";
+  return normalized === "DAY" || normalized === "NIGHT" ? normalized : "all";
 }
 
 function getProblemCandidates(row: RawProductionAchievementProblemRow[]) {
@@ -280,7 +291,7 @@ function buildLineCard(
       summaryRows.reduce((total, row) => total + toNumber(row.prodAct), 0) /
       pairDivisor,
     oee: average(summaryRows.map((row) => toNumber(row.oee))),
-    tt: summaryRows.find((row) => String(row.tt ?? "").trim())?.tt ?? "",
+    tt: toPlainString(summaryRows.find((row) => String(row.tt ?? "").trim())?.tt),
     oeeTarget: 90,
     balance:
       summaryRows.reduce((total, row) => total + toNumber(row.balance), 0) /
@@ -289,23 +300,6 @@ function buildLineCard(
     problems: buildProblems(line, problemRows),
     variants: buildVariants(line, summaryRows),
   };
-}
-
-function buildAssyCard() {
-  return {
-    key: "assy",
-    label: "Assy",
-    imageSrc: "/images/2tr.png",
-    prodPlan: 0,
-    prodAct: 0,
-    oee: null,
-    tt: "",
-    oeeTarget: null,
-    balance: 0,
-    stopTime: 0,
-    problems: [],
-    variants: [],
-  } satisfies ProductionAchievementCard;
 }
 
 export async function getProductionAchievementDashboard(filters?: {
@@ -328,6 +322,6 @@ export async function getProductionAchievementDashboard(filters?: {
   return {
     date,
     shift,
-    cards: [buildAssyCard(), ...lineCards],
+    cards: lineCards,
   };
 }

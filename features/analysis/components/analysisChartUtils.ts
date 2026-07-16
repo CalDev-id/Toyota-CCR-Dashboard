@@ -1,8 +1,14 @@
 import type {
+  AnalysisLine,
   AnalysisLineKey as LineKey,
   AnalysisOeeSeriesRow as SeriesRow,
   AnalysisShiftSeriesRow as ShiftSeriesRow,
 } from "@/features/analysis/types";
+
+export type AnalysisChartLine = Pick<
+  AnalysisLine,
+  "key" | "label" | "shiftMode" | "displayShiftLabel"
+>;
 
 export function normalizePercent(value: number) {
   return Math.abs(value) <= 1 ? value * 100 : value;
@@ -64,8 +70,20 @@ export function meetsOeeTarget(value: number | null) {
   return value !== null && normalizePercent(value) >= 90;
 }
 
-export function getShiftChartRows(series: ShiftSeriesRow[], key: LineKey) {
-  return series.filter((row) => row[`${key}R`] !== null || row[`${key}W`] !== null);
+export function isSingleShiftLine(line: AnalysisChartLine) {
+  return line.shiftMode === "single";
+}
+
+export function getPrimaryShiftLabel(line: AnalysisChartLine) {
+  return line.displayShiftLabel ?? "R";
+}
+
+export function getShiftChartRows(series: ShiftSeriesRow[], line: AnalysisChartLine) {
+  return series.filter((row) =>
+    isSingleShiftLine(line)
+      ? row[`${line.key}R`] !== null
+      : row[`${line.key}R`] !== null || row[`${line.key}W`] !== null,
+  );
 }
 
 export function buildShiftPath(

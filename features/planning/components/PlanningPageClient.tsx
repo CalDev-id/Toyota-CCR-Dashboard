@@ -21,10 +21,12 @@ import {
   defaultPart,
   getCurrentMonth,
   getPartLabel,
+  isGroupColumn,
   isUpdateField,
   isVisibleColumn,
   makeEditing,
   makeEmptyForm,
+  sortVisibleColumns,
 } from "@/features/planning/planning-ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -75,6 +77,17 @@ async function readResponse(response: Response) {
   return body;
 }
 
+function hasEditingChanges(
+  current: Record<string, string> | undefined,
+  initial: Record<string, string> | undefined,
+  columns: PlanningColumn[],
+) {
+  if (!current || !initial) {
+    return false;
+  }
+
+  return columns.some((column) => (current[column.field] ?? "") !== (initial[column.field] ?? ""));
+}
 
 export default function PlanningPage() {
   const [activePart, setActivePart] = useState<PlanningPartKey>(defaultPart);
@@ -105,9 +118,29 @@ export default function PlanningPage() {
     [columns],
   );
   const updateColumns = useMemo(() => columns.filter(isUpdateField), [columns]);
+  const initialEditing = useMemo(() => makeEditing(rows, columns), [columns, rows]);
+  const changedRowIds = useMemo(() => {
+    const draftIds = new Set(draftRows.map((row) => row.id));
+
+    if (updateColumns.length === 0) {
+      return [];
+    }
+
+    return rows
+      .map((row, rowIndex) =>
+        primaryColumn ? String(row[primaryColumn.field]) : String(rowIndex),
+      )
+      .filter((id) => !draftIds.has(id))
+      .filter((id) => hasEditingChanges(editing[id], initialEditing[id], updateColumns));
+  }, [draftRows, editing, initialEditing, primaryColumn, rows, updateColumns]);
   const visibleColumns = useMemo(
-    () => columns.filter(isVisibleColumn),
-    [columns],
+    () =>
+      sortVisibleColumns(
+        columns.filter(
+          (column) => isVisibleColumn(column) && (activePart !== "assy" || !isGroupColumn(column)),
+        ),
+      ),
+    [activePart, columns],
   );
   const activePartSummary = useMemo(
     () => parts.find((part) => part.key === activePart),
@@ -120,7 +153,7 @@ export default function PlanningPage() {
         part,
         month: filterMonth,
         shift: filterShift,
-        group: filterGroup,
+        group: part === "assy" ? "all" : filterGroup,
       });
 
       return `/api/planning?${params.toString()}`;
@@ -260,10 +293,23 @@ export default function PlanningPage() {
     }
   }
 
-  async function updateRow(id: string) {
+  async function updateChangedRows() {
+    if (changedRowIds.length === 0) {
+      return;
+    }
+
+    setIsSaving(true);
+
     try {
-      await updatePlanningRowAction(activePart, id, editing[id] ?? {});
-      showToast(`Data ${getPartLabel(activePart)} berhasil diupdate.`, "success");
+      await Promise.all(
+        changedRowIds.map((id) =>
+          updatePlanningRowAction(activePart, id, editing[id] ?? {}),
+        ),
+      );
+      showToast(
+        `${changedRowIds.length} data ${getPartLabel(activePart)} berhasil diupdate.`,
+        "success",
+      );
       await loadPlanning(activePart);
     } catch (updateError) {
       showToast(
@@ -272,6 +318,8 @@ export default function PlanningPage() {
           : "Unable to update planning data",
         "error",
       );
+    } finally {
+      setIsSaving(false);
     }
   }
 
@@ -391,6 +439,9 @@ export default function PlanningPage() {
         selectPart={selectPart}
         openImportModal={openImportModal}
         addDraftRow={() => addDraftRow()}
+        updateChangedRows={() => void updateChangedRows()}
+        hasPendingUpdates={changedRowIds.length > 0}
+        isSaving={isSaving}
       />
 
       <PlanningTable
@@ -400,12 +451,10 @@ export default function PlanningPage() {
         draftRows={draftRows}
         primaryColumn={primaryColumn}
         editing={editing}
-        updateColumns={updateColumns}
         isSaving={isSaving}
         activePart={activePart}
         setEditingValue={setEditingValue}
         saveDraftRow={(id) => void saveDraftRow(id)}
-        updateRow={(id) => void updateRow(id)}
         setDraftRows={setDraftRows}
         setDeleteTarget={setDeleteTarget}
       />

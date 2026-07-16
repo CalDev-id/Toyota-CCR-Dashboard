@@ -24,11 +24,11 @@ export default function ProductionAchievementFilters({
   }
 
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+    <div className="grid gap-4 sm:grid-cols-[220px_220px] sm:items-end">
       <label className="grid gap-1.5 text-xs font-semibold text-[#344054] dark:text-[#d4dae5]">
         Date
         <input
-          className="h-10 rounded-lg border border-[#d0d5dd] bg-white px-3 text-sm font-medium text-[#101828] outline-none transition focus:border-[#465fff] focus:ring-2 focus:ring-[#ecf3ff] dark:border-[#384860] dark:bg-[#111827] dark:text-[#f8fafc] dark:focus:ring-[#14245a]"
+          className="h-10 rounded-lg border border-[#d0d5dd] bg-white px-3 text-sm font-semibold text-[#101828] shadow-sm outline-none transition focus:border-[#465fff] focus:ring-2 focus:ring-[#ecf3ff] dark:border-[#384860] dark:bg-[#111827] dark:text-[#f8fafc] dark:focus:ring-[#14245a]"
           name="date"
           type="date"
           value={draftDate}
@@ -49,7 +49,7 @@ export default function ProductionAchievementFilters({
         Shift
         <span className="relative">
           <select
-            className="h-10 w-full appearance-none rounded-lg border border-[#d0d5dd] bg-white py-0 pl-3 pr-10 text-sm font-medium text-[#101828] outline-none transition focus:border-[#465fff] focus:ring-2 focus:ring-[#ecf3ff] dark:border-[#384860] dark:bg-[#111827] dark:text-[#f8fafc] dark:focus:ring-[#14245a]"
+            className="h-10 w-full appearance-none rounded-lg border border-[#d0d5dd] bg-white py-0 pl-3 pr-10 text-sm font-semibold text-[#101828] shadow-sm outline-none transition focus:border-[#465fff] focus:ring-2 focus:ring-[#ecf3ff] dark:border-[#384860] dark:bg-[#111827] dark:text-[#f8fafc] dark:focus:ring-[#14245a]"
             name="shift"
             value={draftShift}
             onChange={(event) => {
@@ -58,8 +58,8 @@ export default function ProductionAchievementFilters({
             }}
           >
             <option value="all">All Shift</option>
-            <option value="R">R</option>
-            <option value="W">W</option>
+            <option value="DAY">Day</option>
+            <option value="NIGHT">Night</option>
           </select>
           <svg
             viewBox="0 0 20 20"
