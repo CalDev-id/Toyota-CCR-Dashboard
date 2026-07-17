@@ -2,6 +2,7 @@
 
 import { auth } from "@/auth";
 import { getReportPrisma } from "@/lib/report-prisma";
+import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
 type SlotTemplate = { order: number; start: string; end: string; minutes: number; type: "normal" | "ot" };
@@ -27,11 +28,11 @@ function sameNullableNumber(left: unknown, right: unknown) { const leftNumber = 
 function sameNullableText(left: unknown, right: unknown) { const leftText = left === null || left === undefined ? "" : String(left); const rightText = right === null || right === undefined ? "" : String(right); return leftText === rightText; }
 
 async function getPlanContext(part: string, date: string, shift: string, group: string) {
-  const db = getReportPrisma(); const table = tableFor(part);
+  const reportDb = getReportPrisma(); const db = prisma; const table = tableFor(part);
   const planGroup = part === "assy" ? "all" : group;
   const source = part === "assy"
-    ? await db.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT ftt, foee, fratio, fot FROM \`${table}\` WHERE fdate=? AND fshift=? LIMIT 1`, date, shift)
-    : await db.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT ftt, foee, fratio, fot FROM \`${table}\` WHERE fdate=? AND fshift=? AND fgroup=? LIMIT 1`, date, shift, group);
+    ? await reportDb.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT ftt, foee, fratio, fot FROM \`${table}\` WHERE fdate=? AND fshift=? LIMIT 1`, date, shift)
+    : await reportDb.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT ftt, foee, fratio, fot FROM \`${table}\` WHERE fdate=? AND fshift=? AND fgroup=? LIMIT 1`, date, shift, group);
 
   // Monthly Planning is the master:
   // - if the monthly row does not exist, Daily Planning shows an empty-state message;
@@ -119,7 +120,7 @@ export async function loadDailyPlanning(part: string, date: string, shift: strin
   return { group, tt, oee: monthlyOee, ratio, ratioOne, ratioTwo, hasMonthlyData: true, message: "", rows };
 }
 
-export async function updateDailyTarget(id: number, target: number, ratioOne: number, ratioTwo: number) { await requireUser(); const [oneTr,twoTr] = split(Math.max(0,target),ratioOne,ratioTwo); await getReportPrisma().$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET total_target=?,one_tr=?,two_tr=?,is_schedule_override=1 WHERE id=?",target,oneTr,twoTr,id); revalidatePath("/daily-planning"); }
-export async function updateDailyOee(id: number, oee: number) { await requireUser(); if (oee <= 0) throw new Error("OEE harus valid"); await getReportPrisma().$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET oee=?,is_oee_override=1 WHERE id=?",oee,id); revalidatePath("/daily-planning"); }
+export async function updateDailyTarget(id: number, target: number, ratioOne: number, ratioTwo: number) { await requireUser(); const [oneTr,twoTr] = split(Math.max(0,target),ratioOne,ratioTwo); await prisma.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET total_target=?,one_tr=?,two_tr=?,is_schedule_override=1 WHERE id=?",target,oneTr,twoTr,id); revalidatePath("/daily-planning"); }
+export async function updateDailyOee(id: number, oee: number) { await requireUser(); if (oee <= 0) throw new Error("OEE harus valid"); await prisma.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET oee=?,is_oee_override=1 WHERE id=?",oee,id); revalidatePath("/daily-planning"); }
 export async function updateDailySharedParameters(part: string,date: string,shift: string,group: string,tt: number,ratio: string) { await requireUser(); const [one,two] = parseRatio(ratio); if (tt<=0 || one+two<=0) throw new Error("TT dan Ratio harus valid"); const { db,plan,hasMonthlyData } = await getPlanContext(part,date,shift,group); if (!hasMonthlyData || !plan) throw new Error("Data monthly untuk tanggal ini belum diisi."); await db.$executeRawUnsafe("UPDATE t_daily_production_plan SET override_tt=?,override_ratio=? WHERE id=?",tt,`${one}:${two}`,plan.id); revalidatePath("/daily-planning"); }
-export async function updateDailySlotSchedule(id: number,startTime: string,endTime: string,_minutes: number,ratioOne: number,ratioTwo: number,tt: number,oee: number) { await requireUser(); const minutes = calculateDurationMinutes(startTime,endTime); const target=targetFor(minutes,tt,oee*100); const [oneTr,twoTr]=split(target,ratioOne,ratioTwo); await getReportPrisma().$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET start_time=?,end_time=?,prod_minutes=?,total_target=?,one_tr=?,two_tr=?,is_schedule_override=1 WHERE id=?",startTime,endTime,minutes,target,oneTr,twoTr,id); revalidatePath("/daily-planning"); }
+export async function updateDailySlotSchedule(id: number,startTime: string,endTime: string,_minutes: number,ratioOne: number,ratioTwo: number,tt: number,oee: number) { await requireUser(); const minutes = calculateDurationMinutes(startTime,endTime); const target=targetFor(minutes,tt,oee*100); const [oneTr,twoTr]=split(target,ratioOne,ratioTwo); await prisma.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET start_time=?,end_time=?,prod_minutes=?,total_target=?,one_tr=?,two_tr=?,is_schedule_override=1 WHERE id=?",startTime,endTime,minutes,target,oneTr,twoTr,id); revalidatePath("/daily-planning"); }
