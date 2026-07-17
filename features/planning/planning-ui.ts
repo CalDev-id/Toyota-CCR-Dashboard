@@ -76,7 +76,7 @@ export function isUpdateField(column: PlanningColumn) {
 
 export function isVisibleColumn(column: PlanningColumn) {
   const field = column.field.toLowerCase();
-  return field !== "fid" && field !== "fdatetime_modified" && field !== "remarks" && field !== "fremarks";
+  return field !== "fid" && field !== "fdatetime_modified" && field !== "remark" && field !== "remarks";
 }
 
 export function isShiftColumn(column: PlanningColumn) {
@@ -96,6 +96,7 @@ export function formatColumnLabel(field: string) {
     ftt: "TT",
     foee: "OEE",
     fratio: "Ratio",
+    fremarks: "Remark",
     f1tr: "1TR",
     f2tr: "2TR",
   };
@@ -109,8 +110,8 @@ export function formatColumnLabel(field: string) {
 
 export function sortVisibleColumns(columns: PlanningColumn[]) {
   return [...columns].sort((left, right) => {
-    const leftIsRemark = ["remark", "fremarks"].includes(left.field.toLowerCase());
-    const rightIsRemark = ["remark", "fremarks"].includes(right.field.toLowerCase());
+    const leftIsRemark = left.field.toLowerCase() === "fremarks";
+    const rightIsRemark = right.field.toLowerCase() === "fremarks";
 
     if (leftIsRemark === rightIsRemark) return 0;
     return leftIsRemark ? 1 : -1;
