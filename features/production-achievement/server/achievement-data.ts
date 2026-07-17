@@ -8,40 +8,41 @@ import type {
   RawProductionAchievementSummaryRow,
 } from "@/features/production-achievement/types";
 import { getReportPrisma } from "@/lib/report-prisma";
+import { summaryViewName } from "@/lib/report-views";
 
 const productionAchievementLineConfigs: ProductionAchievementLineConfig[] = [
   {
     key: "assy",
     label: "Assy",
-    summaryView: "v_assy_summary",
+    summaryView: summaryViewName("v_assy_summary"),
     detailProblemView: "v_assy_detail_problem",
     imageSrc: "/images/2tr.png",
   },
   {
     key: "cylblock",
     label: "Cylinder Block",
-    summaryView: "v_cylblock_summary",
+    summaryView: summaryViewName("v_cylblock_summary"),
     detailProblemView: "v_cylblock_detail_problem",
     imageSrc: "/images/cb.png",
   },
   {
     key: "cylhead",
     label: "Cylinder Head",
-    summaryView: "v_cylhead_summary",
+    summaryView: summaryViewName("v_cylhead_summary"),
     detailProblemView: "v_cylhead_detail_problem",
     imageSrc: "/images/ch.png",
   },
   {
     key: "crankshaft",
     label: "Crankshaft",
-    summaryView: "v_crankshaft_summary",
+    summaryView: summaryViewName("v_crankshaft_summary"),
     detailProblemView: "v_crankshaft_detail_problem",
     imageSrc: "/images/crank.png",
   },
   {
     key: "camshaft",
     label: "Camshaft",
-    summaryView: "v_camshaft_summary",
+    summaryView: summaryViewName("v_camshaft_summary"),
     detailProblemView: "v_camshaft_detail_problem",
     imageSrc: "/images/cam.png",
   },

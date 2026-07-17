@@ -8,12 +8,13 @@ import type {
   RawAnalysisOeeRow,
 } from "@/features/analysis/types";
 import { getReportPrisma } from "@/lib/report-prisma";
+import { summaryViewName } from "@/lib/report-views";
 
 export const analysisLines: AnalysisLine[] = [
   {
     key: "assyline",
     label: "Assy Line",
-    tableName: "v_assy_summary",
+    tableName: summaryViewName("v_assy_summary"),
     problemTableName: "v_assy_detail_problem",
     shiftMode: "single",
     sourceShift: "N",
@@ -22,25 +23,25 @@ export const analysisLines: AnalysisLine[] = [
   {
     key: "cylblock",
     label: "Cyl Block",
-    tableName: "v_cylblock_summary",
+    tableName: summaryViewName("v_cylblock_summary"),
     problemTableName: "v_cylblock_detail_problem",
   },
   {
     key: "cylhead",
     label: "Cyl Head",
-    tableName: "v_cylhead_summary",
+    tableName: summaryViewName("v_cylhead_summary"),
     problemTableName: "v_cylhead_detail_problem",
   },
   {
     key: "crankshaft",
     label: "Crankshaft",
-    tableName: "v_crankshaft_summary",
+    tableName: summaryViewName("v_crankshaft_summary"),
     problemTableName: "v_crankshaft_detail_problem",
   },
   {
     key: "camshaft",
     label: "Camshaft",
-    tableName: "v_camshaft_summary",
+    tableName: summaryViewName("v_camshaft_summary"),
     problemTableName: "v_camshaft_detail_problem",
   },
 ];

@@ -26,13 +26,26 @@ function tableFor(part: string) { if (!parts.has(part)) throw new Error("Invalid
 function toNullableNumber(value: unknown) { if (value === null || value === undefined || value === "") return null; const numeric = Number(value); return Number.isFinite(numeric) ? numeric : null; }
 function sameNullableNumber(left: unknown, right: unknown) { const leftNumber = toNullableNumber(left); const rightNumber = toNullableNumber(right); return leftNumber === rightNumber; }
 function sameNullableText(left: unknown, right: unknown) { const leftText = left === null || left === undefined ? "" : String(left); const rightText = right === null || right === undefined ? "" : String(right); return leftText === rightText; }
+function shiftAliases(value: string) {
+  return value === "1" ? ["1", "Day", "DAY", "day"] : value === "2" ? ["2", "Night", "NIGHT", "night"] : [value];
+}
 
 async function getPlanContext(part: string, date: string, shift: string, group: string) {
   const reportDb = getReportPrisma(); const db = prisma; const table = tableFor(part);
   const planGroup = part === "assy" ? "all" : group;
+  const shifts = shiftAliases(shift);
   const source = part === "assy"
-    ? await reportDb.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT ftt, foee, fratio, fot FROM \`${table}\` WHERE fdate=? AND fshift=? LIMIT 1`, date, shift)
-    : await reportDb.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT ftt, foee, fratio, fot FROM \`${table}\` WHERE fdate=? AND fshift=? AND fgroup=? LIMIT 1`, date, shift, group);
+    ? await reportDb.$queryRawUnsafe<Record<string, unknown>[]>(
+        `SELECT ftt, foee, fratio, fot FROM \`${table}\` WHERE DATE(fdate)=? AND TRIM(fshift) IN (${shifts.map(() => "?").join(",")}) LIMIT 1`,
+        date,
+        ...shifts,
+      )
+    : await reportDb.$queryRawUnsafe<Record<string, unknown>[]>(
+        `SELECT ftt, foee, fratio, fot FROM \`${table}\` WHERE DATE(fdate)=? AND TRIM(fshift) IN (${shifts.map(() => "?").join(",")}) AND TRIM(fgroup)=? LIMIT 1`,
+        date,
+        ...shifts,
+        group,
+      );
 
   // Monthly Planning is the master:
   // - if the monthly row does not exist, Daily Planning shows an empty-state message;

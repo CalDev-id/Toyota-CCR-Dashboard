@@ -8,29 +8,30 @@ import type {
   RawProductionSummaryRow,
 } from "@/features/production/types";
 import { getReportPrisma } from "@/lib/report-prisma";
+import { summaryViewName } from "@/lib/report-views";
 
 const productionSummaryLines: Record<
   ProductionSummaryLineKey,
   ProductionSummaryLine
 > = {
   assy: {
-    summaryView: "v_assy_summary",
+    summaryView: summaryViewName("v_assy_summary"),
     detailProblemView: "v_assy_detail_problem",
   },
   cylblock: {
-    summaryView: "v_cylblock_summary",
+    summaryView: summaryViewName("v_cylblock_summary"),
     detailProblemView: "v_cylblock_detail_problem",
   },
   cylhead: {
-    summaryView: "v_cylhead_summary",
+    summaryView: summaryViewName("v_cylhead_summary"),
     detailProblemView: "v_cylhead_detail_problem",
   },
   camshaft: {
-    summaryView: "v_camshaft_summary",
+    summaryView: summaryViewName("v_camshaft_summary"),
     detailProblemView: "v_camshaft_detail_problem",
   },
   crankshaft: {
-    summaryView: "v_crankshaft_summary",
+    summaryView: summaryViewName("v_crankshaft_summary"),
     detailProblemView: "v_crankshaft_detail_problem",
   },
 };
