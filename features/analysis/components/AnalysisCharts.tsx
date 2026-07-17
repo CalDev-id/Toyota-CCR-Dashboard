@@ -112,7 +112,7 @@ export function OeeLineChart({
                 <div className="mt-3 flex gap-3">
                   {[
                     ["Balance(Unit)", card?.balance ?? 0],
-                    ["Balance Monthly", card?.balanceMonthly ?? 0],
+                    ["Balance Monthly ", card?.balanceMonthly ?? 0],
                   ].map(([label, value]) => (
                     <div key={label} className="min-w-0 flex-1 rounded-xl bg-[#f9fafb] p-3">
                       <p className="text-[10px] font-medium text-[#667085]">{label}</p>
