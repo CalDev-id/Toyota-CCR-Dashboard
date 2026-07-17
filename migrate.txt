@@ -1,19 +1,83 @@
-ALTER TABLE t_plan_daily_production_cylblock
-  DROP COLUMN IF EXISTS ftotal_target,
-  DROP COLUMN IF EXISTS fratio_1tr,
-  DROP COLUMN IF EXISTS fratio_2tr;
+Kita debug Daily Planning di repo Toyota CCR server ini.
 
-ALTER TABLE t_plan_daily_production_cylhead
-  DROP COLUMN IF EXISTS ftotal_target,
-  DROP COLUMN IF EXISTS fratio_1tr,
-  DROP COLUMN IF EXISTS fratio_2tr;
+Konteks penting:
+- App pakai 2 DB.
+- DATABASE_URL = DB app internal / toyota_ccr.
+- REPORT_DATABASE_URL = DB report / db_tmmin_trace_regrinding.
+- Monthly Planning source harus dibaca dari REPORT_DATABASE_URL:
+  - t_plan_daily_production_cylblock
+  - t_plan_daily_production_cylhead
+  - t_plan_daily_production_camshaft
+  - t_plan_daily_production_crankshaft
+  - t_plan_daily_production_assy
+- Daily Planning hasil/generate slot harus disimpan ke DATABASE_URL:
+  - t_daily_production_plan
+  - t_daily_production_plan_slot
 
-ALTER TABLE t_plan_daily_production_camshaft
-  DROP COLUMN IF EXISTS ftotal_target,
-  DROP COLUMN IF EXISTS fratio_1tr,
-  DROP COLUMN IF EXISTS fratio_2tr;
+Masalah:
+- Halaman Daily Planning masih tampil “Data monthly untuk tanggal ini belum diisi” / “Tidak ada data daily planning”, padahal data Monthly Planning di report DB ada.
+- Tolong debug langsung di server ini, jangan asumsi.
+- Cek .env, compose env runtime, dan koneksi dua DB.
+- Cek apakah container app benar-benar menerima DATABASE_URL dan REPORT_DATABASE_URL.
+- Cek apakah t_daily_production_plan dan t_daily_production_plan_slot sudah ada di DATABASE_URL.
+- Cek apakah monthly planning row ada di REPORT_DATABASE_URL untuk tanggal/part/shift/group yang dipilih UI.
 
-ALTER TABLE t_plan_daily_production_crankshaft
-  DROP COLUMN IF EXISTS ftotal_target,
-  DROP COLUMN IF EXISTS fratio_1tr,
-  DROP COLUMN IF EXISTS fratio_2tr;
+Rule query yang diharapkan:
+- Untuk non-Assy:
+  SELECT ftt, foee, fratio, fot
+  FROM t_plan_daily_production_<part>
+  WHERE DATE(fdate)=?
+    AND TRIM(fshift) IN alias shift
+    AND TRIM(fgroup)=?
+  LIMIT 1
+
+- Untuk Assy:
+  SELECT ftt, foee, fratio, fot
+  FROM t_plan_daily_production_assy
+  WHERE DATE(fdate)=?
+    AND TRIM(fshift) IN alias shift
+  LIMIT 1
+
+Shift alias:
+- UI shift 1 boleh match: 1, Day, DAY, day
+- UI shift 2 boleh match: 2, Night, NIGHT, night
+
+Yang perlu dicek:
+1. Print env dari container:
+   docker compose exec app printenv DATABASE_URL
+   docker compose exec app printenv REPORT_DATABASE_URL
+
+2. Cek app DB:
+   SHOW TABLES LIKE 't_daily_production_plan';
+   SHOW TABLES LIKE 't_daily_production_plan_slot';
+
+3. Kalau tabel Daily Planning belum ada, jalankan:
+   npm run migrate:daily-planning
+   atau dari container node sesuai setup server.
+
+4. Cek report DB monthly row contoh sesuai tanggal UI:
+   SELECT fdate, fshift, fgroup, ftt, foee, fratio, fot
+   FROM t_plan_daily_production_cylblock
+   WHERE DATE(fdate) = 'YYYY-MM-DD'
+   LIMIT 20;
+
+5. Bandingkan value fshift/fgroup aktual di DB dengan filter UI.
+   Bisa jadi fshift pakai Day/Night, group ada spasi, atau fdate datetime.
+
+6. Buka file:
+   features/daily-planning/actions.ts
+
+Pastikan:
+- getReportPrisma() hanya dipakai untuk baca monthly source.
+- prisma dari lib/prisma hanya dipakai untuk t_daily_production_plan dan t_daily_production_plan_slot.
+- Jangan simpan daily plan ke REPORT_DATABASE_URL.
+- Jangan baca monthly source dari DATABASE_URL.
+
+Kalau menemukan bug, fix code secukupnya.
+Setelah fix:
+- npm run lint
+- npm run build
+- docker compose build --no-cache
+- docker compose up -d
+
+Berikan root cause singkat dan SQL/command yang dipakai untuk membuktikan.
