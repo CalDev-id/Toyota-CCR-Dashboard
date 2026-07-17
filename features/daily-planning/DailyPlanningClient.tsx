@@ -22,6 +22,7 @@ type EditingRow = Pick<DailyRow, "start_time" | "end_time" | "fratio"> & {
   foee: number | string;
   ftotal_target: number | string;
 };
+type DailyTotals = { minutes: number; target: number; oneTr: number; twoTr: number };
 
 function formatPart(value: string) {
   return partLabels[value] ?? value;
@@ -126,10 +127,10 @@ export default function DailyPlanningClient() {
   const isAssy = part === "assy";
   const effectiveGroup = isAssy ? "all" : group;
   const emptyMessage = data && !data.hasMonthlyData ? data.message : "Tidak ada data daily planning.";
-  const changedRows = visibleRows.filter((row) => hasRowChanges(row, editing[row.id]));
+  const changedRows = visibleRows.filter((row: DailyRow) => hasRowChanges(row, editing[row.id]));
   const hasPendingUpdates = changedRows.length > 0;
   const totals = visibleRows.reduce(
-    (result, row) => ({
+    (result: DailyTotals, row: DailyRow) => ({
       minutes: result.minutes + Number(editing[row.id]?.prod_minutes ?? row.prod_minutes),
       target: result.target + Number(editing[row.id]?.ftotal_target ?? row.ftotal_target),
       oneTr: result.oneTr + row.f1tr,
@@ -174,7 +175,7 @@ export default function DailyPlanningClient() {
     setIsSaving(true);
 
     try {
-      const firstChangedShared = changedRows.find((row) => {
+      const firstChangedShared = changedRows.find((row: DailyRow) => {
         const next = editing[row.id];
         return next && (parseDecimal(row.ftt) !== parseDecimal(next.ftt) || row.fratio !== next.fratio);
       });
@@ -280,7 +281,7 @@ export default function DailyPlanningClient() {
                     {emptyMessage}
                   </td>
                 </tr>
-              ) : visibleRows.map((row) => {
+              ) : visibleRows.map((row: DailyRow) => {
                 const current = editing[row.id] ?? row;
 
                 return (

@@ -94,17 +94,17 @@ export async function loadDailyPlanning(part: string, date: string, shift: strin
   const template = getTemplate(date,shift,otMinutes);
   const [ratioOne, ratioTwo] = parseRatio(ratio);
   const templateOrders = new Set(template.map((slot) => slot.order));
-  const staleSlots = existing.filter((row) => !templateOrders.has(Number(row.slot_order)));
+  const staleSlots = existing.filter((row: Slot) => !templateOrders.has(Number(row.slot_order)));
 
   if (staleSlots.length > 0) {
     await db.$executeRawUnsafe(
       `DELETE FROM t_daily_production_plan_slot WHERE id IN (${staleSlots.map(() => "?").join(",")})`,
-      ...staleSlots.map((row) => row.id),
+      ...staleSlots.map((row: Slot) => row.id),
     );
   }
 
   for (const slot of template) {
-    const existingSlot = existing.find((row) => Number(row.slot_order) === slot.order);
+    const existingSlot = existing.find((row: Slot) => Number(row.slot_order) === slot.order);
     const oeeForTarget = existingSlot?.is_oee_override ? Number(existingSlot.oee) : (monthlyOee ?? 0);
     const target = targetFor(slot.minutes, tt ?? 0, oeeForTarget);
     const [oneTr,twoTr] = split(target,ratioOne,ratioTwo);
@@ -129,7 +129,7 @@ export async function loadDailyPlanning(part: string, date: string, shift: strin
     }
   }
   const slots = await db.$queryRawUnsafe<Slot[]>("SELECT id,slot_order,TIME_FORMAT(start_time,'%H:%i') AS start_time,TIME_FORMAT(end_time,'%H:%i') AS end_time,prod_minutes,slot_type,oee,is_oee_override,total_target,one_tr,two_tr,is_schedule_override FROM t_daily_production_plan_slot WHERE daily_plan_id=? ORDER BY slot_order", plan.id);
-  const rows = slots.map((slot) => { const oee = slot.is_oee_override ? Number(slot.oee) : monthlyOee; const target = slot.is_schedule_override ? Number(slot.total_target) : targetFor(Number(slot.prod_minutes),tt ?? 0,oee ?? 0); const [oneTr,twoTr] = slot.is_schedule_override ? [Number(slot.one_tr),Number(slot.two_tr)] : split(target,ratioOne,ratioTwo); return { ...slot, oee: Number(slot.oee ?? 0), ftt: tt ?? "", foee: oee ?? "", fratio: ratio, ftotal_target:target, f1tr:oneTr, f2tr:twoTr }; });
+  const rows = slots.map((slot: Slot) => { const oee = slot.is_oee_override ? Number(slot.oee) : monthlyOee; const target = slot.is_schedule_override ? Number(slot.total_target) : targetFor(Number(slot.prod_minutes),tt ?? 0,oee ?? 0); const [oneTr,twoTr] = slot.is_schedule_override ? [Number(slot.one_tr),Number(slot.two_tr)] : split(target,ratioOne,ratioTwo); return { ...slot, oee: Number(slot.oee ?? 0), ftt: tt ?? "", foee: oee ?? "", fratio: ratio, ftotal_target:target, f1tr:oneTr, f2tr:twoTr }; });
   return { group, tt, oee: monthlyOee, ratio, ratioOne, ratioTwo, hasMonthlyData: true, message: "", rows };
 }
 

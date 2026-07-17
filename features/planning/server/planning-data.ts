@@ -123,7 +123,7 @@ export async function getPlanningColumns(part: PlanningPartKey) {
     `SHOW COLUMNS FROM ${quotedTable(part)}`,
   );
 
-  return columns.map<PlanningColumn>((column) => ({
+  return columns.map<PlanningColumn>((column: RawColumn) => ({
     field: column.Field,
     type: column.Type,
     nullable: column.Null === "YES",
@@ -325,9 +325,9 @@ export async function getFilteredPlanningRows(
     orderStartDate,
   );
 
-  return rows.map((row) =>
+  return rows.map((row: Record<string, unknown>) =>
     Object.fromEntries(
-      Object.entries(row).map(([key, value]) => [
+      Object.entries(row).map(([key, value]: [string, unknown]) => [
         key,
         typeof value === "bigint" ? value.toString() : value,
       ]),
@@ -358,14 +358,14 @@ export async function getPlanningFilterOptions(
     shifts: Array.from(
       new Set(
         rows
-          .map((row) => String(row.shift_value ?? "").trim())
+          .map((row: Record<string, string | number | null>) => String(row.shift_value ?? "").trim())
           .filter(Boolean),
       ),
     ),
     groups: Array.from(
       new Set(
         rows
-          .map((row) => String(row.group_value ?? "").trim())
+          .map((row: Record<string, string | number | null>) => String(row.group_value ?? "").trim())
           .filter(Boolean),
       ),
     ),
