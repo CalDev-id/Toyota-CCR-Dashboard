@@ -139,7 +139,12 @@ async function getProductionAchievementProblemRows(
 }
 
 function toNumber(value: unknown) {
-  const numeric = Number(value ?? 0);
+  const text = String(value ?? "").trim();
+  const normalized =
+    text.includes(",") && text.includes(".")
+      ? text.replaceAll(".", "").replace(",", ".")
+      : text.replace(",", ".");
+  const numeric = Number(normalized || 0);
   return Number.isFinite(numeric) ? numeric : 0;
 }
 
