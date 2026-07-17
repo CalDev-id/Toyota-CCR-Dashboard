@@ -45,6 +45,7 @@ services:
     environment:
       DATABASE_URL: mysql://root:${MARIADB_ROOT_PASSWORD:-toyota_root_password}@db:3306/${MARIADB_DATABASE:-toyota_ccr}
       REPORT_DATABASE_URL: ${REPORT_DATABASE_URL}
+      REPORT_SUMMARY_VIEW_SUFFIX: ${REPORT_SUMMARY_VIEW_SUFFIX:-}
       AUTH_SECRET: ${AUTH_SECRET:-change-this-auth-secret-before-production}
       AUTH_TRUST_HOST: "true"
       PORT: 3000

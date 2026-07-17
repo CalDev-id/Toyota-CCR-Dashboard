@@ -14,7 +14,7 @@ export const analysisLines: AnalysisLine[] = [
   {
     key: "assyline",
     label: "Assy Line",
-    tableName: summaryViewName("v_assy_summary"),
+    tableName: "v_assy_summary",
     problemTableName: "v_assy_detail_problem",
     shiftMode: "single",
     sourceShift: "N",
@@ -23,25 +23,25 @@ export const analysisLines: AnalysisLine[] = [
   {
     key: "cylblock",
     label: "Cyl Block",
-    tableName: summaryViewName("v_cylblock_summary"),
+    tableName: "v_cylblock_summary",
     problemTableName: "v_cylblock_detail_problem",
   },
   {
     key: "cylhead",
     label: "Cyl Head",
-    tableName: summaryViewName("v_cylhead_summary"),
+    tableName: "v_cylhead_summary",
     problemTableName: "v_cylhead_detail_problem",
   },
   {
     key: "crankshaft",
     label: "Crankshaft",
-    tableName: summaryViewName("v_crankshaft_summary"),
+    tableName: "v_crankshaft_summary",
     problemTableName: "v_crankshaft_detail_problem",
   },
   {
     key: "camshaft",
     label: "Camshaft",
-    tableName: summaryViewName("v_camshaft_summary"),
+    tableName: "v_camshaft_summary",
     problemTableName: "v_camshaft_detail_problem",
   },
 ];
@@ -72,7 +72,7 @@ export async function getAnalysisLineRows(
       OT_plan AS otPlan,
       OT_act AS otAct,
       OT_diff AS otDiff
-     FROM ${quoteIdentifier(line.tableName)}
+     FROM ${quoteIdentifier(summaryViewName(line.tableName))}
      WHERE \`DATE\` >= ? AND \`DATE\` < ?
      ORDER BY \`DATE\` ASC, SHIFT ASC`,
     start,

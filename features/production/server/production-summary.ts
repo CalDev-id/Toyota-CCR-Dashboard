@@ -15,23 +15,23 @@ const productionSummaryLines: Record<
   ProductionSummaryLine
 > = {
   assy: {
-    summaryView: summaryViewName("v_assy_summary"),
+    summaryView: "v_assy_summary",
     detailProblemView: "v_assy_detail_problem",
   },
   cylblock: {
-    summaryView: summaryViewName("v_cylblock_summary"),
+    summaryView: "v_cylblock_summary",
     detailProblemView: "v_cylblock_detail_problem",
   },
   cylhead: {
-    summaryView: summaryViewName("v_cylhead_summary"),
+    summaryView: "v_cylhead_summary",
     detailProblemView: "v_cylhead_detail_problem",
   },
   camshaft: {
-    summaryView: summaryViewName("v_camshaft_summary"),
+    summaryView: "v_camshaft_summary",
     detailProblemView: "v_camshaft_detail_problem",
   },
   crankshaft: {
-    summaryView: summaryViewName("v_crankshaft_summary"),
+    summaryView: "v_crankshaft_summary",
     detailProblemView: "v_crankshaft_detail_problem",
   },
 };
@@ -55,7 +55,7 @@ async function getProductionFilterOptionRows(
     }>
   >(
     `SELECT DISTINCT SHIFT AS shift, SHIFT2 AS shift2, SHOP AS shop FROM ${quoteIdentifier(
-      line.summaryView,
+      summaryViewName(line.summaryView),
     )} WHERE \`DATE\` >= ? AND \`DATE\` < ? ORDER BY SHIFT, SHIFT2, SHOP`,
     start,
     end,
@@ -89,7 +89,7 @@ async function getProductionSummaryRows(
       RQ AS rq,
       OEE AS oee,
       fdate_modified AS modifiedAt
-    FROM ${quoteIdentifier(line.summaryView)}${where}
+    FROM ${quoteIdentifier(summaryViewName(line.summaryView))}${where}
     ORDER BY \`DATE\` ASC, SHIFT ASC, SHOP ASC
     LIMIT 500`,
     ...values,

@@ -14,35 +14,35 @@ const productionAchievementLineConfigs: ProductionAchievementLineConfig[] = [
   {
     key: "assy",
     label: "Assy",
-    summaryView: summaryViewName("v_assy_summary"),
+    summaryView: "v_assy_summary",
     detailProblemView: "v_assy_detail_problem",
     imageSrc: "/images/2tr.png",
   },
   {
     key: "cylblock",
     label: "Cylinder Block",
-    summaryView: summaryViewName("v_cylblock_summary"),
+    summaryView: "v_cylblock_summary",
     detailProblemView: "v_cylblock_detail_problem",
     imageSrc: "/images/cb.png",
   },
   {
     key: "cylhead",
     label: "Cylinder Head",
-    summaryView: summaryViewName("v_cylhead_summary"),
+    summaryView: "v_cylhead_summary",
     detailProblemView: "v_cylhead_detail_problem",
     imageSrc: "/images/ch.png",
   },
   {
     key: "crankshaft",
     label: "Crankshaft",
-    summaryView: summaryViewName("v_crankshaft_summary"),
+    summaryView: "v_crankshaft_summary",
     detailProblemView: "v_crankshaft_detail_problem",
     imageSrc: "/images/crank.png",
   },
   {
     key: "camshaft",
     label: "Camshaft",
-    summaryView: summaryViewName("v_camshaft_summary"),
+    summaryView: "v_camshaft_summary",
     detailProblemView: "v_camshaft_detail_problem",
     imageSrc: "/images/cam.png",
   },
@@ -81,7 +81,7 @@ async function getProductionAchievementSummaryRows(
       Prod_act AS prodAct,
       Balance AS balance,
       OEE AS oee
-    FROM ${quoteIdentifier(line.summaryView)}
+    FROM ${quoteIdentifier(summaryViewName(line.summaryView))}
     ${where}
     ORDER BY SHIFT ASC, SHOP ASC, Variant ASC`,
     ...values,

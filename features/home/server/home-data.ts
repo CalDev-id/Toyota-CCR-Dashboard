@@ -10,10 +10,10 @@ import { getReportPrisma } from "@/lib/report-prisma";
 import { summaryViewName } from "@/lib/report-views";
 
 export const homeLineConfigs: HomeLineConfig[] = [
-  { key: "cylblock", label: "Cyl Block", tableName: summaryViewName("v_cylblock_summary") },
-  { key: "cylhead", label: "Cyl Head", tableName: summaryViewName("v_cylhead_summary") },
-  { key: "camshaft", label: "Camshaft", tableName: summaryViewName("v_camshaft_summary") },
-  { key: "crankshaft", label: "Crankshaft", tableName: summaryViewName("v_crankshaft_summary") },
+  { key: "cylblock", label: "Cyl Block", tableName: "v_cylblock_summary" },
+  { key: "cylhead", label: "Cyl Head", tableName: "v_cylhead_summary" },
+  { key: "camshaft", label: "Camshaft", tableName: "v_camshaft_summary" },
+  { key: "crankshaft", label: "Crankshaft", tableName: "v_crankshaft_summary" },
 ];
 
 function quoteIdentifier(value: string) {
@@ -35,7 +35,7 @@ export async function getHomeLineRows(
       Prod_plan AS prodPlan,
       Prod_act AS prodAct,
       Balance AS balance
-     FROM ${quoteIdentifier(line.tableName)}
+     FROM ${quoteIdentifier(summaryViewName(line.tableName))}
      WHERE \`DATE\` >= ? AND \`DATE\` < ?
      ORDER BY \`DATE\` ASC`,
     start,
