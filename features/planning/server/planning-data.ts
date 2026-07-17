@@ -177,6 +177,21 @@ export function getMonthRange(month: string) {
   return { start, end };
 }
 
+function getTodayKey() {
+  const date = new Date();
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    "0",
+  )}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function getPlanningOrderStartDate(month: string) {
+  const today = getTodayKey();
+
+  return today.startsWith(`${month}-`) ? today : `${month}-01`;
+}
+
 function findColumn(columns: PlanningColumn[], candidates: string[]) {
   return candidates
     .map((candidate) =>
@@ -296,7 +311,9 @@ export async function getFilteredPlanningRows(
     values,
     columns: { dateColumn, shiftColumn, groupColumn },
   } = buildPlanningFilterWhere(columns, filters);
-  const orderBy = ` ORDER BY ${quotedColumn(dateColumn.field)} ASC, ${quotedColumn(
+  const dateField = quotedColumn(dateColumn.field);
+  const orderStartDate = getPlanningOrderStartDate(filters.month);
+  const orderBy = ` ORDER BY CASE WHEN ${dateField} >= ? THEN ${dateField} ELSE DATE_ADD(${dateField}, INTERVAL 1 MONTH) END ASC, ${quotedColumn(
     shiftColumn.field,
   )} ASC, ${quotedColumn(groupColumn.field)} ASC${
     primary ? `, ${quotedColumn(primary.field)} ASC` : ""
@@ -305,6 +322,7 @@ export async function getFilteredPlanningRows(
   const rows = await getReportPrisma().$queryRawUnsafe<Record<string, unknown>[]>(
     `SELECT * FROM ${quotedTable(part)}${where}${orderBy} LIMIT 200`,
     ...values,
+    orderStartDate,
   );
 
   return rows.map((row) =>

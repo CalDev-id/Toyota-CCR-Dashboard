@@ -105,6 +105,16 @@ async function replaceExistingBatches(
   }
 }
 
+function normalizeImportRows(part: PlanningPartKey, columns: PlanningColumn[], rows: Record<string, unknown>[]) {
+  if (part !== "assy") {
+    return rows;
+  }
+
+  const { groupColumn } = getConflictColumns(columns);
+
+  return rows.map((row) => ({ ...row, [groupColumn.field]: "N" }));
+}
+
 export async function importPlanningRowsAction(
   partParam: PlanningPartKey,
   formData: FormData,
@@ -137,7 +147,8 @@ export async function importPlanningRowsAction(
   }
 
   const columns = await getPlanningColumns(part);
-  const conflicts = await findExistingBatches(part, columns, rows);
+  const normalizedRows = normalizeImportRows(part, columns, rows);
+  const conflicts = await findExistingBatches(part, columns, normalizedRows);
 
   if (conflicts.length > 0 && !overwrite) {
     return {
@@ -148,10 +159,10 @@ export async function importPlanningRowsAction(
   }
 
   if (overwrite) {
-    await replaceExistingBatches(part, columns, rows);
+    await replaceExistingBatches(part, columns, normalizedRows);
   }
 
-  const inserted = await insertPlanningRows(part, columns, rows);
+  const inserted = await insertPlanningRows(part, columns, normalizedRows);
 
   revalidatePath("/planning");
 

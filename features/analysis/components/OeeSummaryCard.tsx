@@ -3,8 +3,9 @@ import { formatPercent, meetsOeeTarget, metricTone } from "@/features/analysis/c
 
 export default function OeeSummaryCard({ card }: { card: OeeCard }) {
   const isTargetMet = meetsOeeTarget(card.ave);
+  const isAssyLine = card.key === "assyline";
   const metricItems =
-    card.key === "assyline"
+    isAssyLine
       ? [
           ["Daily", card.r],
           ["Monthly", card.monthly],
@@ -65,7 +66,12 @@ export default function OeeSummaryCard({ card }: { card: OeeCard }) {
 
       <div className="mt-5 flex flex-nowrap items-stretch gap-2">
         {metricItems.map(([label, value]) => (
-          <div key={label} className="min-w-0 flex-1 rounded-xl bg-[#f9fafb] p-2.5">
+          <div
+            key={label}
+            className={`min-w-0 rounded-xl bg-[#f9fafb] p-2.5 ${
+              !isAssyLine && label === "Monthly" ? "flex-[1.35]" : "flex-1"
+            }`}
+          >
             <p className="text-xs font-medium text-[#667085]">{label}</p>
             <p className={`mt-1 whitespace-nowrap text-[clamp(0.7rem,0.9vw,0.875rem)] font-semibold ${metricTone(value as number | null)}`}>
               {formatPercent(value as number | null)}

@@ -110,6 +110,20 @@ function toNumber(value: unknown) {
   return Number.isFinite(numeric) ? numeric : 0;
 }
 
+function getEffectiveOtPlan(line: AnalysisLine, row: RawAnalysisOeeRow) {
+  const otPlan = toNumber(row.otPlan);
+
+  if (otPlan >= 8) {
+    return otPlan - 8;
+  }
+
+  return otPlan;
+}
+
+function getOtGap(line: AnalysisLine, row: RawAnalysisOeeRow) {
+  return toNumber(row.otAct) - getEffectiveOtPlan(line, row);
+}
+
 function toDateKey(value: unknown) {
   if (!value) {
     return "";
@@ -308,12 +322,12 @@ function buildCard(
     gapCumR: sumAverageByGroup(
       monthlyRRows,
       (row) => `${toDateKey(row.date)}:${normalizeShift(row.shift)}`,
-      (row) => toNumber(row.otDiff),
+      (row) => getOtGap(line, row),
     ),
     gapCumW: sumAverageByGroup(
       monthlyWRows,
       (row) => `${toDateKey(row.date)}:${normalizeShift(row.shift)}`,
-      (row) => toNumber(row.otDiff),
+      (row) => getOtGap(line, row),
     ),
     note: buildProblemNote(problemRows),
   };
@@ -392,11 +406,11 @@ function buildDailyGap(line: AnalysisLine, rows: RawAnalysisOeeRow[]) {
     const current = grouped.get(date) ?? { r: [], w: [] };
 
     if (normalizeShift(row.shift) === primaryShift) {
-      current.r.push(toNumber(row.otDiff));
+      current.r.push(getOtGap(line, row));
     }
 
     if (secondaryShift && normalizeShift(row.shift) === secondaryShift) {
-      current.w.push(toNumber(row.otDiff));
+      current.w.push(getOtGap(line, row));
     }
 
     grouped.set(date, current);

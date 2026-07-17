@@ -15,9 +15,10 @@ export default function DailyGapChart({
       singleShift ? row[`${lineKey}R`] !== null : row[`${lineKey}R`] !== null || row[`${lineKey}W`] !== null,
   );
   const hasSparseRows = chartRows.length > 0 && chartRows.length <= 7;
+  const scaleFloor = 4;
   const maxValue =
     Math.max(
-      1,
+      scaleFloor,
       ...chartRows.flatMap((row) => [
         Math.abs(row[`${lineKey}R`] ?? 0),
         Math.abs(row[`${lineKey}W`] ?? 0),
@@ -26,10 +27,10 @@ export default function DailyGapChart({
   const chartMinWidth = getChartMinWidth(chartRows.length);
 
   return (
-    <div>
-      <div className="overflow-x-auto overflow-y-hidden">
-        <div className="px-4" style={{ minWidth: chartMinWidth }}>
-          <div className="relative mt-5 h-56">
+    <div className="mt-4 flex flex-1 flex-col">
+      <div className="flex-1 overflow-x-auto overflow-y-hidden">
+        <div className="px-4 pb-3" style={{ minWidth: chartMinWidth }}>
+          <div className="relative h-36">
             <div className="absolute left-0 right-0 top-1/2 border-t border-dashed border-[#98a2b3]" />
             <div
               className={`flex h-full items-stretch gap-2 ${
@@ -57,6 +58,7 @@ export default function DailyGapChart({
                       {bars.map((bar) => {
                         const height = Math.min((Math.abs(bar.value) / maxValue) * 50, 50);
                         const isPositive = bar.value >= 0;
+                        const visibleHeight = Math.max(height, bar.value === 0 ? 0 : 5);
 
                         return (
                           <div
@@ -66,8 +68,8 @@ export default function DailyGapChart({
                             }`}
                             style={{
                               backgroundColor: bar.color,
-                              height: `${Math.max(height, bar.value === 0 ? 0 : 7)}%`,
-                              top: isPositive ? `${50 - height}%` : "50%",
+                              height: `${visibleHeight}%`,
+                              top: isPositive ? `${50 - visibleHeight}%` : "50%",
                               width: bar.width,
                               zIndex: bar.zIndex,
                             }}
@@ -81,7 +83,7 @@ export default function DailyGapChart({
 
                         const height = Math.min((Math.abs(bar.value) / maxValue) * 50, 50);
                         const isPositive = bar.value >= 0;
-                        const edgeOffset = Math.max(height, 7);
+                        const edgeOffset = Math.max(height, 5);
 
                         return (
                           <span
@@ -109,7 +111,7 @@ export default function DailyGapChart({
           </div>
 
           <div
-            className={`mt-2 flex gap-2 text-[10px] font-medium text-[#667085] ${
+            className={`mt-3 flex gap-2 text-[10px] font-medium text-[#667085] ${
               hasSparseRows ? "justify-around" : "justify-between"
             }`}
           >

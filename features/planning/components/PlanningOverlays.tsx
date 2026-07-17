@@ -92,8 +92,10 @@ export default function PlanningOverlays({
                   "Format tanggal YYYY-MM-DD",
                   "Shift hanya 1/2",
                   "Group hanya R/W",
-                  "1TR dan 2TR wajib angka",
+                  "TT, OEE, 1TR, dan 2TR wajib angka",
+                  "Ratio format, contoh 1:4",
                   "OT boleh decimal",
+                  "Total Plan dihitung dari 1TR + 2TR",
                   "Jika data sudah ada maka akan update",
                 ].map((rule) => (
                   <li key={rule} className="flex items-start gap-2">

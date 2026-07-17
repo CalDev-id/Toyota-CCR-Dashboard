@@ -3,6 +3,7 @@
 import { auth } from "@/auth";
 import {
   getEditableColumns,
+  getConflictColumns,
   getPlanningColumns,
   getPrimaryColumn,
   quotedColumn,
@@ -35,6 +36,7 @@ function normalizeValue(value: unknown, column: PlanningColumn) {
 }
 
 function buildPayload(
+  part: PlanningPartKey,
   body: Record<string, unknown>,
   columns: PlanningColumn[],
   mode: "create" | "update",
@@ -48,6 +50,11 @@ function buildPayload(
     }
   }
 
+  if (part === "assy") {
+    const { groupColumn } = getConflictColumns(columns);
+    payload[groupColumn.field] = "N";
+  }
+
   return payload;
 }
 
@@ -56,25 +63,33 @@ export async function insertPlanningRows(
   columns: PlanningColumn[],
   rows: Record<string, unknown>[],
 ) {
+  const normalizedRows =
+    part === "assy"
+      ? rows.map((row) => {
+          const { groupColumn } = getConflictColumns(columns);
+
+          return { ...row, [groupColumn.field]: "N" };
+        })
+      : rows;
   const writableColumns = getEditableColumns(columns, "create").filter((column) =>
-    rows.some((row) => Object.prototype.hasOwnProperty.call(row, column.field)),
+    normalizedRows.some((row) => Object.prototype.hasOwnProperty.call(row, column.field)),
   );
 
-  if (writableColumns.length === 0 || rows.length === 0) {
+  if (writableColumns.length === 0 || normalizedRows.length === 0) {
     return 0;
   }
 
   const fields = writableColumns.map((column) => quotedColumn(column.field)).join(", ");
   const placeholders = `(${writableColumns.map(() => "?").join(", ")})`;
-  const sql = `INSERT INTO ${quotedTable(part)} (${fields}) VALUES ${rows
+  const sql = `INSERT INTO ${quotedTable(part)} (${fields}) VALUES ${normalizedRows
     .map(() => placeholders)
     .join(", ")}`;
-  const values = rows.flatMap((row) =>
+  const values = normalizedRows.flatMap((row) =>
     writableColumns.map((column) => normalizeValue(row[column.field], column)),
   );
 
   await getReportPrisma().$executeRawUnsafe(sql, ...values);
-  return rows.length;
+  return normalizedRows.length;
 }
 
 async function updatePlanningRow(
@@ -84,7 +99,7 @@ async function updatePlanningRow(
   body: Record<string, unknown>,
 ) {
   const primary = getPrimaryColumn(columns);
-  const payload = buildPayload(body, columns, "update");
+  const payload = buildPayload(part, body, columns, "update");
   const entries = Object.entries(payload);
 
   if (entries.length === 0) {
@@ -122,7 +137,7 @@ export async function createPlanningRowAction(
 
   const part = requirePlanningPart(partParam);
   const columns = await getPlanningColumns(part);
-  const payload = buildPayload(body, columns, "create");
+  const payload = buildPayload(part, body, columns, "create");
   const inserted = await insertPlanningRows(part, columns, [payload]);
 
   revalidatePath("/planning");
