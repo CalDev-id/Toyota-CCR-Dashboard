@@ -41,7 +41,7 @@ export default function PlanningTable({
   setDeleteTarget,
 }: PlanningTableProps) {
   const isDateField = (column: PlanningColumn) => column.inputType === "date";
-  const isRemarkField = (column: PlanningColumn) => column.field.toLowerCase() === "remark";
+  const isRemarkField = (column: PlanningColumn) => column.field.toLowerCase() === "fremarks";
   const isOtField = (column: PlanningColumn) =>
     ["ot", "fot"].includes(column.field.toLowerCase());
   const isTrField = (column: PlanningColumn) =>
