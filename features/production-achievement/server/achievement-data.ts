@@ -66,19 +66,41 @@ function buildDateShiftWhere(date: string, shift: string) {
   };
 }
 
+async function hasColumn(tableName: string, columnName: string) {
+  const rows = await getReportPrisma()
+    .$queryRawUnsafe<Array<{ Field: string }>>(
+      `SHOW COLUMNS FROM ${quoteIdentifier(tableName)} LIKE ?`,
+      columnName,
+    )
+    .catch(() => []);
+
+  return rows.length > 0;
+}
+
+async function productionAchievementActExpression(line: ProductionAchievementLineConfig) {
+  if (line.key === "assy") {
+    return quoteIdentifier("Prod_act");
+  }
+
+  return (await hasColumn(summaryViewName(line.summaryView), "Prod_realtime"))
+    ? quoteIdentifier("Prod_realtime")
+    : "NULL";
+}
+
 async function getProductionAchievementSummaryRows(
   line: ProductionAchievementLineConfig,
   date: string,
   shift: string,
 ) {
   const { where, values } = buildDateShiftWhere(date, shift);
+  const actExpression = await productionAchievementActExpression(line);
 
   return getReportPrisma().$queryRawUnsafe<RawProductionAchievementSummaryRow[]>(
     `SELECT
       Variant AS variant,
       TT AS tt,
       Prod_plan AS prodPlan,
-      Prod_act AS prodAct,
+      ${actExpression} AS prodAct,
       Balance AS balance,
       OEE AS oee
     FROM ${quoteIdentifier(summaryViewName(line.summaryView))}
