@@ -28,7 +28,7 @@ function normalizeValue(value: unknown, column: PlanningColumn) {
   }
 
   if (column.inputType === "number") {
-    const numberValue = Number(value);
+    const numberValue = Number(String(value).trim().replace(",", "."));
     return Number.isFinite(numberValue) ? numberValue : null;
   }
 

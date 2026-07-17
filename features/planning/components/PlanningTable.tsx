@@ -46,6 +46,7 @@ export default function PlanningTable({
     ["ot", "fot"].includes(column.field.toLowerCase());
   const isTrField = (column: PlanningColumn) =>
     ["f1tr", "f2tr"].includes(column.field.toLowerCase());
+  const isNumberField = (column: PlanningColumn) => column.inputType === "number";
   const isCompactField = (column: PlanningColumn) =>
     ["shift", "fshift", "group", "fgroup", "tt", "ftt", "oee", "foee", "ratio", "fratio", "f1tr", "f2tr"].includes(column.field.toLowerCase());
 
@@ -203,7 +204,8 @@ export default function PlanningTable({
                                     ? "w-14 min-w-14"
                                     : "w-24"
                             }`}
-                            type={column.inputType}
+                            inputMode={isNumberField(column) ? "decimal" : undefined}
+                            type={isNumberField(column) ? "text" : column.inputType}
                           />
                         ) : (
                           <span
