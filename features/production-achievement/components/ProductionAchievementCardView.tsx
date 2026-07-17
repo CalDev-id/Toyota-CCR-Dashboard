@@ -32,12 +32,15 @@ function formatStopTime(value: number) {
   return `${formatNumberAuto(value)} min`;
 }
 
-function meetsOeeTarget(value: number | null) {
-  if (value === null) {
+function meetsOeeTarget(value: number | null, target: number | null) {
+  if (value === null || target === null) {
     return false;
   }
 
-  return (Math.abs(value) <= 1 ? value * 100 : value) >= 90;
+  const normalizedValue = Math.abs(value) <= 1 ? value * 100 : value;
+  const normalizedTarget = Math.abs(target) <= 1 ? target * 100 : target;
+
+  return normalizedValue >= normalizedTarget;
 }
 
 function getOeeTargetClass(value: number | null, target: number | null) {
@@ -131,7 +134,8 @@ export default function ProductionAchievementCardView({
 }: {
   card: ProductionAchievementCard;
 }) {
-  const isTargetMet = meetsOeeTarget(card.oee);
+  const isTargetMet = meetsOeeTarget(card.oee, card.oeeTarget);
+  const targetLabel = formatPercent(card.oeeTarget);
   const hasProblems = card.problems.length > 0;
 
   return (
@@ -149,7 +153,7 @@ export default function ProductionAchievementCardView({
               : "bg-[#fef3f2] text-[#d92d20] dark:bg-[#3b1111] dark:text-[#fda29b]"
           }`}
           aria-label={isTargetMet ? "OEE target met" : "OEE below target"}
-          title={isTargetMet ? "OEE >= 90%" : "OEE < 90%"}
+          title={isTargetMet ? `OEE >= ${targetLabel}` : `OEE < ${targetLabel}`}
         >
           {isTargetMet ? (
             <svg

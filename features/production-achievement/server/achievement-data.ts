@@ -66,25 +66,12 @@ function buildDateShiftWhere(date: string, shift: string) {
   };
 }
 
-async function hasColumn(tableName: string, columnName: string) {
-  const rows = await getReportPrisma()
-    .$queryRawUnsafe<Array<{ Field: string }>>(
-      `SHOW COLUMNS FROM ${quoteIdentifier(tableName)} LIKE ?`,
-      columnName,
-    )
-    .catch(() => []);
-
-  return rows.length > 0;
-}
-
-async function productionAchievementActExpression(line: ProductionAchievementLineConfig) {
+function productionAchievementActExpression(line: ProductionAchievementLineConfig) {
   if (line.key === "assy") {
     return quoteIdentifier("Prod_act");
   }
 
-  return (await hasColumn(summaryViewName(line.summaryView), "Prod_realtime"))
-    ? quoteIdentifier("Prod_realtime")
-    : "NULL";
+  return quoteIdentifier("Prod_realtime");
 }
 
 async function getProductionAchievementSummaryRows(
@@ -93,21 +80,45 @@ async function getProductionAchievementSummaryRows(
   shift: string,
 ) {
   const { where, values } = buildDateShiftWhere(date, shift);
-  const actExpression = await productionAchievementActExpression(line);
-
-  return getReportPrisma().$queryRawUnsafe<RawProductionAchievementSummaryRow[]>(
-    `SELECT
+  const actExpression = productionAchievementActExpression(line);
+  const summaryView = summaryViewName(line.summaryView);
+  const sql = `SELECT
       Variant AS variant,
       TT AS tt,
       Prod_plan AS prodPlan,
       ${actExpression} AS prodAct,
       Balance AS balance,
       OEE AS oee
-    FROM ${quoteIdentifier(summaryViewName(line.summaryView))}
+    FROM ${quoteIdentifier(summaryView)}
+    ${where}
+    ORDER BY SHIFT ASC, SHOP ASC, Variant ASC`;
+
+  try {
+    return await getReportPrisma().$queryRawUnsafe<RawProductionAchievementSummaryRow[]>(
+      sql,
+      ...values,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (line.key === "assy" || !message.includes("Prod_realtime")) {
+      throw error;
+    }
+
+    return getReportPrisma().$queryRawUnsafe<RawProductionAchievementSummaryRow[]>(
+      `SELECT
+      Variant AS variant,
+      TT AS tt,
+      Prod_plan AS prodPlan,
+      NULL AS prodAct,
+      Balance AS balance,
+      OEE AS oee
+    FROM ${quoteIdentifier(summaryView)}
     ${where}
     ORDER BY SHIFT ASC, SHOP ASC, Variant ASC`,
-    ...values,
-  );
+      ...values,
+    );
+  }
 }
 
 async function getProductionAchievementProblemRows(
@@ -320,7 +331,7 @@ function buildLineCard(
       pairDivisor,
     oee: average(summaryRows.map((row) => toNumber(row.oee))),
     tt: toPlainString(summaryRows.find((row) => String(row.tt ?? "").trim())?.tt),
-    oeeTarget: 90,
+    oeeTarget: line.key === "camshaft" ? 93 : 90,
     balance:
       summaryRows.reduce((total, row) => total + toNumber(row.balance), 0) /
       balanceDivisor,
