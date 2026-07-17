@@ -15,6 +15,7 @@ const migrations = [
   "../database/migrations/20260714_monthly_oee_daily_override.sql",
   "../database/migrations/20260714_daily_plan_header_detail.sql",
   "../database/migrations/20260715_daily_monthly_sync.sql",
+  "../database/migrations/20260716_assy_monthly_parameters.sql",
 ];
 const connection = await mariadb.createConnection({ host: url.hostname, port: Number(url.port || 3306), user: decodeURIComponent(url.username), password: decodeURIComponent(url.password), database: url.pathname.slice(1), multipleStatements: true });
 
