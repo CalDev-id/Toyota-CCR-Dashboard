@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed:user": "node scripts/seed-user.mjs",
+    "migrate:app": "node scripts/migrate-daily-planning.mjs",
     "migrate:daily-planning": "node scripts/migrate-daily-planning.mjs",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",

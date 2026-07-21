@@ -51,8 +51,8 @@ Yang perlu dicek:
    SHOW TABLES LIKE 't_daily_production_plan';
    SHOW TABLES LIKE 't_daily_production_plan_slot';
 
-3. Kalau tabel Daily Planning belum ada, jalankan:
-   npm run migrate:daily-planning
+3. Kalau tabel app/Daily Planning belum ada, jalankan:
+   npm run migrate:app
    atau dari container node sesuai setup server.
 
 4. Cek report DB monthly row contoh sesuai tanggal UI:

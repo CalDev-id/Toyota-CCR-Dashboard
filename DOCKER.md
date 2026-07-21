@@ -63,7 +63,7 @@ Compose akan:
 
 1. Menyalakan MariaDB.
 2. Menunggu database ready.
-3. Menjalankan `npm run prisma:push`.
+3. Menjalankan `npm run migrate:app` untuk membuat tabel app yang belum ada tanpa drop data.
 4. Menjalankan `npm run seed:user`.
 5. Menyalakan aplikasi Next.js.
 
@@ -129,7 +129,9 @@ Lalu jalankan:
 
 ```bash
 npm run prisma:generate
-npm run prisma:push
+npm run migrate:app
 npm run seed:user
 npm run dev
 ```
+
+Jangan jalankan `npm run prisma:push` ke database kantor/production. Prisma schema app ini tidak memetakan semua tabel yang ada di database, jadi `db push` bisa mencoba drop tabel yang tidak ada di schema.
