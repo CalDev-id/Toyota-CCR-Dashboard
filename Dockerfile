@@ -1,6 +1,7 @@
 FROM node:22-alpine AS base
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+RUN apk add --no-cache tzdata
 
 FROM base AS deps
 COPY package.json package-lock.json ./
@@ -17,8 +18,11 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV TZ=Asia/Jakarta
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
+
+RUN apk add --no-cache tzdata
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
