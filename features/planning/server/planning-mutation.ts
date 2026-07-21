@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import {
   getEditableColumns,
   getConflictColumns,
+  getPlanningDateKey,
   getPlanningColumns,
   getPrimaryColumn,
   quotedColumn,
@@ -35,6 +36,49 @@ function normalizeValue(value: unknown, column: PlanningColumn) {
   return value;
 }
 
+function findColumn(columns: PlanningColumn[], candidates: string[]) {
+  return candidates
+    .map((candidate) =>
+      columns.find((column) => column.field.toLowerCase() === candidate.toLowerCase()),
+    )
+    .find(Boolean);
+}
+
+function getRatioFallback(columns: PlanningColumn[], row: Record<string, unknown>) {
+  const ratioColumn = findColumn(columns, ["fratio", "ratio"]);
+  const oneTrColumn = findColumn(columns, ["f1tr"]);
+  const twoTrColumn = findColumn(columns, ["f2tr"]);
+
+  if (
+    !ratioColumn ||
+    !oneTrColumn ||
+    !twoTrColumn ||
+    String(row[ratioColumn.field] ?? "").trim()
+  ) {
+    return null;
+  }
+
+  const oneTr = Number(String(row[oneTrColumn.field] ?? "").trim().replace(",", "."));
+  const twoTr = Number(String(row[twoTrColumn.field] ?? "").trim().replace(",", "."));
+
+  if (!Number.isFinite(oneTr) || !Number.isFinite(twoTr) || oneTr <= 0 || twoTr <= 0) {
+    return null;
+  }
+
+  const precision = 1000;
+  let left = Math.round(oneTr * precision);
+  let right = Math.round(twoTr * precision);
+
+  while (right !== 0) {
+    const remainder = left % right;
+    left = right;
+    right = remainder;
+  }
+
+  const divisor = left || 1;
+  return `${Math.round(oneTr * precision) / divisor}:${Math.round(twoTr * precision) / divisor}`;
+}
+
 function buildPayload(
   part: PlanningPartKey,
   body: Record<string, unknown>,
@@ -59,11 +103,7 @@ function buildPayload(
 }
 
 function dateKey(value: unknown) {
-  if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
-  }
-
-  return String(value ?? "").slice(0, 10);
+  return getPlanningDateKey(value);
 }
 
 async function assertUniquePlanningBatch(
@@ -114,16 +154,26 @@ export async function insertPlanningRows(
           return { ...row, [groupColumn.field]: "N" };
         })
       : rows;
+  const rowsWithRatio = normalizedRows.map((row) => {
+    const ratio = getRatioFallback(columns, row);
+
+    if (!ratio) {
+      return row;
+    }
+
+    const ratioColumn = findColumn(columns, ["fratio", "ratio"]);
+    return { ...row, [ratioColumn!.field]: ratio };
+  });
   const writableColumns = getEditableColumns(columns, "create").filter((column) =>
-    normalizedRows.some((row) => Object.prototype.hasOwnProperty.call(row, column.field)),
+    rowsWithRatio.some((row) => Object.prototype.hasOwnProperty.call(row, column.field)),
   );
 
-  if (writableColumns.length === 0 || normalizedRows.length === 0) {
+  if (writableColumns.length === 0 || rowsWithRatio.length === 0) {
     return 0;
   }
 
   if (!options.skipDuplicateCheck) {
-    for (const row of normalizedRows) {
+    for (const row of rowsWithRatio) {
       await assertUniquePlanningBatch(part, columns, row);
     }
   }
@@ -133,12 +183,12 @@ export async function insertPlanningRows(
   const sql = `INSERT INTO ${quotedTable(part)} (${fields}) VALUES ${normalizedRows
     .map(() => placeholders)
     .join(", ")}`;
-  const values = normalizedRows.flatMap((row) =>
+  const values = rowsWithRatio.flatMap((row) =>
     writableColumns.map((column) => normalizeValue(row[column.field], column)),
   );
 
   await getReportPrisma().$executeRawUnsafe(sql, ...values);
-  return normalizedRows.length;
+  return rowsWithRatio.length;
 }
 
 async function updatePlanningRow(

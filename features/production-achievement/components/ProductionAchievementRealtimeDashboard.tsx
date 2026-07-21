@@ -29,6 +29,10 @@ function formatWeekday(value: string) {
   }).format(parseDashboardDate(value));
 }
 
+function formatShiftLabel(value: string) {
+  return value.toUpperCase() === "NIGHT" ? "Night" : "Day";
+}
+
 async function fetchDashboard(date: string, shift: string) {
   const params = new URLSearchParams({ date, shift });
   const response = await fetch(`/api/production-achievement?${params.toString()}`, {
@@ -99,7 +103,7 @@ export default function ProductionAchievementRealtimeDashboard({
         <div className="grid gap-4 lg:grid-cols-[minmax(280px,1fr)_auto_auto] lg:items-center">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight text-[#101828] dark:text-[#f8fafc] md:text-3xl">
-              Production Achievement
+              Production Achievement ({formatShiftLabel(dashboard.shift)})
             </h1>
             <div className="mt-3 flex flex-wrap items-center gap-2.5 text-sm font-semibold text-[#667085] dark:text-[#a7b0c0]">
               <svg

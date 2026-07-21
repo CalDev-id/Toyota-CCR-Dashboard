@@ -3,6 +3,7 @@
 import { auth } from "@/auth";
 import {
   getConflictColumns,
+  getPlanningDateKey,
   getPlanningColumns,
   quotedColumn,
   quotedTable,
@@ -23,11 +24,7 @@ async function requireSession() {
 }
 
 function dateKey(value: unknown) {
-  if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
-  }
-
-  return String(value ?? "").slice(0, 10);
+  return getPlanningDateKey(value);
 }
 
 function getBatchKeys(rows: Record<string, unknown>[], columns: PlanningColumn[]) {
@@ -132,13 +129,13 @@ async function replaceExistingBatches(
 }
 
 function normalizeImportRows(part: PlanningPartKey, columns: PlanningColumn[], rows: Record<string, unknown>[]) {
-  if (part !== "assy") {
-    return rows;
-  }
+  const { dateColumn, groupColumn } = getConflictColumns(columns);
 
-  const { groupColumn } = getConflictColumns(columns);
-
-  return rows.map((row) => ({ ...row, [groupColumn.field]: "N" }));
+  return rows.map((row) => ({
+    ...row,
+    [dateColumn.field]: dateKey(row[dateColumn.field]),
+    ...(part === "assy" ? { [groupColumn.field]: "N" } : {}),
+  }));
 }
 
 export async function importPlanningRowsAction(
@@ -165,7 +162,7 @@ export async function importPlanningRowsAction(
 
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(
     workbook.Sheets[sheetName],
-    { defval: "" },
+    { defval: "", raw: false },
   );
 
   if (rows.length === 0) {
