@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
 type ProductionAchievementFiltersProps = {
   date: string;
   shift: string;
@@ -13,13 +11,10 @@ export default function ProductionAchievementFilters({
   shift,
   onFilterChange,
 }: ProductionAchievementFiltersProps) {
-  const [draftDate, setDraftDate] = useState(date);
-  const [draftShift, setDraftShift] = useState(shift);
-
   function updateFilter(next: { date?: string; shift?: string }) {
     onFilterChange({
-      date: next.date ?? draftDate,
-      shift: next.shift ?? draftShift,
+      date: next.date ?? date,
+      shift: next.shift ?? shift,
     });
   }
 
@@ -31,10 +26,9 @@ export default function ProductionAchievementFilters({
           className="h-10 rounded-lg border border-[#d0d5dd] bg-white px-3 text-sm font-semibold text-[#101828] shadow-sm outline-none transition focus:border-[#465fff] focus:ring-2 focus:ring-[#ecf3ff] dark:border-[#384860] dark:bg-[#111827] dark:text-[#f8fafc] dark:focus:ring-[#14245a]"
           name="date"
           type="date"
-          value={draftDate}
+          value={date}
           onBlur={(event) => updateFilter({ date: event.target.value })}
           onChange={(event) => {
-            setDraftDate(event.target.value);
             updateFilter({ date: event.target.value });
           }}
           onKeyDown={(event) => {
@@ -51,13 +45,11 @@ export default function ProductionAchievementFilters({
           <select
             className="h-10 w-full appearance-none rounded-lg border border-[#d0d5dd] bg-white py-0 pl-3 pr-10 text-sm font-semibold text-[#101828] shadow-sm outline-none transition focus:border-[#465fff] focus:ring-2 focus:ring-[#ecf3ff] dark:border-[#384860] dark:bg-[#111827] dark:text-[#f8fafc] dark:focus:ring-[#14245a]"
             name="shift"
-            value={draftShift}
+            value={shift}
             onChange={(event) => {
-              setDraftShift(event.target.value);
               updateFilter({ shift: event.target.value });
             }}
           >
-            <option value="all">All Shift</option>
             <option value="DAY">Day</option>
             <option value="NIGHT">Night</option>
           </select>

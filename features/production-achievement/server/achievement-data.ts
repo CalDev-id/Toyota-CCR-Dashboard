@@ -7,6 +7,8 @@ import type {
   RawProductionAchievementProblemRow,
   RawProductionAchievementSummaryRow,
 } from "@/features/production-achievement/types";
+import { loadDailyPlanningData } from "@/features/daily-planning/server/daily-planning-service";
+import { prisma } from "@/lib/prisma";
 import { getReportPrisma } from "@/lib/report-prisma";
 import { summaryViewName } from "@/lib/report-views";
 
@@ -48,6 +50,17 @@ const productionAchievementLineConfigs: ProductionAchievementLineConfig[] = [
   },
 ];
 
+const monthlyPlanningTables: Record<
+  ProductionAchievementLineConfig["key"],
+  string
+> = {
+  assy: "t_plan_daily_production_assy",
+  cylblock: "t_plan_daily_production_cylblock",
+  cylhead: "t_plan_daily_production_cylhead",
+  crankshaft: "t_plan_daily_production_crankshaft",
+  camshaft: "t_plan_daily_production_camshaft",
+};
+
 function quoteIdentifier(value: string) {
   return `\`${value.replaceAll("`", "``")}\``;
 }
@@ -72,6 +85,50 @@ function productionAchievementActExpression(line: ProductionAchievementLineConfi
   }
 
   return quoteIdentifier("Prod_realtime");
+}
+
+function getProductionAchievementShiftValue(shift: string) {
+  if (shift === "DAY") {
+    return "1";
+  }
+
+  if (shift === "NIGHT") {
+    return "2";
+  }
+
+  return null;
+}
+
+function shiftAliases(value: string) {
+  return value === "DAY"
+    ? ["1", "Day", "DAY", "day"]
+    : value === "NIGHT"
+      ? ["2", "Night", "NIGHT", "night"]
+      : [value];
+}
+
+async function getMonthlyPlanningParameters(
+  line: ProductionAchievementLineConfig,
+  date: string,
+  shift: string,
+) {
+  const shifts = shiftAliases(shift);
+  const rows = await getReportPrisma().$queryRawUnsafe<
+    Array<{ tt: unknown; oeeTarget: unknown }>
+  >(
+    `SELECT ftt AS tt, foee AS oeeTarget FROM ${quoteIdentifier(
+      monthlyPlanningTables[line.key],
+    )} WHERE DATE(fdate)=? AND TRIM(fshift) IN (${shifts
+      .map(() => "?")
+      .join(",")}) ORDER BY TRIM(fgroup) ASC LIMIT 1`,
+    date,
+    ...shifts,
+  );
+
+  return {
+    tt: toPlainString(rows[0]?.tt),
+    oeeTarget: toNumber(rows[0]?.oeeTarget),
+  };
 }
 
 async function getProductionAchievementSummaryRows(
@@ -180,14 +237,209 @@ function average(values: number[]) {
   return values.reduce((total, value) => total + value, 0) / values.length;
 }
 
+function parseTimeMinutes(value: string) {
+  const [hour, minute] = value.split(":").map(Number);
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    return 0;
+  }
+
+  return hour * 60 + minute;
+}
+
+function getCurrentTimeMinutes() {
+  const date = new Date();
+
+  return date.getHours() * 60 + date.getMinutes();
+}
+
 function normalizeDate(value: string | null | undefined) {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : getTodayKey();
 }
 
 function normalizeShift(value: string | null | undefined) {
-  const normalized = String(value ?? "all").trim().toUpperCase();
+  const normalized = String(value ?? "").trim().toUpperCase();
 
-  return normalized === "DAY" || normalized === "NIGHT" ? normalized : "all";
+  return normalized === "DAY" || normalized === "NIGHT"
+    ? normalized
+    : getActiveShiftLabel();
+}
+
+function getActiveShiftLabel() {
+  const current = getCurrentTimeMinutes();
+  const dayStart = parseTimeMinutes("07:00");
+  const nightStart = parseTimeMinutes("19:30");
+
+  return current >= dayStart && current < nightStart ? "DAY" : "NIGHT";
+}
+
+function getActiveShiftValue() {
+  return getActiveShiftLabel() === "DAY" ? "1" : "2";
+}
+
+function isToday(date: string) {
+  return date === getTodayKey();
+}
+
+function getComparableTimeMinutes(value: string, shiftValue: string) {
+  const minutes = parseTimeMinutes(value);
+
+  return shiftValue === "2" && minutes < parseTimeMinutes("12:00")
+    ? minutes + 24 * 60
+    : minutes;
+}
+
+function getCurrentMinutesFromSelectedDate(date: string) {
+  const current = new Date();
+  const selected = new Date(`${date}T00:00:00`);
+
+  return Math.floor((current.getTime() - selected.getTime()) / 60000);
+}
+
+type RawDailyPlanningSlotRow = {
+  lineKey: string;
+  shiftValue: string;
+  slotOrder: string | number | null;
+  startTime: string;
+  endTime: string;
+  totalTarget: string | number | null;
+  oneTr: string | number | null;
+  twoTr: string | number | null;
+};
+
+type DailyPlanningPlanOverride = {
+  prodPlan: number;
+  variants: Map<string, number>;
+};
+
+function getPlanningSlotBounds(row: RawDailyPlanningSlotRow) {
+  const startMinutes = getComparableTimeMinutes(row.startTime, row.shiftValue);
+  let endMinutes = getComparableTimeMinutes(row.endTime, row.shiftValue);
+
+  if (endMinutes < startMinutes) {
+    endMinutes += 24 * 60;
+  }
+
+  return { startMinutes, endMinutes };
+}
+
+function shouldIncludePlanningSlot(
+  slot: RawDailyPlanningSlotRow,
+  currentMinutes: number,
+) {
+  const { startMinutes, endMinutes } = getPlanningSlotBounds(slot);
+
+  return endMinutes <= currentMinutes || startMinutes <= currentMinutes;
+}
+
+async function getDailyPlanningPlanOverrides(date: string, shift: string) {
+  const requestedShift = getProductionAchievementShiftValue(shift);
+  const shiftValues = requestedShift
+    ? [requestedShift]
+    : isToday(date)
+      ? [getActiveShiftValue()]
+      : ["1", "2"];
+  const currentMinutes = getCurrentMinutesFromSelectedDate(date);
+
+  await Promise.all(
+    productionAchievementLineConfigs.map((line) =>
+      Promise.all(
+        shiftValues.map((shiftValue) =>
+          loadDailyPlanningData(line.key, date, shiftValue).catch(() => null),
+        ),
+      ),
+    ),
+  );
+
+  const rows = await prisma.$queryRawUnsafe<RawDailyPlanningSlotRow[]>(
+    `
+    SELECT
+      plan.line_key AS lineKey,
+      plan.fshift AS shiftValue,
+      slot.slot_order AS slotOrder,
+      TIME_FORMAT(slot.start_time, '%H:%i') AS startTime,
+      TIME_FORMAT(slot.end_time, '%H:%i') AS endTime,
+      slot.total_target AS totalTarget,
+      slot.one_tr AS oneTr,
+      slot.two_tr AS twoTr
+    FROM t_daily_production_plan_slot slot
+    INNER JOIN t_daily_production_plan plan ON plan.id = slot.daily_plan_id
+    WHERE plan.fdate = ?
+      AND plan.fshift IN (${shiftValues.map(() => "?").join(",")})
+      AND (
+        plan.fgroup = 'all'
+        OR NOT EXISTS (
+          SELECT 1
+          FROM t_daily_production_plan all_plan
+          WHERE all_plan.line_key = plan.line_key
+            AND all_plan.fdate = plan.fdate
+            AND all_plan.fshift = plan.fshift
+            AND all_plan.fgroup = 'all'
+        )
+      )
+    ORDER BY plan.line_key ASC, slot.slot_order ASC
+  `,
+    date,
+    ...shiftValues,
+  );
+  const overrides = new Map<string, DailyPlanningPlanOverride>();
+  const groupedRows = new Map<string, RawDailyPlanningSlotRow[]>();
+
+  for (const row of rows) {
+    const key = `${row.lineKey}-${row.shiftValue}`;
+    groupedRows.set(key, [...(groupedRows.get(key) ?? []), row]);
+  }
+
+  function addPlanningRow(row: RawDailyPlanningSlotRow) {
+    const current = overrides.get(row.lineKey) ?? {
+      prodPlan: 0,
+      variants: new Map<string, number>(),
+    };
+    const oneTr = toNumber(row.oneTr);
+    const twoTr = toNumber(row.twoTr);
+
+    current.prodPlan += toNumber(row.totalTarget);
+    current.variants.set("1TR", (current.variants.get("1TR") ?? 0) + oneTr);
+    current.variants.set("2TR", (current.variants.get("2TR") ?? 0) + twoTr);
+    overrides.set(row.lineKey, current);
+  }
+
+  for (const rowsInShift of groupedRows.values()) {
+    const sortedRows = rowsInShift.sort(
+      (a, b) => Number(a.slotOrder ?? 0) - Number(b.slotOrder ?? 0),
+    );
+
+    const firstRow = sortedRows[0];
+    const lastRow = sortedRows[sortedRows.length - 1];
+
+    if (!firstRow || !lastRow) {
+      continue;
+    }
+
+    const { startMinutes: firstStartMinutes } = getPlanningSlotBounds(firstRow);
+    const { endMinutes: lastEndMinutes } = getPlanningSlotBounds(lastRow);
+
+    if (currentMinutes < firstStartMinutes) {
+      addPlanningRow(firstRow);
+      continue;
+    }
+
+    if (currentMinutes >= lastEndMinutes) {
+      for (const row of sortedRows) {
+        addPlanningRow(row);
+      }
+
+      continue;
+    }
+
+    for (const row of sortedRows) {
+      if (shouldIncludePlanningSlot(row, currentMinutes)) {
+        addPlanningRow(row);
+      }
+    }
+  }
+
+  return overrides;
 }
 
 function getProblemCandidates(row: RawProductionAchievementProblemRow[]) {
@@ -284,6 +536,7 @@ function buildVariantName(line: ProductionAchievementLineConfig, value: string |
 function buildVariants(
   line: ProductionAchievementLineConfig,
   rows: RawProductionAchievementSummaryRow[],
+  planOverride?: DailyPlanningPlanOverride,
 ) {
   const grouped = new Map<string, ProductionAchievementVariant>();
 
@@ -300,10 +553,26 @@ function buildVariants(
       prodAct: 0,
       balance: 0,
     };
-    current.prodPlan += toNumber(row.prodPlan);
     current.prodAct += toNumber(row.prodAct);
-    current.balance += toNumber(row.balance);
+    current.prodPlan += 0;
+    current.balance = current.prodAct - current.prodPlan;
     grouped.set(name, current);
+  }
+
+  if (planOverride) {
+    for (const [variant, plan] of planOverride.variants.entries()) {
+      const name = buildVariantName(line, variant);
+      const current = grouped.get(name) ?? {
+        name,
+        prodPlan: 0,
+        prodAct: 0,
+        balance: 0,
+      };
+
+      current.prodPlan = plan;
+      current.balance = current.prodAct - current.prodPlan;
+      grouped.set(name, current);
+    }
   }
 
   return Array.from(grouped.values()).sort((a, b) =>
@@ -315,29 +584,28 @@ function buildLineCard(
   line: ProductionAchievementLineConfig,
   summaryRows: RawProductionAchievementSummaryRow[],
   problemRows: RawProductionAchievementProblemRow[],
+  monthlyParameters: { tt: string; oeeTarget: number },
+  planOverride?: DailyPlanningPlanOverride,
 ): ProductionAchievementCard {
-  const balanceDivisor = line.key === "camshaft" ? 2 : 1;
   const pairDivisor = line.key === "camshaft" ? 2 : 1;
+  const prodPlan = planOverride?.prodPlan ?? 0;
+  const prodAct =
+    summaryRows.reduce((total, row) => total + toNumber(row.prodAct), 0) /
+    pairDivisor;
 
   return {
     key: line.key,
     label: line.label,
     imageSrc: line.imageSrc,
-    prodPlan:
-      summaryRows.reduce((total, row) => total + toNumber(row.prodPlan), 0) /
-      pairDivisor,
-    prodAct:
-      summaryRows.reduce((total, row) => total + toNumber(row.prodAct), 0) /
-      pairDivisor,
+    prodPlan,
+    prodAct,
     oee: average(summaryRows.map((row) => toNumber(row.oee))),
-    tt: toPlainString(summaryRows.find((row) => String(row.tt ?? "").trim())?.tt),
-    oeeTarget: line.key === "camshaft" ? 93 : 90,
-    balance:
-      summaryRows.reduce((total, row) => total + toNumber(row.balance), 0) /
-      balanceDivisor,
+    tt: monthlyParameters.tt || toPlainString(summaryRows.find((row) => String(row.tt ?? "").trim())?.tt),
+    oeeTarget: monthlyParameters.oeeTarget || (line.key === "camshaft" ? 93 : 90),
+    balance: prodAct - prodPlan,
     stopTime: buildStopTime(problemRows),
     problems: buildProblems(line, problemRows),
-    variants: buildVariants(line, summaryRows),
+    variants: buildVariants(line, summaryRows, planOverride),
   };
 }
 
@@ -347,14 +615,25 @@ export async function getProductionAchievementDashboard(filters?: {
 }): Promise<ProductionAchievementDashboard> {
   const date = normalizeDate(filters?.date);
   const shift = normalizeShift(filters?.shift);
+  const planOverrides = await getDailyPlanningPlanOverrides(date, shift);
   const lineCards = await Promise.all(
     productionAchievementLineConfigs.map(async (line) => {
-      const [summaryRows, problemRows] = await Promise.all([
+      const [summaryRows, problemRows, monthlyParameters] = await Promise.all([
         getProductionAchievementSummaryRows(line, date, shift),
         getProductionAchievementProblemRows(line, date, shift),
+        getMonthlyPlanningParameters(line, date, shift).catch(() => ({
+          tt: "",
+          oeeTarget: 0,
+        })),
       ]);
 
-      return buildLineCard(line, summaryRows, problemRows);
+      return buildLineCard(
+        line,
+        summaryRows,
+        problemRows,
+        monthlyParameters,
+        planOverrides.get(line.key),
+      );
     }),
   );
 

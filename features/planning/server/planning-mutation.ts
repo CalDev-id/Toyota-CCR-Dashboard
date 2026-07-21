@@ -58,10 +58,53 @@ function buildPayload(
   return payload;
 }
 
+function dateKey(value: unknown) {
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  return String(value ?? "").slice(0, 10);
+}
+
+async function assertUniquePlanningBatch(
+  part: PlanningPartKey,
+  columns: PlanningColumn[],
+  row: Record<string, unknown>,
+) {
+  const { dateColumn, shiftColumn, groupColumn } = getConflictColumns(columns);
+  const date = dateKey(row[dateColumn.field]);
+  const shift = String(row[shiftColumn.field] ?? "").trim();
+  const group = String(row[groupColumn.field] ?? "").trim();
+
+  if (!date || !shift || !group) {
+    return;
+  }
+
+  const existing = await getReportPrisma().$queryRawUnsafe<
+    Array<{ count: bigint | number }>
+  >(
+    `SELECT COUNT(*) AS count FROM ${quotedTable(part)} WHERE DATE(${quotedColumn(
+      dateColumn.field,
+    )}) = ? AND ${quotedColumn(shiftColumn.field)} = ? AND ${quotedColumn(
+      groupColumn.field,
+    )} = ?`,
+    date,
+    shift,
+    group,
+  );
+
+  if (Number(existing[0]?.count ?? 0) > 0) {
+    throw new Error(
+      `Planning data already exists for date ${date}, shift ${shift}, group ${group}`,
+    );
+  }
+}
+
 export async function insertPlanningRows(
   part: PlanningPartKey,
   columns: PlanningColumn[],
   rows: Record<string, unknown>[],
+  options: { skipDuplicateCheck?: boolean } = {},
 ) {
   const normalizedRows =
     part === "assy"
@@ -77,6 +120,12 @@ export async function insertPlanningRows(
 
   if (writableColumns.length === 0 || normalizedRows.length === 0) {
     return 0;
+  }
+
+  if (!options.skipDuplicateCheck) {
+    for (const row of normalizedRows) {
+      await assertUniquePlanningBatch(part, columns, row);
+    }
   }
 
   const fields = writableColumns.map((column) => quotedColumn(column.field)).join(", ");

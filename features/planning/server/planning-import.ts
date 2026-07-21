@@ -50,6 +50,32 @@ function getBatchKeys(rows: Record<string, unknown>[], columns: PlanningColumn[]
   };
 }
 
+function findDuplicateRowsInBatch(
+  rows: Record<string, unknown>[],
+  columns: PlanningColumn[],
+) {
+  const { dateColumn, shiftColumn, groupColumn } = getConflictColumns(columns);
+  const counts = new Map<string, { count: number; date: string; shift: string; group: string }>();
+
+  for (const row of rows) {
+    const date = dateKey(row[dateColumn.field]);
+    const shift = String(row[shiftColumn.field] ?? "").trim();
+    const group = String(row[groupColumn.field] ?? "").trim();
+
+    if (!date || !shift || !group) {
+      continue;
+    }
+
+    const key = `${date}||${shift}||${group}`;
+    const current = counts.get(key) ?? { count: 0, date, shift, group };
+    counts.set(key, { ...current, count: current.count + 1 });
+  }
+
+  return Array.from(counts.values())
+    .filter((item) => item.count > 1)
+    .map(({ date, shift, group }) => ({ date, shift, group }));
+}
+
 async function findExistingBatches(
   part: PlanningPartKey,
   columns: PlanningColumn[],
@@ -148,6 +174,16 @@ export async function importPlanningRowsAction(
 
   const columns = await getPlanningColumns(part);
   const normalizedRows = normalizeImportRows(part, columns, rows);
+  const duplicateRows = findDuplicateRowsInBatch(normalizedRows, columns);
+
+  if (duplicateRows.length > 0) {
+    return {
+      error: "Import contains duplicate date, shift, and group data",
+      status: 409,
+      conflicts: duplicateRows,
+    };
+  }
+
   const conflicts = await findExistingBatches(part, columns, normalizedRows);
 
   if (conflicts.length > 0 && !overwrite) {
@@ -162,7 +198,9 @@ export async function importPlanningRowsAction(
     await replaceExistingBatches(part, columns, normalizedRows);
   }
 
-  const inserted = await insertPlanningRows(part, columns, normalizedRows);
+  const inserted = await insertPlanningRows(part, columns, normalizedRows, {
+    skipDuplicateCheck: true,
+  });
 
   revalidatePath("/planning");
 

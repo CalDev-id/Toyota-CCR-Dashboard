@@ -100,13 +100,12 @@ export default function DailyPlanningClient() {
   const [date, setDate] = useState(today);
   const [part, setPart] = useState("cylblock");
   const [shift, setShift] = useState("1");
-  const [group, setGroup] = useState("R");
   const [data, setData] = useState<DailyData | null>(null);
   const [editing, setEditing] = useState<Record<number, EditingRow>>({});
   const [isSaving, setIsSaving] = useState(false);
 
   async function refresh() {
-    const nextData = await loadDailyPlanning(part, date, shift, part === "assy" ? "all" : group);
+    const nextData = await loadDailyPlanning(part, date, shift);
     startTransition(() => {
       setData(nextData);
       setEditing(makeEditingRows(nextData.rows));
@@ -115,17 +114,15 @@ export default function DailyPlanningClient() {
 
   useEffect(() => {
     void (async () => {
-      const nextData = await loadDailyPlanning(part, date, shift, part === "assy" ? "all" : group);
+      const nextData = await loadDailyPlanning(part, date, shift);
       startTransition(() => {
         setData(nextData);
         setEditing(makeEditingRows(nextData.rows));
       });
     })();
-  }, [date, group, part, shift]);
+  }, [date, part, shift]);
 
   const visibleRows = data?.rows ?? [];
-  const isAssy = part === "assy";
-  const effectiveGroup = isAssy ? "all" : group;
   const emptyMessage = data && !data.hasMonthlyData ? data.message : "Tidak ada data daily planning.";
   const changedRows = visibleRows.filter((row: DailyRow) => hasRowChanges(row, editing[row.id]));
   const hasPendingUpdates = changedRows.length > 0;
@@ -186,7 +183,6 @@ export default function DailyPlanningClient() {
           part,
           date,
           shift,
-          effectiveGroup,
           parseDecimal(next.ftt),
           next.fratio,
         );
@@ -242,13 +238,12 @@ export default function DailyPlanningClient() {
         >
           <div>
             <h2 className="text-base font-semibold text-[#101828]">{formatPart(part)} Detail</h2>
-            <p className="mt-1 text-sm text-[#667085]">{isAssy ? "Daily planning filtered by date and shift" : "Daily planning filtered by date, shift, and group"}</p>
+            <p className="mt-1 text-sm text-[#667085]">Daily planning filtered by date and shift</p>
           </div>
-          <div className={`grid gap-2 ${isAssy ? "sm:grid-cols-[160px_170px_112px_auto]" : "sm:grid-cols-[160px_170px_112px_112px_auto]"} sm:items-end`}>
+          <div className="grid gap-2 sm:grid-cols-[160px_170px_112px_auto] sm:items-end">
             <label className="block"><span className="sr-only">Date</span><input className="h-10 w-full rounded-lg border border-[#e4e7ec] px-3 text-sm font-medium text-[#344054]" type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
-            <label className="relative block"><span className="sr-only">Line</span><select className="h-10 w-full appearance-none rounded-lg border border-[#e4e7ec] bg-white px-3 pr-10 text-sm font-medium text-[#344054]" value={part} onChange={(event) => { setPart(event.target.value); if (event.target.value === "assy") setGroup("all"); }}>{parts.map((item) => <option key={item} value={item}>{formatPart(item)}</option>)}</select><svg viewBox="0 0 24 24" aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#667085]"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg></label>
+            <label className="relative block"><span className="sr-only">Line</span><select className="h-10 w-full appearance-none rounded-lg border border-[#e4e7ec] bg-white px-3 pr-10 text-sm font-medium text-[#344054]" value={part} onChange={(event) => setPart(event.target.value)}>{parts.map((item) => <option key={item} value={item}>{formatPart(item)}</option>)}</select><svg viewBox="0 0 24 24" aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#667085]"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg></label>
             <label className="relative block"><span className="sr-only">Shift</span><select className="h-10 w-full appearance-none rounded-lg border border-[#e4e7ec] bg-white px-3 pr-10 text-sm font-medium text-[#344054]" value={shift} onChange={(event) => setShift(event.target.value)}><option value="1">Day</option><option value="2">Night</option></select><svg viewBox="0 0 24 24" aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#667085]"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg></label>
-            {isAssy ? null : <label className="relative block"><span className="sr-only">Group</span><select className="h-10 w-full appearance-none rounded-lg border border-[#e4e7ec] bg-white px-3 pr-10 text-sm font-medium text-[#344054]" value={group} onChange={(event) => setGroup(event.target.value)}><option value="R">R</option><option value="W">W</option></select><svg viewBox="0 0 24 24" aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#667085]"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg></label>}
             <button
               className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-transparent bg-[#12b76a] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#039855] disabled:cursor-not-allowed disabled:opacity-60"
               disabled={!hasPendingUpdates || isSaving}
