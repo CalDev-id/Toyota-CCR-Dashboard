@@ -3,6 +3,7 @@ services:
     image: mariadb:11.4
     restart: unless-stopped
     environment:
+      TZ: Asia/Jakarta
       MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-toyota_root_password}
       MARIADB_DATABASE: ${MARIADB_DATABASE:-toyota_ccr}
     ports:
@@ -27,6 +28,7 @@ services:
       context: .
       target: builder
     environment:
+      TZ: Asia/Jakarta
       DATABASE_URL: mysql://root:${MARIADB_ROOT_PASSWORD:-toyota_root_password}@db:3306/${MARIADB_DATABASE:-toyota_ccr}
       SEED_USER_NAME: ${SEED_USER_NAME:-Admin CCR}
       SEED_USER_EMAIL: ${SEED_USER_EMAIL:-admin@example.com}
@@ -43,6 +45,7 @@ services:
       target: runner
     restart: unless-stopped
     environment:
+      TZ: Asia/Jakarta
       DATABASE_URL: mysql://root:${MARIADB_ROOT_PASSWORD:-toyota_root_password}@db:3306/${MARIADB_DATABASE:-toyota_ccr}
       REPORT_DATABASE_URL: ${REPORT_DATABASE_URL}
       REPORT_SUMMARY_VIEW_SUFFIX: ${REPORT_SUMMARY_VIEW_SUFFIX:-}

@@ -67,6 +67,8 @@ Compose akan:
 4. Menjalankan `npm run seed:user`.
 5. Menyalakan aplikasi Next.js.
 
+Timezone container diset ke `Asia/Jakarta`, supaya rule shift Day/Night mengikuti jam WIB.
+
 Buka aplikasi:
 
 ```text
