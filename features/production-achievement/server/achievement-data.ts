@@ -2,7 +2,6 @@ import type {
   ProductionAchievementCard,
   ProductionAchievementDashboard,
   ProductionAchievementLineConfig,
-  ProductionAchievementProblem,
   ProductionAchievementVariant,
   RawProductionAchievementProblemRow,
   RawProductionAchievementSummaryRow,
@@ -498,12 +497,9 @@ async function getDailyPlanningPlanOverrides(date: string, shift: string) {
   return overrides;
 }
 
-function getProblemCandidates(row: RawProductionAchievementProblemRow[]) {
-  return row.flatMap((item) => {
-    const defectUnits = toNumber(item.defectC) + toNumber(item.defectM);
-    const rqMinutes = toNumber(item.defectCMin) + toNumber(item.defectMMin);
-
-    return [
+function buildProblems(rows: RawProductionAchievementProblemRow[]) {
+  return rows
+    .flatMap((item) => [
       {
         label: item.problemAv ?? "",
         value: toNumber(item.lsAvMin),
@@ -516,52 +512,10 @@ function getProblemCandidates(row: RawProductionAchievementProblemRow[]) {
         unit: "min" as const,
         type: "PE" as const,
       },
-      {
-        label: item.problemRq ?? "",
-        value: rqMinutes > 0 ? rqMinutes : defectUnits,
-        unit: rqMinutes > 0 ? ("min" as const) : ("unit" as const),
-        type: "RQ" as const,
-      },
-    ];
-  });
-}
-
-function buildProblem(rows: RawProductionAchievementProblemRow[]): ProductionAchievementProblem | null {
-  const problem = getProblemCandidates(rows)
+    ])
     .filter((item) => item.label.trim() && item.value > 0)
-    .sort((a, b) => b.value - a.value)[0];
-
-  return problem ?? null;
-}
-
-function buildProblems(
-  line: ProductionAchievementLineConfig,
-  rows: RawProductionAchievementProblemRow[],
-) {
-  if (line.key === "cylblock") {
-    return rows
-      .flatMap((item) => [
-        {
-          label: item.problemAv ?? "",
-          value: toNumber(item.lsAvMin),
-          unit: "min" as const,
-          type: "AV" as const,
-        },
-        {
-          label: item.problemPe ?? "",
-          value: toNumber(item.lsPeMin),
-          unit: "min" as const,
-          type: "PE" as const,
-        },
-      ])
-      .filter((item) => item.label.trim() && item.value > 0)
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 3);
-  }
-
-  const problem = buildProblem(rows);
-
-  return problem ? [problem] : [];
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 3);
 }
 
 function buildStopTime(rows: RawProductionAchievementProblemRow[]) {
@@ -669,7 +623,7 @@ function buildLineCard(
     oeeTarget: monthlyParameters.oeeTarget || (line.key === "camshaft" ? 93 : 90),
     balance: prodAct - prodPlan,
     stopTime: buildStopTime(problemRows),
-    problems: buildProblems(line, problemRows),
+    problems: buildProblems(problemRows),
     variants: buildVariants(line, summaryRows, planOverride),
   };
 }
