@@ -217,7 +217,7 @@ export default function ProductionAchievementCardView({
         <div className="grid grid-cols-2 gap-2">
           <MetricTile
             label="Balance"
-            value={formatNumberAuto(card.balance)}
+            value={formatNumber(card.balance)}
             valueClassName={getBalanceClass(card.balance)}
             valueSizeClassName="text-lg"
           />
@@ -279,7 +279,7 @@ export default function ProductionAchievementCardView({
                         variant.balance,
                       )}`}
                     >
-                      {formatNumberAuto(variant.balance)}
+                      {formatNumber(variant.balance)}
                     </td>
                   </tr>
                 ))}

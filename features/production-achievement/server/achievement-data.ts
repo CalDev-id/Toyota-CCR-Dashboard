@@ -272,21 +272,6 @@ function isToday(date: string) {
   return date === getTodayKey();
 }
 
-function getComparableTimeMinutes(value: string, shiftValue: string) {
-  const minutes = parseTimeMinutes(value);
-
-  return shiftValue === "2" && minutes < parseTimeMinutes("12:00")
-    ? minutes + 24 * 60
-    : minutes;
-}
-
-function getCurrentMinutesFromSelectedDate(date: string) {
-  const current = new Date();
-  const selected = new Date(`${date}T00:00:00`);
-
-  return Math.floor((current.getTime() - selected.getTime()) / 60000);
-}
-
 type RawDailyPlanningSlotRow = {
   lineKey: string;
   shiftValue: string;
@@ -306,26 +291,6 @@ type DailyPlanningPlanOverride = {
   tt: number;
   workHoursMinutes: number;
 };
-
-function getPlanningSlotBounds(row: RawDailyPlanningSlotRow) {
-  const startMinutes = getComparableTimeMinutes(row.startTime, row.shiftValue);
-  let endMinutes = getComparableTimeMinutes(row.endTime, row.shiftValue);
-
-  if (endMinutes < startMinutes) {
-    endMinutes += 24 * 60;
-  }
-
-  return { startMinutes, endMinutes };
-}
-
-function shouldIncludePlanningSlot(
-  slot: RawDailyPlanningSlotRow,
-  currentMinutes: number,
-) {
-  const { startMinutes, endMinutes } = getPlanningSlotBounds(slot);
-
-  return endMinutes <= currentMinutes || startMinutes <= currentMinutes;
-}
 
 function getLocalDate(value: string) {
   const [year, month, day] = value.split("-").map(Number);
@@ -350,37 +315,45 @@ function getSlotDateBounds(date: string, slot: RawDailyPlanningSlotRow) {
   return { start, end };
 }
 
-function getPlanningWorkHoursMinutes(
+function getPlanningSlotProgress(
   date: string,
-  slots: RawDailyPlanningSlotRow[],
+  slot: RawDailyPlanningSlotRow,
+  now: Date,
 ) {
   const today = getTodayKey();
 
   if (date < today) {
-    return slots.reduce((total, slot) => total + toNumber(slot.prodMinutes), 0);
+    return 1;
   }
 
   if (date > today) {
     return 0;
   }
 
-  const now = new Date();
+  const { start, end } = getSlotDateBounds(date, slot);
+  const duration = end.getTime() - start.getTime();
 
-  return slots.reduce((total, slot) => {
-    const plannedMinutes = toNumber(slot.prodMinutes);
-    const { start, end } = getSlotDateBounds(date, slot);
-    const slotDuration = end.getTime() - start.getTime();
+  if (duration <= 0 || now <= start) {
+    return 0;
+  }
 
-    if (plannedMinutes <= 0 || slotDuration <= 0 || now <= start) {
-      return total;
-    }
+  if (now >= end) {
+    return 1;
+  }
 
-    if (now >= end) {
-      return total + plannedMinutes;
-    }
+  return (now.getTime() - start.getTime()) / duration;
+}
 
-    return total + plannedMinutes * ((now.getTime() - start.getTime()) / slotDuration);
-  }, 0);
+function getPlanningWorkHoursMinutes(
+  date: string,
+  slots: RawDailyPlanningSlotRow[],
+  now: Date,
+) {
+  return slots.reduce(
+    (total, slot) =>
+      total + toNumber(slot.prodMinutes) * getPlanningSlotProgress(date, slot, now),
+    0,
+  );
 }
 
 async function getDailyPlanningPlanOverrides(date: string, shift: string) {
@@ -390,8 +363,6 @@ async function getDailyPlanningPlanOverrides(date: string, shift: string) {
     : isToday(date)
       ? [getActiveShiftValue()]
       : ["1", "2"];
-  const currentMinutes = getCurrentMinutesFromSelectedDate(date);
-
   await Promise.all(
     productionAchievementLineConfigs.map((line) =>
       Promise.all(
@@ -443,7 +414,7 @@ async function getDailyPlanningPlanOverrides(date: string, shift: string) {
     groupedRows.set(key, [...(groupedRows.get(key) ?? []), row]);
   }
 
-  function addPlanningRow(row: RawDailyPlanningSlotRow) {
+  function addPlanningRow(row: RawDailyPlanningSlotRow, progress: number) {
     const current = overrides.get(row.lineKey) ?? {
       prodPlan: 0,
       variants: new Map<string, number>(),
@@ -453,9 +424,9 @@ async function getDailyPlanningPlanOverrides(date: string, shift: string) {
     const oneTr = toNumber(row.oneTr);
     const twoTr = toNumber(row.twoTr);
 
-    current.prodPlan += toNumber(row.totalTarget);
-    current.variants.set("1TR", (current.variants.get("1TR") ?? 0) + oneTr);
-    current.variants.set("2TR", (current.variants.get("2TR") ?? 0) + twoTr);
+    current.prodPlan += toNumber(row.totalTarget) * progress;
+    current.variants.set("1TR", (current.variants.get("1TR") ?? 0) + oneTr * progress);
+    current.variants.set("2TR", (current.variants.get("2TR") ?? 0) + twoTr * progress);
     overrides.set(row.lineKey, current);
   }
 
@@ -465,32 +436,20 @@ async function getDailyPlanningPlanOverrides(date: string, shift: string) {
     );
 
     const firstRow = sortedRows[0];
-    const lastRow = sortedRows[sortedRows.length - 1];
 
-    if (!firstRow || !lastRow) {
+    if (!firstRow) {
       continue;
     }
 
-    const { startMinutes: firstStartMinutes } = getPlanningSlotBounds(firstRow);
-    const { endMinutes: lastEndMinutes } = getPlanningSlotBounds(lastRow);
+    const now = new Date();
 
-    if (currentMinutes < firstStartMinutes) {
-      addPlanningRow(firstRow);
-    } else if (currentMinutes >= lastEndMinutes) {
-      for (const row of sortedRows) {
-        addPlanningRow(row);
-      }
-    } else {
-      for (const row of sortedRows) {
-        if (shouldIncludePlanningSlot(row, currentMinutes)) {
-          addPlanningRow(row);
-        }
-      }
+    for (const row of sortedRows) {
+      addPlanningRow(row, getPlanningSlotProgress(date, row, now));
     }
 
     const current = overrides.get(firstRow.lineKey);
     if (current) {
-      current.workHoursMinutes += getPlanningWorkHoursMinutes(date, sortedRows);
+      current.workHoursMinutes += getPlanningWorkHoursMinutes(date, sortedRows, now);
     }
   }
 
