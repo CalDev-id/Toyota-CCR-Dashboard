@@ -1,5 +1,4 @@
 import { getProductionAchievementDashboard } from "@/features/production-achievement/server/achievement-data";
-import { trackActiveProductionRealtimeStatus } from "@/features/production-achievement/server/realtime-status";
 
 export const dynamic = "force-dynamic";
 
@@ -9,9 +8,6 @@ function getSearchValue(value: string | null) {
 
 export async function GET(request: Request) {
   try {
-    await trackActiveProductionRealtimeStatus().catch((error) => {
-      console.error("Unable to track production realtime status", error);
-    });
     const url = new URL(request.url);
     const dashboard = await getProductionAchievementDashboard({
       date: getSearchValue(url.searchParams.get("date")),

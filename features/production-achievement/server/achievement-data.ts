@@ -9,6 +9,7 @@ import type {
 import { loadDailyPlanningData } from "@/features/daily-planning/server/daily-planning-service";
 import {
   getProductionRealtimeStatus,
+  trackProductionRealtimeStatus,
   type ProductionRealtimeStatus,
 } from "@/features/production-achievement/server/realtime-status";
 import { prisma } from "@/lib/prisma";
@@ -143,6 +144,7 @@ async function getProductionAchievementSummaryRows(
   const actExpression = productionAchievementActExpression(line);
   const summaryView = summaryViewName(line.summaryView);
   const sql = `SELECT
+      SHOP AS shop,
       Variant AS variant,
       TT AS tt,
       Prod_plan AS prodPlan,
@@ -167,6 +169,7 @@ async function getProductionAchievementSummaryRows(
 
     return getReportPrisma().$queryRawUnsafe<RawProductionAchievementSummaryRow[]>(
       `SELECT
+      SHOP AS shop,
       Variant AS variant,
       TT AS tt,
       Prod_plan AS prodPlan,
@@ -605,11 +608,7 @@ export async function getProductionAchievementDashboard(filters?: {
   const date = normalizeDate(filters?.date);
   const shift = normalizeShift(filters?.shift);
   const planOverrides = await getDailyPlanningPlanOverrides(date, shift);
-  const realtimeStatuses: ProductionRealtimeStatus = await getProductionRealtimeStatus(
-    date,
-    shift,
-  ).catch(() => ({}));
-  const lineCards = await Promise.all(
+  const lineData = await Promise.all(
     productionAchievementLineConfigs.map(async (line) => {
       const [summaryRows, problemRows, monthlyParameters] = await Promise.all([
         getProductionAchievementSummaryRows(line, date, shift),
@@ -620,15 +619,32 @@ export async function getProductionAchievementDashboard(filters?: {
         })),
       ]);
 
-      return buildLineCard(
+      return { line, summaryRows, problemRows, monthlyParameters };
+    }),
+  );
+
+  await Promise.all(
+    lineData.map(({ line, summaryRows }) =>
+      trackProductionRealtimeStatus(line.key, date, shift, summaryRows),
+    ),
+  ).catch(() => {
+    // Keep the dashboard available if the app status table is unavailable.
+  });
+
+  const realtimeStatuses: ProductionRealtimeStatus = await getProductionRealtimeStatus(
+    date,
+    shift,
+  ).catch(() => ({}));
+  const lineCards = lineData.map(
+    ({ line, summaryRows, problemRows, monthlyParameters }) =>
+      buildLineCard(
         line,
         summaryRows,
         problemRows,
         monthlyParameters,
         planOverrides.get(line.key),
         realtimeStatuses[line.key] ?? null,
-      );
-    }),
+      ),
   );
 
   return {

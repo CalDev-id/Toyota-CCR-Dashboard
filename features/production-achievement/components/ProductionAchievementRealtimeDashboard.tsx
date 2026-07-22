@@ -89,7 +89,7 @@ export default function ProductionAchievementRealtimeDashboard({
 
     const interval = window.setInterval(() => {
       void refreshDashboard();
-    }, 15000);
+    }, 30000);
 
     return () => {
       isActive = false;

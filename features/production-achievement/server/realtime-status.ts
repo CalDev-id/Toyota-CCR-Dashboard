@@ -1,25 +1,12 @@
 import { createHash } from "node:crypto";
 
-import type { ProductionAchievementLineKey } from "@/features/production-achievement/types";
+import type {
+  ProductionAchievementLineKey,
+  RawProductionAchievementSummaryRow,
+} from "@/features/production-achievement/types";
 import { prisma } from "@/lib/prisma";
-import { getReportPrisma } from "@/lib/report-prisma";
-import { summaryViewName } from "@/lib/report-views";
 
 const trackedLines = ["cylblock", "cylhead", "crankshaft", "camshaft"] as const;
-
-const summaryViews: Record<(typeof trackedLines)[number], string> = {
-  cylblock: "v_cylblock_summary",
-  cylhead: "v_cylhead_summary",
-  crankshaft: "v_crankshaft_summary",
-  camshaft: "v_camshaft_summary",
-};
-
-type SourceRow = {
-  shift: string | null;
-  shop: string | null;
-  variant: string | null;
-  prodRealtime: string | number | null;
-};
 
 type StatusRow = {
   lineKey: string;
@@ -30,54 +17,33 @@ export type ProductionRealtimeStatus = Partial<
   Record<ProductionAchievementLineKey, string>
 >;
 
-function quoteIdentifier(value: string) {
-  return `\`${value.replaceAll("`", "``")}\``;
-}
-
-function dateKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-    date.getDate(),
-  ).padStart(2, "0")}`;
-}
-
-function getActiveProductionContext(now = new Date()) {
-  const minutes = now.getHours() * 60 + now.getMinutes();
-  const isDay = minutes >= 7 * 60 && minutes < 19 * 60 + 30;
-  const reportDate = new Date(now);
-
-  if (!isDay && minutes < 7 * 60) {
-    reportDate.setDate(reportDate.getDate() - 1);
-  }
-
-  return { reportDate: dateKey(reportDate), shift: isDay ? "DAY" : "NIGHT" };
-}
-
-function sourceSignature(rows: SourceRow[]) {
+function sourceSignature(rows: RawProductionAchievementSummaryRow[]) {
   const snapshot = rows.map((row) => [
-    String(row.shift ?? "").trim(),
     String(row.shop ?? "").trim(),
     String(row.variant ?? "").trim(),
-    String(row.prodRealtime ?? "").trim(),
+    String(row.prodAct ?? "").trim(),
   ]);
 
   return createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
 }
 
-async function trackLine(
-  lineKey: (typeof trackedLines)[number],
+function isTrackedLine(
+  lineKey: ProductionAchievementLineKey,
+): lineKey is (typeof trackedLines)[number] {
+  return trackedLines.includes(lineKey as (typeof trackedLines)[number]);
+}
+
+export async function trackProductionRealtimeStatus(
+  lineKey: ProductionAchievementLineKey,
   reportDate: string,
   shift: string,
-  checkedAt: Date,
+  rows: RawProductionAchievementSummaryRow[],
 ) {
-  const view = quoteIdentifier(summaryViewName(summaryViews[lineKey]));
-  const rows = await getReportPrisma().$queryRawUnsafe<SourceRow[]>(
-    `SELECT SHIFT AS shift, SHOP AS shop, Variant AS variant, Prod_realtime AS prodRealtime
-     FROM ${view}
-     WHERE \`DATE\` = ? AND SHIFT2 = ?
-     ORDER BY SHIFT ASC, SHOP ASC, Variant ASC`,
-    reportDate,
-    shift,
-  );
+  if (!isTrackedLine(lineKey)) {
+    return;
+  }
+
+  const checkedAt = new Date();
   const signature = sourceSignature(rows);
 
   await prisma.$executeRawUnsafe(
@@ -94,15 +60,6 @@ async function trackLine(
     checkedAt,
     checkedAt,
     signature,
-  );
-}
-
-export async function trackActiveProductionRealtimeStatus() {
-  const { reportDate, shift } = getActiveProductionContext();
-  const checkedAt = new Date();
-
-  await Promise.all(
-    trackedLines.map((lineKey) => trackLine(lineKey, reportDate, shift, checkedAt)),
   );
 }
 

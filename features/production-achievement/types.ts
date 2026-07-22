@@ -14,6 +14,7 @@ export type ProductionAchievementLineConfig = {
 };
 
 export type RawProductionAchievementSummaryRow = {
+  shop: string | null;
   variant: string | null;
   tt: string | null;
   prodPlan: string | number | null;

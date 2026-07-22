@@ -17,6 +17,39 @@ const lineLabels: Record<LineKey, string> = {
   camshaft: "Camshaft",
 };
 
+function OeeCardSkeleton() {
+  return (
+    <article className="min-h-[168px] animate-pulse rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm dark:border-[#273449] dark:bg-[#111827]">
+      <div className="h-4 w-24 rounded bg-[#eaecf0] dark:bg-[#273449]" />
+      <div className="mt-3 h-8 w-20 rounded bg-[#f2f4f7] dark:bg-[#202d40]" />
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <div className="h-12 rounded-lg bg-[#f2f4f7] dark:bg-[#202d40]" />
+        <div className="h-12 rounded-lg bg-[#f2f4f7] dark:bg-[#202d40]" />
+      </div>
+    </article>
+  );
+}
+
+function ChartSkeleton({ label }: { label: string }) {
+  return (
+    <article className="animate-pulse rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm dark:border-[#273449] dark:bg-[#111827]">
+      <div className="h-4 w-28 rounded bg-[#eaecf0] dark:bg-[#273449]" />
+      <p className="mt-1 text-xs font-medium text-[#98a2b3] dark:text-[#7f8a9d]">
+        {label}
+      </p>
+      <div className="mt-4 flex h-48 items-end gap-2 rounded-xl bg-[#f9fafb] px-4 pb-4 dark:bg-[#162033]">
+        {[42, 68, 54, 80, 61, 74, 48].map((height, index) => (
+          <div
+            key={index}
+            className="flex-1 rounded-t bg-[#e4e7ec] dark:bg-[#273449]"
+            style={{ height: `${height}%` }}
+          />
+        ))}
+      </div>
+    </article>
+  );
+}
+
 function todayKey() {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
@@ -151,9 +184,18 @@ export default function AnalysisPage() {
       ) : null}
 
       {isLoading ? (
-        <div className="mt-4 grid h-40 place-items-center rounded-2xl border border-[#e4e7ec] bg-white text-sm font-medium text-[#667085]">
-          Loading OEE analysis...
-        </div>
+        <>
+          <section className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+            {lines.map((line) => (
+              <OeeCardSkeleton key={line.key} />
+            ))}
+          </section>
+          <section className="mt-4 grid gap-4 xl:grid-cols-5">
+            {lines.map((line) => (
+              <ChartSkeleton key={line.key} label={line.label} />
+            ))}
+          </section>
+        </>
       ) : (
         <>
           <section className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
