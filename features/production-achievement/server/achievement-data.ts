@@ -229,14 +229,6 @@ function getTodayKey() {
   )}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function average(values: number[]) {
-  if (values.length === 0) {
-    return null;
-  }
-
-  return values.reduce((total, value) => total + value, 0) / values.length;
-}
-
 function parseTimeMinutes(value: string) {
   const [hour, minute] = value.split(":").map(Number);
 
@@ -302,14 +294,18 @@ type RawDailyPlanningSlotRow = {
   slotOrder: string | number | null;
   startTime: string;
   endTime: string;
+  prodMinutes: string | number | null;
   totalTarget: string | number | null;
   oneTr: string | number | null;
   twoTr: string | number | null;
+  tt: string | number | null;
 };
 
 type DailyPlanningPlanOverride = {
   prodPlan: number;
   variants: Map<string, number>;
+  tt: number;
+  workHoursMinutes: number;
 };
 
 function getPlanningSlotBounds(row: RawDailyPlanningSlotRow) {
@@ -330,6 +326,62 @@ function shouldIncludePlanningSlot(
   const { startMinutes, endMinutes } = getPlanningSlotBounds(slot);
 
   return endMinutes <= currentMinutes || startMinutes <= currentMinutes;
+}
+
+function getLocalDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+
+  return new Date(year, month - 1, day);
+}
+
+function getSlotDateBounds(date: string, slot: RawDailyPlanningSlotRow) {
+  const start = getLocalDate(date);
+  const [startHour, startMinute] = slot.startTime.split(":").map(Number);
+  const [endHour, endMinute] = slot.endTime.split(":").map(Number);
+
+  start.setHours(startHour, startMinute, 0, 0);
+
+  const end = getLocalDate(date);
+  end.setHours(endHour, endMinute, 0, 0);
+
+  if (end <= start) {
+    end.setDate(end.getDate() + 1);
+  }
+
+  return { start, end };
+}
+
+function getPlanningWorkHoursMinutes(
+  date: string,
+  slots: RawDailyPlanningSlotRow[],
+) {
+  const today = getTodayKey();
+
+  if (date < today) {
+    return slots.reduce((total, slot) => total + toNumber(slot.prodMinutes), 0);
+  }
+
+  if (date > today) {
+    return 0;
+  }
+
+  const now = new Date();
+
+  return slots.reduce((total, slot) => {
+    const plannedMinutes = toNumber(slot.prodMinutes);
+    const { start, end } = getSlotDateBounds(date, slot);
+    const slotDuration = end.getTime() - start.getTime();
+
+    if (plannedMinutes <= 0 || slotDuration <= 0 || now <= start) {
+      return total;
+    }
+
+    if (now >= end) {
+      return total + plannedMinutes;
+    }
+
+    return total + plannedMinutes * ((now.getTime() - start.getTime()) / slotDuration);
+  }, 0);
 }
 
 async function getDailyPlanningPlanOverrides(date: string, shift: string) {
@@ -359,9 +411,11 @@ async function getDailyPlanningPlanOverrides(date: string, shift: string) {
       slot.slot_order AS slotOrder,
       TIME_FORMAT(slot.start_time, '%H:%i') AS startTime,
       TIME_FORMAT(slot.end_time, '%H:%i') AS endTime,
+      slot.prod_minutes AS prodMinutes,
       slot.total_target AS totalTarget,
       slot.one_tr AS oneTr,
-      slot.two_tr AS twoTr
+      slot.two_tr AS twoTr,
+      COALESCE(plan.override_tt, plan.source_tt) AS tt
     FROM t_daily_production_plan_slot slot
     INNER JOIN t_daily_production_plan plan ON plan.id = slot.daily_plan_id
     WHERE plan.fdate = ?
@@ -394,6 +448,8 @@ async function getDailyPlanningPlanOverrides(date: string, shift: string) {
     const current = overrides.get(row.lineKey) ?? {
       prodPlan: 0,
       variants: new Map<string, number>(),
+      tt: toNumber(row.tt),
+      workHoursMinutes: 0,
     };
     const oneTr = toNumber(row.oneTr);
     const twoTr = toNumber(row.twoTr);
@@ -421,21 +477,21 @@ async function getDailyPlanningPlanOverrides(date: string, shift: string) {
 
     if (currentMinutes < firstStartMinutes) {
       addPlanningRow(firstRow);
-      continue;
-    }
-
-    if (currentMinutes >= lastEndMinutes) {
+    } else if (currentMinutes >= lastEndMinutes) {
       for (const row of sortedRows) {
         addPlanningRow(row);
       }
-
-      continue;
+    } else {
+      for (const row of sortedRows) {
+        if (shouldIncludePlanningSlot(row, currentMinutes)) {
+          addPlanningRow(row);
+        }
+      }
     }
 
-    for (const row of sortedRows) {
-      if (shouldIncludePlanningSlot(row, currentMinutes)) {
-        addPlanningRow(row);
-      }
+    const current = overrides.get(firstRow.lineKey);
+    if (current) {
+      current.workHoursMinutes += getPlanningWorkHoursMinutes(date, sortedRows);
     }
   }
 
@@ -592,6 +648,15 @@ function buildLineCard(
   const prodAct =
     summaryRows.reduce((total, row) => total + toNumber(row.prodAct), 0) /
     pairDivisor;
+  const effectiveTt =
+    planOverride?.tt ||
+    toNumber(monthlyParameters.tt) ||
+    toNumber(summaryRows.find((row) => String(row.tt ?? "").trim())?.tt);
+  const workHoursMinutes = planOverride?.workHoursMinutes ?? 0;
+  const oee =
+    effectiveTt > 0 && workHoursMinutes > 0
+      ? (prodAct * effectiveTt * 100) / workHoursMinutes
+      : null;
 
   return {
     key: line.key,
@@ -599,8 +664,8 @@ function buildLineCard(
     imageSrc: line.imageSrc,
     prodPlan,
     prodAct,
-    oee: average(summaryRows.map((row) => toNumber(row.oee))),
-    tt: monthlyParameters.tt || toPlainString(summaryRows.find((row) => String(row.tt ?? "").trim())?.tt),
+    oee,
+    tt: effectiveTt ? toPlainString(effectiveTt) : "",
     oeeTarget: monthlyParameters.oeeTarget || (line.key === "camshaft" ? 93 : 90),
     balance: prodAct - prodPlan,
     stopTime: buildStopTime(problemRows),
