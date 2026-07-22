@@ -1,0 +1,45 @@
+app-1  | Production Achievement timing {
+app-1  |   date: '2026-07-22',
+app-1  |   shift: 'DAY',
+app-1  |   totalMs: 2087,
+app-1  |   planningMs: 61,
+app-1  |   statusMs: 9,
+app-1  |   statusReadMs: 1,
+app-1  |   lines: {
+app-1  |     assy: { summaryMs: 18, problemMs: 9, monthlyMs: 13 },
+app-1  |     cylblock: { summaryMs: 1992, problemMs: 8, monthlyMs: 16 },
+app-1  |     cylhead: { summaryMs: 1778, problemMs: 22, monthlyMs: 21 },
+app-1  |     crankshaft: { summaryMs: 1785, problemMs: 24, monthlyMs: 32 },
+app-1  |     camshaft: { summaryMs: 2015, problemMs: 8, monthlyMs: 33 }
+app-1  |   }
+app-1  | }
+app-1  | Production Achievement timing {
+app-1  |   date: '2026-07-22',
+app-1  |   shift: 'DAY',
+app-1  |   totalMs: 2541,
+app-1  |   planningMs: 65,
+app-1  |   statusMs: 19,
+app-1  |   statusReadMs: 2,
+app-1  |   lines: {
+app-1  |     assy: { summaryMs: 20, problemMs: 19, monthlyMs: 18 },
+app-1  |     cylblock: { summaryMs: 2454, problemMs: 19, monthlyMs: 18 },
+app-1  |     cylhead: { summaryMs: 1963, problemMs: 30, monthlyMs: 22 },
+app-1  |     crankshaft: { summaryMs: 2019, problemMs: 34, monthlyMs: 22 },
+app-1  |     camshaft: { summaryMs: 2274, problemMs: 19, monthlyMs: 23 }
+app-1  |   }
+app-1  | }
+app-1  | Production Achievement timing {
+app-1  |   date: '2026-07-22',
+app-1  |   shift: 'DAY',
+app-1  |   totalMs: 3401,
+app-1  |   planningMs: 62,
+app-1  |   statusMs: 7,
+app-1  |   statusReadMs: 2,
+app-1  |   lines: {
+app-1  |     assy: { summaryMs: 23, problemMs: 20, monthlyMs: 25 },
+app-1  |     cylblock: { summaryMs: 3322, problemMs: 13, monthlyMs: 30 },
+app-1  |     cylhead: { summaryMs: 3159, problemMs: 37, monthlyMs: 39 },
+app-1  |     crankshaft: { summaryMs: 3247, problemMs: 32, monthlyMs: 42 },
+app-1  |     camshaft: { summaryMs: 3329, problemMs: 18, monthlyMs: 46 }
+app-1  |   }
+app-1  | }
