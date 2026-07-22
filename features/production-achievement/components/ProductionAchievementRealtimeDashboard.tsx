@@ -4,7 +4,7 @@ import ProductionAchievementCardView from "@/features/production-achievement/com
 import ProductionAchievementClock from "@/features/production-achievement/components/ProductionAchievementClock";
 import ProductionAchievementFilters from "@/features/production-achievement/components/ProductionAchievementFilters";
 import type { ProductionAchievementDashboard } from "@/features/production-achievement/types";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type ProductionAchievementRealtimeDashboardProps = {
   initialDashboard: ProductionAchievementDashboard;
@@ -52,8 +52,11 @@ export default function ProductionAchievementRealtimeDashboard({
 }: ProductionAchievementRealtimeDashboardProps) {
   const [dashboard, setDashboard] =
     useState<ProductionAchievementDashboard>(initialDashboard);
+  const [isFilterLoading, setIsFilterLoading] = useState(false);
+  const filterRequestRef = useRef(0);
 
   async function handleFilterChange(next: { date?: string; shift?: string }) {
+    const requestId = ++filterRequestRef.current;
     const nextDate = next.date ?? dashboard.date;
     const nextShift = next.shift ?? dashboard.shift;
     const params = new URLSearchParams({ date: nextDate, shift: nextShift });
@@ -63,12 +66,20 @@ export default function ProductionAchievementRealtimeDashboard({
       "",
       `/production-achievement?${params.toString()}`,
     );
+    setIsFilterLoading(true);
 
     try {
       const nextDashboard = await fetchDashboard(nextDate, nextShift);
-      setDashboard(nextDashboard);
+
+      if (requestId === filterRequestRef.current) {
+        setDashboard(nextDashboard);
+      }
     } catch {
       // Keep the last successful snapshot visible if a filter refresh fails.
+    } finally {
+      if (requestId === filterRequestRef.current) {
+        setIsFilterLoading(false);
+      }
     }
   }
 
@@ -139,12 +150,47 @@ export default function ProductionAchievementRealtimeDashboard({
         </div>
       </div>
 
-      <div className="overflow-x-auto pb-2 [scrollbar-gutter:stable] xl:overflow-visible xl:pb-0">
-        <div className="grid auto-cols-[320px] grid-flow-col gap-3 xl:grid-flow-row xl:grid-cols-5 xl:auto-cols-auto">
-          {dashboard.cards.map((card) => (
-            <ProductionAchievementCardView key={card.key} card={card} />
-          ))}
+      <div className="relative">
+        <div
+          className={`overflow-x-auto pb-2 [scrollbar-gutter:stable] transition-opacity xl:overflow-visible xl:pb-0 ${
+            isFilterLoading ? "pointer-events-none opacity-40" : ""
+          }`}
+        >
+          <div className="grid auto-cols-[320px] grid-flow-col gap-3 xl:grid-flow-row xl:grid-cols-5 xl:auto-cols-auto">
+            {dashboard.cards.map((card) => (
+              <ProductionAchievementCardView key={card.key} card={card} />
+            ))}
+          </div>
         </div>
+
+        {isFilterLoading ? (
+          <div className="absolute inset-0 grid place-items-center rounded-2xl bg-white/45 backdrop-blur-[1px] dark:bg-[#101828]/45">
+            <div className="flex items-center gap-2 rounded-full border border-[#d0d5dd] bg-white px-4 py-2 text-sm font-semibold text-[#344054] shadow-sm dark:border-[#384860] dark:bg-[#162033] dark:text-[#d4dae5]">
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                className="size-4 animate-spin text-[#465fff]"
+                fill="none"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="9"
+                  stroke="currentColor"
+                  strokeOpacity="0.25"
+                  strokeWidth="3"
+                />
+                <path
+                  d="M12 3a9 9 0 0 1 9 9"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="3"
+                />
+              </svg>
+              Updating data...
+            </div>
+          </div>
+        ) : null}
       </div>
     </section>
   );

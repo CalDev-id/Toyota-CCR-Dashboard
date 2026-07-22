@@ -50,10 +50,6 @@ function quoteIdentifier(value: string) {
   return `\`${value.replaceAll("`", "``")}\``;
 }
 
-function elapsedMilliseconds(startedAt: number) {
-  return Math.round(performance.now() - startedAt);
-}
-
 export async function getAnalysisLineRows(
   line: AnalysisLine,
   start: string,
@@ -433,33 +429,16 @@ function buildDailyGap(line: AnalysisLine, rows: RawAnalysisOeeRow[]) {
 }
 
 export async function getAnalysisOee(dateParam: string | null) {
-  const startedAt = performance.now();
   const range = parseDate(dateParam);
   const days = getRangeDays(range.year, range.month, range.dayCount);
   const entries = await Promise.all(
     analysisLines.map(async (line) => {
-      const summaryStartedAt = performance.now();
-      const problemStartedAt = performance.now();
-      const [summaryResult, problemResult] = await Promise.all([
-        getAnalysisLineRows(line, range.start, range.endExclusive).then((rows) => ({
-          rows,
-          ms: elapsedMilliseconds(summaryStartedAt),
-        })),
-        getAnalysisProblemRows(line, range.date, range.endExclusive).then((rows) => ({
-          rows,
-          ms: elapsedMilliseconds(problemStartedAt),
-        })),
+      const [rows, problemRows] = await Promise.all([
+        getAnalysisLineRows(line, range.start, range.endExclusive),
+        getAnalysisProblemRows(line, range.date, range.endExclusive),
       ]);
 
-      return {
-        line,
-        rows: summaryResult.rows,
-        problemRows: problemResult.rows,
-        timing: {
-          summaryMs: summaryResult.ms,
-          problemMs: problemResult.ms,
-        },
-      };
+      return { line, rows, problemRows };
     }),
   );
   const cards = entries.map((entry) =>
@@ -596,7 +575,7 @@ export async function getAnalysisOee(dateParam: string | null) {
     return row;
   });
 
-  const response = {
+  return {
     date: range.date,
     start: range.start,
     end: range.date,
@@ -618,18 +597,4 @@ export async function getAnalysisOee(dateParam: string | null) {
     })),
   };
 
-  const totalMs = elapsedMilliseconds(startedAt);
-
-  if (totalMs >= 500) {
-    console.info("Asakai Board timing", {
-      date: range.date,
-      range: `${range.start} to ${range.endExclusive}`,
-      totalMs,
-      lines: Object.fromEntries(
-        entries.map(({ line, timing }) => [line.key, timing]),
-      ),
-    });
-  }
-
-  return response;
 }
