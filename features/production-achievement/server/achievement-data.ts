@@ -565,10 +565,14 @@ function buildLineCard(
     planOverride?.tt ||
     toNumber(monthlyParameters.tt) ||
     toNumber(summaryRows.find((row) => String(row.tt ?? "").trim())?.tt);
+  const actualTt = toPlainString(
+    summaryRows.find((row) => String(row.tt ?? "").trim())?.tt,
+  );
+  const actualTtValue = toNumber(actualTt);
   const workHoursMinutes = planOverride?.workHoursMinutes ?? 0;
   const oee =
-    effectiveTt > 0 && workHoursMinutes > 0
-      ? (prodAct * effectiveTt * 100) / workHoursMinutes
+    actualTtValue > 0 && workHoursMinutes > 0
+      ? (prodAct * actualTtValue * 100) / workHoursMinutes
       : null;
 
   return {
@@ -578,7 +582,8 @@ function buildLineCard(
     prodPlan,
     prodAct,
     oee,
-    tt: effectiveTt ? toPlainString(effectiveTt) : "",
+    ttAct: actualTt,
+    ttPlan: effectiveTt ? toPlainString(effectiveTt) : "",
     oeeTarget: monthlyParameters.oeeTarget || (line.key === "camshaft" ? 93 : 90),
     balance: prodAct - prodPlan,
     stopTime: buildStopTime(problemRows),

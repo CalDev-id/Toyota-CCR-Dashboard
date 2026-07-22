@@ -230,8 +230,8 @@ export default function ProductionAchievementCardView({
         </div>
         <div className="grid grid-cols-2 gap-2">
           <MetricTile
-            label="TT"
-            value={formatTt(card.tt)}
+            label="TT Act / Plan"
+            value={`${formatTt(card.ttAct)} / ${formatTt(card.ttPlan)}`}
             valueSizeClassName="text-lg"
           />
           <MetricTile
