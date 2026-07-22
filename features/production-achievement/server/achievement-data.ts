@@ -69,10 +69,6 @@ function quoteIdentifier(value: string) {
   return `\`${value.replaceAll("`", "``")}\``;
 }
 
-function elapsedMilliseconds(startedAt: number) {
-  return Math.round(performance.now() - startedAt);
-}
-
 function buildDateShiftWhere(date: string, shift: string) {
   if (shift === "all") {
     return {
@@ -609,49 +605,24 @@ export async function getProductionAchievementDashboard(filters?: {
   date?: string | null;
   shift?: string | null;
 }): Promise<ProductionAchievementDashboard> {
-  const startedAt = performance.now();
   const date = normalizeDate(filters?.date);
   const shift = normalizeShift(filters?.shift);
-  const planningStartedAt = performance.now();
   const planOverrides = await getDailyPlanningPlanOverrides(date, shift);
-  const planningMs = elapsedMilliseconds(planningStartedAt);
   const lineData = await Promise.all(
     productionAchievementLineConfigs.map(async (line) => {
-      const summaryStartedAt = performance.now();
-      const problemStartedAt = performance.now();
-      const monthlyStartedAt = performance.now();
-      const [summaryResult, problemResult, monthlyResult] = await Promise.all([
-        getProductionAchievementSummaryRows(line, date, shift).then((rows) => ({
-          rows,
-          ms: elapsedMilliseconds(summaryStartedAt),
+      const [summaryRows, problemRows, monthlyParameters] = await Promise.all([
+        getProductionAchievementSummaryRows(line, date, shift),
+        getProductionAchievementProblemRows(line, date, shift),
+        getMonthlyPlanningParameters(line, date, shift).catch(() => ({
+          tt: "",
+          oeeTarget: 0,
         })),
-        getProductionAchievementProblemRows(line, date, shift).then((rows) => ({
-          rows,
-          ms: elapsedMilliseconds(problemStartedAt),
-        })),
-        getMonthlyPlanningParameters(line, date, shift)
-          .catch(() => ({ tt: "", oeeTarget: 0 }))
-          .then((parameters) => ({
-            parameters,
-            ms: elapsedMilliseconds(monthlyStartedAt),
-          })),
       ]);
 
-      return {
-        line,
-        summaryRows: summaryResult.rows,
-        problemRows: problemResult.rows,
-        monthlyParameters: monthlyResult.parameters,
-        timing: {
-          summaryMs: summaryResult.ms,
-          problemMs: problemResult.ms,
-          monthlyMs: monthlyResult.ms,
-        },
-      };
+      return { line, summaryRows, problemRows, monthlyParameters };
     }),
   );
 
-  const statusStartedAt = performance.now();
   await Promise.all(
     lineData.map(({ line, summaryRows }) =>
       trackProductionRealtimeStatus(line.key, date, shift, summaryRows),
@@ -659,14 +630,11 @@ export async function getProductionAchievementDashboard(filters?: {
   ).catch(() => {
     // Keep the dashboard available if the app status table is unavailable.
   });
-  const statusMs = elapsedMilliseconds(statusStartedAt);
 
-  const statusReadStartedAt = performance.now();
   const realtimeStatuses: ProductionRealtimeStatus = await getProductionRealtimeStatus(
     date,
     shift,
   ).catch(() => ({}));
-  const statusReadMs = elapsedMilliseconds(statusReadStartedAt);
   const lineCards = lineData.map(
     ({ line, summaryRows, problemRows, monthlyParameters }) =>
       buildLineCard(
@@ -678,22 +646,6 @@ export async function getProductionAchievementDashboard(filters?: {
         realtimeStatuses[line.key] ?? null,
       ),
   );
-
-  const totalMs = elapsedMilliseconds(startedAt);
-
-  if (totalMs >= 500) {
-    console.info("Production Achievement timing", {
-      date,
-      shift,
-      totalMs,
-      planningMs,
-      statusMs,
-      statusReadMs,
-      lines: Object.fromEntries(
-        lineData.map(({ line, timing }) => [line.key, timing]),
-      ),
-    });
-  }
 
   return {
     date,
