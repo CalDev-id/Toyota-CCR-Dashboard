@@ -2,6 +2,8 @@
 
 import DefaultLayout from "@/components/layouts/DefaultLayout";
 import {
+  addDailyOt,
+  deleteDailyManualOt,
   loadDailyPlanning,
   updateDailySlotSchedule,
   updateDailySharedParameters,
@@ -103,6 +105,8 @@ export default function DailyPlanningClient() {
   const [data, setData] = useState<DailyData | null>(null);
   const [editing, setEditing] = useState<Record<number, EditingRow>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isOtActionPending, setIsOtActionPending] = useState(false);
+  const [isChoosingNightOtPosition, setIsChoosingNightOtPosition] = useState(false);
 
   async function refresh() {
     const nextData = await loadDailyPlanning(part, date, shift);
@@ -126,6 +130,8 @@ export default function DailyPlanningClient() {
   const emptyMessage = data && !data.hasMonthlyData ? data.message : "Tidak ada data daily planning.";
   const changedRows = visibleRows.filter((row: DailyRow) => hasRowChanges(row, editing[row.id]));
   const hasPendingUpdates = changedRows.length > 0;
+  const otRows = visibleRows.filter((row) => row.slot_type === "ot");
+  const canAddOt = Boolean(data?.hasMonthlyData) && (shift === "1" ? otRows.length === 0 : otRows.length < 2);
   const totals = visibleRows.reduce(
     (result: DailyTotals, row: DailyRow) => ({
       minutes: result.minutes + Number(editing[row.id]?.prod_minutes ?? row.prod_minutes),
@@ -229,6 +235,38 @@ export default function DailyPlanningClient() {
     }
   }
 
+  async function handleAddOt(position?: "start" | "end") {
+    setIsOtActionPending(true);
+
+    try {
+      await addDailyOt(part, date, shift, position);
+      await refresh();
+      setIsChoosingNightOtPosition(false);
+    } finally {
+      setIsOtActionPending(false);
+    }
+  }
+
+  async function handleDeleteManualOt(id: number) {
+    setIsOtActionPending(true);
+
+    try {
+      await deleteDailyManualOt(id);
+      await refresh();
+    } finally {
+      setIsOtActionPending(false);
+    }
+  }
+
+  function handleAddOtClick() {
+    if (shift === "2" && otRows.length === 0) {
+      setIsChoosingNightOtPosition(true);
+      return;
+    }
+
+    void handleAddOt();
+  }
+
   return (
     <DefaultLayout>
       <section className="overflow-hidden rounded-2xl border border-[#e4e7ec] bg-white shadow-sm">
@@ -240,7 +278,7 @@ export default function DailyPlanningClient() {
             <h2 className="text-base font-semibold text-[#101828]">{formatPart(part)} Detail</h2>
             <p className="mt-1 text-sm text-[#667085]">Daily planning filtered by date and shift</p>
           </div>
-          <div className="grid gap-2 sm:grid-cols-[160px_170px_112px_auto] sm:items-end">
+          <div className="grid gap-2 sm:grid-cols-[160px_170px_112px_auto_auto] sm:items-end">
             <label className="block"><span className="sr-only">Date</span><input className="h-10 w-full rounded-lg border border-[#e4e7ec] px-3 text-sm font-medium text-[#344054]" type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
             <label className="relative block"><span className="sr-only">Line</span><select className="h-10 w-full appearance-none rounded-lg border border-[#e4e7ec] bg-white px-3 pr-10 text-sm font-medium text-[#344054]" value={part} onChange={(event) => setPart(event.target.value)}>{parts.map((item) => <option key={item} value={item}>{formatPart(item)}</option>)}</select><svg viewBox="0 0 24 24" aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#667085]"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg></label>
             <label className="relative block"><span className="sr-only">Shift</span><select className="h-10 w-full appearance-none rounded-lg border border-[#e4e7ec] bg-white px-3 pr-10 text-sm font-medium text-[#344054]" value={shift} onChange={(event) => setShift(event.target.value)}><option value="1">Day</option><option value="2">Night</option></select><svg viewBox="0 0 24 24" aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#667085]"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg></label>
@@ -264,6 +302,26 @@ export default function DailyPlanningClient() {
               </svg>
               Update
             </button>
+            <button
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-transparent bg-[#2f80ff] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#175cd3] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!canAddOt || isOtActionPending}
+              type="button"
+              onClick={handleAddOtClick}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                className="size-4 shrink-0"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.8"
+              >
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Tambah OT
+            </button>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -281,7 +339,7 @@ export default function DailyPlanningClient() {
 
                 return (
                   <tr key={row.id} className={row.slot_type === "ot" ? "bg-[#f3f7ff] dark:bg-[#0b367c] dark:text-white" : ""} style={row.slot_type === "ot" ? { boxShadow: "inset 4px 0 #2f80ff" } : undefined}>
-                    <td className="px-5 py-3"><div className="flex items-center gap-1"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.start_time} onChange={(event) => setEditingTimeValue(row.id, "start_time", event.target.value)} /><span>-</span><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.end_time} onChange={(event) => setEditingTimeValue(row.id, "end_time", event.target.value)} /></div></td><td className="pl-0 pr-8"><span className="inline-flex h-9 min-w-16 items-center font-semibold text-[#101828]">{current.prod_minutes}</span></td><td className="pl-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.ftt} onChange={(event) => setEditingValue(row.id, "ftt", event.target.value)} /></td><td className="px-2"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.foee} onChange={(event) => setEditingValue(row.id, "foee", event.target.value)} /></td><td className="pl-2 pr-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" value={current.fratio} onChange={(event) => setEditingValue(row.id, "fratio", event.target.value)} /></td>
+                    <td className="px-5 py-3"><div className="flex items-center gap-1"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.start_time} onChange={(event) => setEditingTimeValue(row.id, "start_time", event.target.value)} /><span>-</span><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.end_time} onChange={(event) => setEditingTimeValue(row.id, "end_time", event.target.value)} />{row.slot_type === "ot" && row.is_schedule_override ? <button aria-label="Hapus OT manual" className="ml-1 grid size-8 place-items-center rounded-md text-[#b42318] transition hover:bg-[#fef3f2] disabled:opacity-60" disabled={isOtActionPending} title="Hapus OT manual" type="button" onClick={() => void handleDeleteManualOt(row.id)}><svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5M14 11v5" /></svg></button> : null}</div></td><td className="pl-0 pr-8"><span className="inline-flex h-9 min-w-16 items-center font-semibold text-[#101828]">{current.prod_minutes}</span></td><td className="pl-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.ftt} onChange={(event) => setEditingValue(row.id, "ftt", event.target.value)} /></td><td className="px-2"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.foee} onChange={(event) => setEditingValue(row.id, "foee", event.target.value)} /></td><td className="pl-2 pr-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" value={current.fratio} onChange={(event) => setEditingValue(row.id, "fratio", event.target.value)} /></td>
                     <td className="pl-8"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" inputMode="numeric" value={current.ftotal_target} onChange={(event) => setEditingValue(row.id, "ftotal_target", event.target.value)} /></td><td className="px-2 font-semibold">{row.f1tr}</td><td className="pl-2 pr-5 font-semibold">{row.f2tr}</td>
                   </tr>
                 );
@@ -309,6 +367,32 @@ export default function DailyPlanningClient() {
           </table>
         </div>
       </section>
+      {isChoosingNightOtPosition ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#101828]/45 p-4" role="dialog" aria-modal="true" aria-labelledby="night-ot-title">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl dark:bg-[#111827]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 id="night-ot-title" className="text-lg font-semibold text-[#101828] dark:text-[#f8fafc]">Tambah OT Night</h3>
+                <p className="mt-1 text-sm text-[#667085] dark:text-[#a7b0c0]">Pilih posisi OT Night.</p>
+              </div>
+              <button aria-label="Tutup" className="grid size-8 place-items-center rounded-lg text-[#667085] transition hover:bg-[#f2f4f7] dark:text-[#a7b0c0] dark:hover:bg-[#1f2937]" type="button" onClick={() => setIsChoosingNightOtPosition(false)}>
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2"><path d="m6 6 12 12M18 6 6 18" /></svg>
+              </button>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button className="rounded-xl border border-[#b2ddff] bg-[#f0f9ff] px-3 py-4 text-left transition hover:border-[#2f80ff] hover:bg-[#e0f2fe] disabled:opacity-60 dark:border-[#175cd3] dark:bg-[#102a43] dark:hover:border-[#53b1fd] dark:hover:bg-[#123554]" disabled={isOtActionPending} type="button" onClick={() => void handleAddOt("start")}>
+                <span className="block text-sm font-semibold text-[#175cd3] dark:text-[#84caff]">OT Awal</span>
+                <span className="mt-1 block text-xs text-[#667085] dark:text-[#b2ddff]">Sebelum slot normal pertama · 60 menit</span>
+              </button>
+              <button className="rounded-xl border border-[#abefc6] bg-[#ecfdf3] px-3 py-4 text-left transition hover:border-[#12b76a] hover:bg-[#dcfae6] disabled:opacity-60 dark:border-[#027a48] dark:bg-[#062b1b] dark:hover:border-[#32d583] dark:hover:bg-[#0b3b27]" disabled={isOtActionPending} type="button" onClick={() => void handleAddOt("end")}>
+                <span className="block text-sm font-semibold text-[#027a48] dark:text-[#75e0a7]">OT Akhir</span>
+                <span className="mt-1 block text-xs text-[#667085] dark:text-[#abefc6]">Setelah slot normal terakhir · 30 menit</span>
+              </button>
+            </div>
+            <button className="mt-5 h-10 w-full rounded-lg border border-[#d0d5dd] text-sm font-semibold text-[#344054] transition hover:bg-[#f9fafb] dark:border-[#384860] dark:text-[#d4dae5] dark:hover:bg-[#1f2937]" disabled={isOtActionPending} type="button" onClick={() => setIsChoosingNightOtPosition(false)}>Batal</button>
+          </div>
+        </div>
+      ) : null}
     </DefaultLayout>
   );
 }

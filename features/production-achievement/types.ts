@@ -55,7 +55,8 @@ export type ProductionAchievementCard = {
   prodPlan: number;
   prodAct: number;
   oee: number | null;
-  tt: string;
+  ttAct: string;
+  ttPlan: string;
   oeeTarget: number | null;
   balance: number;
   lastUpdatedAt: string | null;

@@ -125,9 +125,15 @@ export default function PercentLineCanvasChart({
 
   useEffect(() => {
     const scroller = scrollRef.current;
-    if (scroller) {
-      scroller.scrollLeft = 0;
+    if (!scroller) {
+      return;
     }
+
+    const frame = requestAnimationFrame(() => {
+      scroller.scrollLeft = scroller.scrollWidth;
+    });
+
+    return () => cancelAnimationFrame(frame);
   }, [rowDateKey]);
 
   useEffect(() => {

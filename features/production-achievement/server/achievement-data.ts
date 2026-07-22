@@ -2,7 +2,6 @@ import type {
   ProductionAchievementCard,
   ProductionAchievementDashboard,
   ProductionAchievementLineConfig,
-  ProductionAchievementProblem,
   ProductionAchievementVariant,
   RawProductionAchievementProblemRow,
   RawProductionAchievementSummaryRow,
@@ -233,14 +232,6 @@ function getTodayKey() {
   )}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function average(values: number[]) {
-  if (values.length === 0) {
-    return null;
-  }
-
-  return values.reduce((total, value) => total + value, 0) / values.length;
-}
-
 function parseTimeMinutes(value: string) {
   const [hour, minute] = value.split(":").map(Number);
 
@@ -285,55 +276,88 @@ function isToday(date: string) {
   return date === getTodayKey();
 }
 
-function getComparableTimeMinutes(value: string, shiftValue: string) {
-  const minutes = parseTimeMinutes(value);
-
-  return shiftValue === "2" && minutes < parseTimeMinutes("12:00")
-    ? minutes + 24 * 60
-    : minutes;
-}
-
-function getCurrentMinutesFromSelectedDate(date: string) {
-  const current = new Date();
-  const selected = new Date(`${date}T00:00:00`);
-
-  return Math.floor((current.getTime() - selected.getTime()) / 60000);
-}
-
 type RawDailyPlanningSlotRow = {
   lineKey: string;
   shiftValue: string;
   slotOrder: string | number | null;
   startTime: string;
   endTime: string;
+  prodMinutes: string | number | null;
   totalTarget: string | number | null;
   oneTr: string | number | null;
   twoTr: string | number | null;
+  tt: string | number | null;
 };
 
 type DailyPlanningPlanOverride = {
   prodPlan: number;
   variants: Map<string, number>;
+  tt: number;
+  workHoursMinutes: number;
 };
 
-function getPlanningSlotBounds(row: RawDailyPlanningSlotRow) {
-  const startMinutes = getComparableTimeMinutes(row.startTime, row.shiftValue);
-  let endMinutes = getComparableTimeMinutes(row.endTime, row.shiftValue);
+function getLocalDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
 
-  if (endMinutes < startMinutes) {
-    endMinutes += 24 * 60;
-  }
-
-  return { startMinutes, endMinutes };
+  return new Date(year, month - 1, day);
 }
 
-function shouldIncludePlanningSlot(
-  slot: RawDailyPlanningSlotRow,
-  currentMinutes: number,
-) {
-  const { startMinutes, endMinutes } = getPlanningSlotBounds(slot);
+function getSlotDateBounds(date: string, slot: RawDailyPlanningSlotRow) {
+  const start = getLocalDate(date);
+  const [startHour, startMinute] = slot.startTime.split(":").map(Number);
+  const [endHour, endMinute] = slot.endTime.split(":").map(Number);
 
-  return endMinutes <= currentMinutes || startMinutes <= currentMinutes;
+  start.setHours(startHour, startMinute, 0, 0);
+
+  const end = getLocalDate(date);
+  end.setHours(endHour, endMinute, 0, 0);
+
+  if (end <= start) {
+    end.setDate(end.getDate() + 1);
+  }
+
+  return { start, end };
+}
+
+function getPlanningSlotProgress(
+  date: string,
+  slot: RawDailyPlanningSlotRow,
+  now: Date,
+) {
+  const today = getTodayKey();
+
+  if (date < today) {
+    return 1;
+  }
+
+  if (date > today) {
+    return 0;
+  }
+
+  const { start, end } = getSlotDateBounds(date, slot);
+  const duration = end.getTime() - start.getTime();
+
+  if (duration <= 0 || now <= start) {
+    return 0;
+  }
+
+  if (now >= end) {
+    return 1;
+  }
+
+  return (now.getTime() - start.getTime()) / duration;
+}
+
+function getPlanningWorkHoursMinutes(
+  date: string,
+  slots: RawDailyPlanningSlotRow[],
+  now: Date,
+) {
+  return slots.reduce(
+    (total, slot) =>
+      total + toNumber(slot.prodMinutes) * getPlanningSlotProgress(date, slot, now),
+    0,
+  );
 }
 
 async function getDailyPlanningPlanOverrides(date: string, shift: string) {
@@ -343,8 +367,6 @@ async function getDailyPlanningPlanOverrides(date: string, shift: string) {
     : isToday(date)
       ? [getActiveShiftValue()]
       : ["1", "2"];
-  const currentMinutes = getCurrentMinutesFromSelectedDate(date);
-
   await Promise.all(
     productionAchievementLineConfigs.map((line) =>
       Promise.all(
@@ -363,9 +385,11 @@ async function getDailyPlanningPlanOverrides(date: string, shift: string) {
       slot.slot_order AS slotOrder,
       TIME_FORMAT(slot.start_time, '%H:%i') AS startTime,
       TIME_FORMAT(slot.end_time, '%H:%i') AS endTime,
+      slot.prod_minutes AS prodMinutes,
       slot.total_target AS totalTarget,
       slot.one_tr AS oneTr,
-      slot.two_tr AS twoTr
+      slot.two_tr AS twoTr,
+      COALESCE(plan.override_tt, plan.source_tt) AS tt
     FROM t_daily_production_plan_slot slot
     INNER JOIN t_daily_production_plan plan ON plan.id = slot.daily_plan_id
     WHERE plan.fdate = ?
@@ -394,17 +418,19 @@ async function getDailyPlanningPlanOverrides(date: string, shift: string) {
     groupedRows.set(key, [...(groupedRows.get(key) ?? []), row]);
   }
 
-  function addPlanningRow(row: RawDailyPlanningSlotRow) {
+  function addPlanningRow(row: RawDailyPlanningSlotRow, progress: number) {
     const current = overrides.get(row.lineKey) ?? {
       prodPlan: 0,
       variants: new Map<string, number>(),
+      tt: toNumber(row.tt),
+      workHoursMinutes: 0,
     };
     const oneTr = toNumber(row.oneTr);
     const twoTr = toNumber(row.twoTr);
 
-    current.prodPlan += toNumber(row.totalTarget);
-    current.variants.set("1TR", (current.variants.get("1TR") ?? 0) + oneTr);
-    current.variants.set("2TR", (current.variants.get("2TR") ?? 0) + twoTr);
+    current.prodPlan += toNumber(row.totalTarget) * progress;
+    current.variants.set("1TR", (current.variants.get("1TR") ?? 0) + oneTr * progress);
+    current.variants.set("2TR", (current.variants.get("2TR") ?? 0) + twoTr * progress);
     overrides.set(row.lineKey, current);
   }
 
@@ -414,44 +440,29 @@ async function getDailyPlanningPlanOverrides(date: string, shift: string) {
     );
 
     const firstRow = sortedRows[0];
-    const lastRow = sortedRows[sortedRows.length - 1];
 
-    if (!firstRow || !lastRow) {
+    if (!firstRow) {
       continue;
     }
 
-    const { startMinutes: firstStartMinutes } = getPlanningSlotBounds(firstRow);
-    const { endMinutes: lastEndMinutes } = getPlanningSlotBounds(lastRow);
-
-    if (currentMinutes < firstStartMinutes) {
-      addPlanningRow(firstRow);
-      continue;
-    }
-
-    if (currentMinutes >= lastEndMinutes) {
-      for (const row of sortedRows) {
-        addPlanningRow(row);
-      }
-
-      continue;
-    }
+    const now = new Date();
 
     for (const row of sortedRows) {
-      if (shouldIncludePlanningSlot(row, currentMinutes)) {
-        addPlanningRow(row);
-      }
+      addPlanningRow(row, getPlanningSlotProgress(date, row, now));
+    }
+
+    const current = overrides.get(firstRow.lineKey);
+    if (current) {
+      current.workHoursMinutes += getPlanningWorkHoursMinutes(date, sortedRows, now);
     }
   }
 
   return overrides;
 }
 
-function getProblemCandidates(row: RawProductionAchievementProblemRow[]) {
-  return row.flatMap((item) => {
-    const defectUnits = toNumber(item.defectC) + toNumber(item.defectM);
-    const rqMinutes = toNumber(item.defectCMin) + toNumber(item.defectMMin);
-
-    return [
+function buildProblems(rows: RawProductionAchievementProblemRow[]) {
+  return rows
+    .flatMap((item) => [
       {
         label: item.problemAv ?? "",
         value: toNumber(item.lsAvMin),
@@ -464,52 +475,10 @@ function getProblemCandidates(row: RawProductionAchievementProblemRow[]) {
         unit: "min" as const,
         type: "PE" as const,
       },
-      {
-        label: item.problemRq ?? "",
-        value: rqMinutes > 0 ? rqMinutes : defectUnits,
-        unit: rqMinutes > 0 ? ("min" as const) : ("unit" as const),
-        type: "RQ" as const,
-      },
-    ];
-  });
-}
-
-function buildProblem(rows: RawProductionAchievementProblemRow[]): ProductionAchievementProblem | null {
-  const problem = getProblemCandidates(rows)
+    ])
     .filter((item) => item.label.trim() && item.value > 0)
-    .sort((a, b) => b.value - a.value)[0];
-
-  return problem ?? null;
-}
-
-function buildProblems(
-  line: ProductionAchievementLineConfig,
-  rows: RawProductionAchievementProblemRow[],
-) {
-  if (line.key === "cylblock") {
-    return rows
-      .flatMap((item) => [
-        {
-          label: item.problemAv ?? "",
-          value: toNumber(item.lsAvMin),
-          unit: "min" as const,
-          type: "AV" as const,
-        },
-        {
-          label: item.problemPe ?? "",
-          value: toNumber(item.lsPeMin),
-          unit: "min" as const,
-          type: "PE" as const,
-        },
-      ])
-      .filter((item) => item.label.trim() && item.value > 0)
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 3);
-  }
-
-  const problem = buildProblem(rows);
-
-  return problem ? [problem] : [];
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 3);
 }
 
 function buildStopTime(rows: RawProductionAchievementProblemRow[]) {
@@ -597,6 +566,19 @@ function buildLineCard(
   const prodAct =
     summaryRows.reduce((total, row) => total + toNumber(row.prodAct), 0) /
     pairDivisor;
+  const effectiveTt =
+    planOverride?.tt ||
+    toNumber(monthlyParameters.tt) ||
+    toNumber(summaryRows.find((row) => String(row.tt ?? "").trim())?.tt);
+  const actualTt = toPlainString(
+    summaryRows.find((row) => String(row.tt ?? "").trim())?.tt,
+  );
+  const actualTtValue = toNumber(actualTt);
+  const workHoursMinutes = planOverride?.workHoursMinutes ?? 0;
+  const oee =
+    actualTtValue > 0 && workHoursMinutes > 0
+      ? (prodAct * actualTtValue * 100) / workHoursMinutes
+      : null;
 
   return {
     key: line.key,
@@ -604,13 +586,14 @@ function buildLineCard(
     imageSrc: line.imageSrc,
     prodPlan,
     prodAct,
-    oee: average(summaryRows.map((row) => toNumber(row.oee))),
-    tt: monthlyParameters.tt || toPlainString(summaryRows.find((row) => String(row.tt ?? "").trim())?.tt),
+    oee,
+    ttAct: actualTt,
+    ttPlan: effectiveTt ? toPlainString(effectiveTt) : "",
     oeeTarget: monthlyParameters.oeeTarget || (line.key === "camshaft" ? 93 : 90),
     balance: prodAct - prodPlan,
     lastUpdatedAt,
     stopTime: buildStopTime(problemRows),
-    problems: buildProblems(line, problemRows),
+    problems: buildProblems(problemRows),
     variants: buildVariants(line, summaryRows, planOverride),
   };
 }

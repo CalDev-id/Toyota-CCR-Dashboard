@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { AnalysisGapSeriesRow as GapSeriesRow, AnalysisLineKey as LineKey } from "@/features/analysis/types";
 import { formatDayLabel, formatNumber, getChartMinWidth } from "@/features/analysis/components/analysisChartUtils";
 
@@ -10,10 +11,12 @@ export default function DailyGapChart({
   lineKey: LineKey;
   singleShift?: boolean;
 }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
   const chartRows = series.filter(
     (row) =>
       singleShift ? row[`${lineKey}R`] !== null : row[`${lineKey}R`] !== null || row[`${lineKey}W`] !== null,
   );
+  const rowDateKey = chartRows.map((row) => row.date).join("|");
   const hasSparseRows = chartRows.length > 0 && chartRows.length <= 7;
   const scaleFloor = 4;
   const maxValue =
@@ -26,9 +29,22 @@ export default function DailyGapChart({
     ) * 1.15;
   const chartMinWidth = getChartMinWidth(chartRows.length);
 
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller) {
+      return;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      scroller.scrollLeft = scroller.scrollWidth;
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [rowDateKey]);
+
   return (
     <div className="mt-4 flex flex-1 flex-col">
-      <div className="flex-1 overflow-x-auto overflow-y-hidden">
+      <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-hidden">
         <div className="px-4 pb-3" style={{ minWidth: chartMinWidth }}>
           <div className="relative h-36">
             <div className="absolute left-0 right-0 top-1/2 border-t border-dashed border-[#98a2b3]" />
