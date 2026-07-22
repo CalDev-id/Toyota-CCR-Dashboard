@@ -108,6 +108,23 @@ function OeeMetricValue({
   );
 }
 
+function TaktTimeMetricValue({
+  actual,
+  plan,
+}: {
+  actual: string;
+  plan: string;
+}) {
+  return (
+    <span className="whitespace-nowrap text-lg leading-none">
+      {formatTt(actual)}
+      <span className="ml-1 text-xs font-semibold opacity-75">
+        / {formatTt(plan)}
+      </span>
+    </span>
+  );
+}
+
 function ProblemTypeBadge({ type }: { type?: "AV" | "PE" | "RQ" }) {
   if (!type) {
     return null;
@@ -230,8 +247,8 @@ export default function ProductionAchievementCardView({
         </div>
         <div className="grid grid-cols-2 gap-2">
           <MetricTile
-            label="TT Act / Plan"
-            value={`${formatTt(card.ttAct)} / ${formatTt(card.ttPlan)}`}
+            label="Takt Time"
+            value={<TaktTimeMetricValue actual={card.ttAct} plan={card.ttPlan} />}
             valueSizeClassName="text-lg"
           />
           <MetricTile

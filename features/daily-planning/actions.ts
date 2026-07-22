@@ -2,6 +2,8 @@
 
 import { auth } from "@/auth";
 import {
+  addDailyOtData,
+  deleteDailyManualOtData,
   loadDailyPlanningData,
   updateDailyOeeData,
   updateDailySharedParametersData,
@@ -71,5 +73,22 @@ export async function updateDailySlotSchedule(
     tt,
     oee,
   );
+  revalidatePath("/daily-planning");
+}
+
+export async function addDailyOt(
+  part: string,
+  date: string,
+  shift: string,
+  position?: "start" | "end",
+) {
+  await requireUser();
+  await addDailyOtData(part, date, shift, position);
+  revalidatePath("/daily-planning");
+}
+
+export async function deleteDailyManualOt(id: number) {
+  await requireUser();
+  await deleteDailyManualOtData(id);
   revalidatePath("/daily-planning");
 }
