@@ -8,6 +8,10 @@ import type {
   RawProductionAchievementSummaryRow,
 } from "@/features/production-achievement/types";
 import { loadDailyPlanningData } from "@/features/daily-planning/server/daily-planning-service";
+import {
+  getProductionRealtimeStatus,
+  type ProductionRealtimeStatus,
+} from "@/features/production-achievement/server/realtime-status";
 import { prisma } from "@/lib/prisma";
 import { getReportPrisma } from "@/lib/report-prisma";
 import { summaryViewName } from "@/lib/report-views";
@@ -586,6 +590,7 @@ function buildLineCard(
   problemRows: RawProductionAchievementProblemRow[],
   monthlyParameters: { tt: string; oeeTarget: number },
   planOverride?: DailyPlanningPlanOverride,
+  lastUpdatedAt: string | null = null,
 ): ProductionAchievementCard {
   const pairDivisor = line.key === "camshaft" ? 2 : 1;
   const prodPlan = planOverride?.prodPlan ?? 0;
@@ -603,6 +608,7 @@ function buildLineCard(
     tt: monthlyParameters.tt || toPlainString(summaryRows.find((row) => String(row.tt ?? "").trim())?.tt),
     oeeTarget: monthlyParameters.oeeTarget || (line.key === "camshaft" ? 93 : 90),
     balance: prodAct - prodPlan,
+    lastUpdatedAt,
     stopTime: buildStopTime(problemRows),
     problems: buildProblems(line, problemRows),
     variants: buildVariants(line, summaryRows, planOverride),
@@ -616,6 +622,10 @@ export async function getProductionAchievementDashboard(filters?: {
   const date = normalizeDate(filters?.date);
   const shift = normalizeShift(filters?.shift);
   const planOverrides = await getDailyPlanningPlanOverrides(date, shift);
+  const realtimeStatuses: ProductionRealtimeStatus = await getProductionRealtimeStatus(
+    date,
+    shift,
+  ).catch(() => ({}));
   const lineCards = await Promise.all(
     productionAchievementLineConfigs.map(async (line) => {
       const [summaryRows, problemRows, monthlyParameters] = await Promise.all([
@@ -633,6 +643,7 @@ export async function getProductionAchievementDashboard(filters?: {
         problemRows,
         monthlyParameters,
         planOverrides.get(line.key),
+        realtimeStatuses[line.key] ?? null,
       );
     }),
   );

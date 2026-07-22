@@ -9,6 +9,7 @@ const url = new URL(databaseUrl);
 const migrations = [
   "../database/migrations/20260721_user_app_db.sql",
   "../database/migrations/20260717_daily_planning_app_db.sql",
+  "../database/migrations/20260721_production_realtime_status.sql",
 ];
 const connection = await mariadb.createConnection({ host: url.hostname, port: Number(url.port || 3306), user: decodeURIComponent(url.username), password: decodeURIComponent(url.password), database: url.pathname.slice(1), multipleStatements: true });
 

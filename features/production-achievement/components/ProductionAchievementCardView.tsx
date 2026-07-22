@@ -32,6 +32,19 @@ function formatStopTime(value: number) {
   return `${formatNumberAuto(value)} min`;
 }
 
+function formatLastUpdated(value: string | null) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
 function meetsOeeTarget(value: number | null, target: number | null) {
   if (value === null || target === null) {
     return false;
@@ -145,6 +158,11 @@ export default function ProductionAchievementCardView({
           <h2 className="truncate text-lg font-semibold text-[#101828] dark:text-[#f8fafc]">
             {card.label}
           </h2>
+          {card.key !== "assy" ? (
+            <p className="mt-1 text-xs font-medium text-[#667085] dark:text-[#a7b0c0]">
+              Last updated: {formatLastUpdated(card.lastUpdatedAt)}
+            </p>
+          ) : null}
         </div>
         <span
           className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${

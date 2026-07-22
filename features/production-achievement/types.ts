@@ -58,6 +58,7 @@ export type ProductionAchievementCard = {
   tt: string;
   oeeTarget: number | null;
   balance: number;
+  lastUpdatedAt: string | null;
   stopTime: number;
   problems: ProductionAchievementProblem[];
   variants: ProductionAchievementVariant[];
