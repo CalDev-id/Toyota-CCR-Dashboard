@@ -476,7 +476,7 @@ async function getDailyPlanningPlanOverrides(date: string, shift: string) {
 }
 
 function buildProblems(rows: RawProductionAchievementProblemRow[]) {
-  return rows
+  const problems = rows
     .flatMap((item) => [
       {
         label: item.problemAv ?? "",
@@ -491,7 +491,27 @@ function buildProblems(rows: RawProductionAchievementProblemRow[]) {
         type: "PE" as const,
       },
     ])
-    .filter((item) => item.label.trim() && item.value > 0)
+    .filter((item) => item.label.trim() && item.value > 0);
+
+  const groupedProblems = new Map<
+    string,
+    { label: string; value: number; unit: "min"; type: "AV" | "PE" }
+  >();
+
+  for (const problem of problems) {
+    const label = problem.label.trim().replace(/\s+/g, " ");
+    const key = `${problem.type}:${label.toLocaleLowerCase()}`;
+    const current = groupedProblems.get(key);
+
+    groupedProblems.set(key, {
+      label: current?.label ?? label,
+      value: (current?.value ?? 0) + problem.value,
+      unit: "min",
+      type: problem.type,
+    });
+  }
+
+  return Array.from(groupedProblems.values())
     .sort((a, b) => b.value - a.value)
     .slice(0, 3);
 }

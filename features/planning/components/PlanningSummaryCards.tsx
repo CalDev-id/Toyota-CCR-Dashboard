@@ -223,19 +223,27 @@ function PlanningSummaryCard({ part }: { part: PlanningPartSummary }) {
             <p className="mt-2 text-xl font-bold leading-none text-[#101828] dark:text-[#f8fafc]">
               {item.value.toLocaleString()}
             </p>
-            {!isCamshaft ? <div className="mt-3 flex items-center gap-2.5">
+            <div className="mt-3 flex items-center gap-2.5">
               <div className="h-1 flex-1 overflow-hidden rounded-full bg-[#d0d5dd] dark:bg-[#384860]">
-                <div
-                  className={`h-full rounded-full ${partTotal > 0 ? tone.bar : "bg-[#98a2b3] dark:bg-[#7f8a9d]"}`}
-                  style={{ width: `${item.percentage}%` }}
-                />
+                {!isCamshaft ? (
+                  <div
+                    className={`h-full rounded-full ${partTotal > 0 ? tone.bar : "bg-[#98a2b3] dark:bg-[#7f8a9d]"}`}
+                    style={{ width: `${item.percentage}%` }}
+                  />
+                ) : null}
               </div>
               <span
-                className={`min-w-11 rounded-full px-2 py-0.5 text-center text-xs font-bold ${hasRatio ? `${tone.text} bg-[#eef4ff] dark:bg-[#14245a]` : `${tone.softText} bg-[#f2f4f7] dark:bg-[#1f2937]`}`}
+                className={`min-w-11 rounded-full px-2 py-0.5 text-center text-xs font-bold ${
+                  isCamshaft
+                    ? "bg-[#f2f4f7] text-[#98a2b3] dark:bg-[#1f2937] dark:text-[#a7b0c0]"
+                    : hasRatio
+                      ? `${tone.text} bg-[#eef4ff] dark:bg-[#14245a]`
+                      : `${tone.softText} bg-[#f2f4f7] dark:bg-[#1f2937]`
+                }`}
               >
-                {item.ratioLabel}
+                {isCamshaft ? "—" : item.ratioLabel}
               </span>
-            </div> : null}
+            </div>
           </div>
         ))}
       </div>
