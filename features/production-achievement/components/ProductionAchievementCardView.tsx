@@ -306,20 +306,20 @@ export default function ProductionAchievementCardView({
 
       <div className="mt-5 min-h-[100px]">
         {card.variants.length ? (
-          <div className="rounded-xl border border-[#e4e7ec] dark:border-[#273449]">
-            <table className="w-full table-fixed text-xs">
+          <div className="overflow-hidden rounded-xl border border-[#e4e7ec] dark:border-[#273449]">
+            <table className="w-full table-fixed text-sm">
               <thead className="bg-[#f9fafb] text-[#667085] dark:bg-[#162033] dark:text-[#a7b0c0]">
                 <tr>
-                  <th className="w-[34%] px-3 py-2.5 text-left font-semibold">
+                  <th className="w-[34%] px-4 py-2.5 text-left font-semibold">
                     Type
                   </th>
-                  <th className="w-[22%] px-2 py-2.5 text-right font-semibold">
+                  <th className="w-[22%] px-3 py-2.5 text-right font-semibold">
                     Plan
                   </th>
-                  <th className="w-[22%] px-2 py-2.5 text-right font-semibold">
+                  <th className="w-[22%] px-3 py-2.5 text-right font-semibold">
                     Act
                   </th>
-                  <th className="w-[22%] px-3 py-2.5 text-right font-semibold">
+                  <th className="w-[22%] px-4 py-2.5 text-right font-semibold">
                     Bal
                   </th>
                 </tr>
@@ -327,17 +327,17 @@ export default function ProductionAchievementCardView({
               <tbody className="divide-y divide-[#e4e7ec] dark:divide-[#273449]">
                 {card.variants.map((variant) => (
                   <tr key={variant.name}>
-                    <td className="truncate px-3 py-2.5 font-semibold text-[#101828] dark:text-[#f8fafc]">
+                    <td className="truncate px-4 py-2.5 font-semibold text-[#101828] dark:text-[#f8fafc]">
                       {variant.name}
                     </td>
-                    <td className="px-2 py-2.5 text-right font-medium text-[#667085] dark:text-[#a7b0c0]">
+                    <td className="px-3 py-2.5 text-right font-medium text-[#667085] dark:text-[#a7b0c0]">
                       {formatNumber(variant.prodPlan)}
                     </td>
-                    <td className="px-2 py-2.5 text-right font-medium text-[#667085] dark:text-[#a7b0c0]">
+                    <td className="px-3 py-2.5 text-right font-medium text-[#667085] dark:text-[#a7b0c0]">
                       {formatNumberAuto(variant.prodAct)}
                     </td>
                     <td
-                      className={`px-3 py-2.5 text-right font-semibold ${getBalanceClass(
+                      className={`px-4 py-2.5 text-right font-semibold ${getBalanceClass(
                         variant.balance,
                       )}`}
                     >
