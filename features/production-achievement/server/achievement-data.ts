@@ -118,9 +118,9 @@ async function getMonthlyPlanningParameters(
 ) {
   const shifts = shiftAliases(shift);
   const rows = await getReportPrisma().$queryRawUnsafe<
-    Array<{ tt: unknown; oeeTarget: unknown }>
+    Array<{ tt: unknown; oeeTarget: unknown; otPlan: unknown }>
   >(
-    `SELECT ftt AS tt, foee AS oeeTarget FROM ${quoteIdentifier(
+    `SELECT ftt AS tt, foee AS oeeTarget, fot AS otPlan FROM ${quoteIdentifier(
       monthlyPlanningTables[line.key],
     )} WHERE DATE(fdate)=? AND TRIM(fshift) IN (${shifts
       .map(() => "?")
@@ -132,6 +132,7 @@ async function getMonthlyPlanningParameters(
   return {
     tt: toPlainString(rows[0]?.tt),
     oeeTarget: toNumber(rows[0]?.oeeTarget),
+    otPlan: toNumber(rows[0]?.otPlan),
   };
 }
 
@@ -150,7 +151,8 @@ async function getProductionAchievementSummaryRows(
       Prod_plan AS prodPlan,
       ${actExpression} AS prodAct,
       Balance AS balance,
-      OEE AS oee
+      OEE AS oee,
+      OT_act AS otAct
     FROM ${quoteIdentifier(summaryView)}
     ${where}
     ORDER BY SHIFT ASC, SHOP ASC, Variant ASC`;
@@ -175,7 +177,8 @@ async function getProductionAchievementSummaryRows(
       Prod_plan AS prodPlan,
       NULL AS prodAct,
       Balance AS balance,
-      OEE AS oee
+      OEE AS oee,
+      NULL AS otAct
     FROM ${quoteIdentifier(summaryView)}
     ${where}
     ORDER BY SHIFT ASC, SHOP ASC, Variant ASC`,
@@ -226,13 +229,15 @@ function toPlainString(value: unknown) {
   return String(value ?? "");
 }
 
-function getTodayKey() {
-  const date = new Date();
-
+function getDateKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
     2,
     "0",
   )}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function getTodayKey() {
+  return getDateKey(new Date());
 }
 
 function parseTimeMinutes(value: string) {
@@ -252,7 +257,9 @@ function getCurrentTimeMinutes() {
 }
 
 function normalizeDate(value: string | null | undefined) {
-  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : getTodayKey();
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? value
+    : getActiveProductionDateKey();
 }
 
 function normalizeShift(value: string | null | undefined) {
@@ -269,6 +276,16 @@ function getActiveShiftLabel() {
   const nightStart = parseTimeMinutes("19:30");
 
   return current >= dayStart && current < nightStart ? "DAY" : "NIGHT";
+}
+
+function getActiveProductionDateKey() {
+  const date = new Date();
+
+  if (getActiveShiftLabel() === "NIGHT" && getCurrentTimeMinutes() < 7 * 60) {
+    date.setDate(date.getDate() - 1);
+  }
+
+  return getDateKey(date);
 }
 
 function getActiveShiftValue() {
@@ -315,6 +332,11 @@ function getSlotDateBounds(date: string, slot: RawDailyPlanningSlotRow) {
   const end = getLocalDate(date);
   end.setHours(endHour, endMinute, 0, 0);
 
+  if (slot.shiftValue === "2" && startHour < 12) {
+    start.setDate(start.getDate() + 1);
+    end.setDate(end.getDate() + 1);
+  }
+
   if (end <= start) {
     end.setDate(end.getDate() + 1);
   }
@@ -327,16 +349,6 @@ function getPlanningSlotProgress(
   slot: RawDailyPlanningSlotRow,
   now: Date,
 ) {
-  const today = getTodayKey();
-
-  if (date < today) {
-    return 1;
-  }
-
-  if (date > today) {
-    return 0;
-  }
-
   const { start, end } = getSlotDateBounds(date, slot);
   const duration = end.getTime() - start.getTime();
 
@@ -560,7 +572,7 @@ function buildLineCard(
   line: ProductionAchievementLineConfig,
   summaryRows: RawProductionAchievementSummaryRow[],
   problemRows: RawProductionAchievementProblemRow[],
-  monthlyParameters: { tt: string; oeeTarget: number },
+  monthlyParameters: { tt: string; oeeTarget: number; otPlan: number },
   planOverride?: DailyPlanningPlanOverride,
   lastUpdatedAt: string | null = null,
 ): ProductionAchievementCard {
@@ -569,6 +581,10 @@ function buildLineCard(
   const prodAct =
     summaryRows.reduce((total, row) => total + toNumber(row.prodAct), 0) /
     pairDivisor;
+  const otAct = summaryRows.length
+    ? summaryRows.reduce((total, row) => total + toNumber(row.otAct), 0) /
+      summaryRows.length
+    : 0;
   const effectiveTt =
     planOverride?.tt ||
     toNumber(monthlyParameters.tt) ||
@@ -593,6 +609,8 @@ function buildLineCard(
     ttAct: actualTt,
     ttPlan: effectiveTt ? toPlainString(effectiveTt) : "",
     oeeTarget: monthlyParameters.oeeTarget || (line.key === "camshaft" ? 93 : 90),
+    otAct,
+    otPlan: monthlyParameters.otPlan,
     balance: prodAct - prodPlan,
     lastUpdatedAt,
     stopTime: buildStopTime(problemRows),
@@ -616,6 +634,7 @@ export async function getProductionAchievementDashboard(filters?: {
         getMonthlyPlanningParameters(line, date, shift).catch(() => ({
           tt: "",
           oeeTarget: 0,
+          otPlan: 0,
         })),
       ]);
 

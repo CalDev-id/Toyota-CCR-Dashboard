@@ -79,6 +79,10 @@ function getBalanceClass(value: number) {
   return "text-[#344054]";
 }
 
+function getOvertimeClass(actual: number, plan: number) {
+  return actual < plan ? "text-[#b42318]" : "text-[#101828]";
+}
+
 function MetricTile({
   label,
   value,
@@ -133,6 +137,28 @@ function TaktTimeMetricValue({
       {formatTt(actual)}
       <span className="ml-1 text-xs font-semibold opacity-75">
         / {formatTt(plan)}
+      </span>
+    </span>
+  );
+}
+
+function ProductionMetricValue({ actual, plan }: { actual: number; plan: number }) {
+  return (
+    <span className="whitespace-nowrap text-2xl leading-none">
+      {formatNumberAuto(actual)}
+      <span className="ml-1 text-xs font-semibold opacity-75">
+        / {formatNumber(plan)}
+      </span>
+    </span>
+  );
+}
+
+function OvertimeMetricValue({ actual, plan }: { actual: number; plan: number }) {
+  return (
+    <span className="whitespace-nowrap text-lg leading-none">
+      {formatNumberAuto(actual)}
+      <span className="ml-1 text-xs font-semibold opacity-75">
+        / {formatNumberAuto(plan)}
       </span>
     </span>
   );
@@ -239,14 +265,15 @@ export default function ProductionAchievementCardView({
       <div className="mt-4 grid gap-2">
         <div className="grid grid-cols-2 gap-2">
           <MetricTile
-            label="Plan"
-            value={formatNumber(card.prodPlan)}
+            label="Prod."
+            value={<ProductionMetricValue actual={card.prodAct} plan={card.prodPlan} />}
             valueSizeClassName="text-2xl"
           />
           <MetricTile
-            label="Act"
-            value={formatNumberAuto(card.prodAct)}
-            valueSizeClassName="text-2xl"
+            label="OEE"
+            value={<OeeMetricValue value={card.oee} target={card.oeeTarget} />}
+            valueClassName={getOeeTargetClass(card.oee, card.oeeTarget)}
+            valueSizeClassName="text-lg"
           />
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -257,9 +284,9 @@ export default function ProductionAchievementCardView({
             valueSizeClassName="text-lg"
           />
           <MetricTile
-            label="OEE"
-            value={<OeeMetricValue value={card.oee} target={card.oeeTarget} />}
-            valueClassName={getOeeTargetClass(card.oee, card.oeeTarget)}
+            label="Overtime"
+            value={<OvertimeMetricValue actual={card.otAct} plan={card.otPlan} />}
+            valueClassName={getOvertimeClass(card.otAct, card.otPlan)}
             valueSizeClassName="text-lg"
           />
         </div>

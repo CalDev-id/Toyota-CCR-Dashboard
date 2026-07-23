@@ -21,6 +21,7 @@ export type RawProductionAchievementSummaryRow = {
   prodAct: string | number | null;
   balance: string | number | null;
   oee: string | number | null;
+  otAct: string | number | null;
 };
 
 export type RawProductionAchievementProblemRow = {
@@ -59,6 +60,8 @@ export type ProductionAchievementCard = {
   ttAct: string;
   ttPlan: string;
   oeeTarget: number | null;
+  otAct: number;
+  otPlan: number;
   balance: number;
   lastUpdatedAt: string | null;
   stopTime: number;
