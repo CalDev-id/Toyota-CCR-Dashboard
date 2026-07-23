@@ -137,7 +137,10 @@ export default function PlanningPage() {
     () =>
       sortVisibleColumns(
         columns.filter(
-          (column) => isVisibleColumn(column) && (activePart !== "assy" || !isGroupColumn(column)),
+          (column) =>
+            isVisibleColumn(column) &&
+            (activePart !== "assy" || !isGroupColumn(column)) &&
+            (activePart !== "camshaft" || !["ratio", "fratio"].includes(column.field.toLowerCase())),
         ),
       ),
     [activePart, columns],

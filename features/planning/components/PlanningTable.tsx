@@ -40,6 +40,7 @@ export default function PlanningTable({
   setDraftRows,
   setDeleteTarget,
 }: PlanningTableProps) {
+  const isCamshaft = activePart === "camshaft";
   const isDateField = (column: PlanningColumn) => column.inputType === "date";
   const isRemarkField = (column: PlanningColumn) => column.field.toLowerCase() === "fremarks";
   const isOtField = (column: PlanningColumn) =>
@@ -59,7 +60,11 @@ export default function PlanningTable({
               {visibleColumns.map((column) => (
                 <Fragment key={column.field}>
                   <th className="px-3 py-3">
-                    {formatColumnLabel(column.field)}
+                    {isCamshaft && column.field.toLowerCase() === "f1tr"
+                      ? "01"
+                      : isCamshaft && column.field.toLowerCase() === "f2tr"
+                        ? "02"
+                        : formatColumnLabel(column.field)}
                   </th>
                   {column.field.toLowerCase() === "f2tr" ? <th className="px-2 py-3 text-center">Total Plan</th> : null}
                 </Fragment>
@@ -234,7 +239,9 @@ export default function PlanningTable({
                       {column.field.toLowerCase() === "f2tr" ? (
                         <td className="px-2 py-4 text-center font-semibold text-[#101828]">
                           <span className="inline-flex h-9 min-w-16 items-center justify-center text-center">
-                            {Number(row?.f1tr ?? 0) + Number(row?.f2tr ?? 0)}
+                            {isCamshaft
+                              ? Number(row?.f1tr ?? 0)
+                              : Number(row?.f1tr ?? 0) + Number(row?.f2tr ?? 0)}
                           </span>
                         </td>
                       ) : null}

@@ -24,13 +24,14 @@ export async function loadDailyPlanning(part: string, date: string, shift: strin
 }
 
 export async function updateDailyTarget(
+  part: string,
   id: number,
   target: number,
   ratioOne: number,
   ratioTwo: number,
 ) {
   await requireUser();
-  await updateDailyTargetData(id, target, ratioOne, ratioTwo);
+  await updateDailyTargetData(part, id, target, ratioOne, ratioTwo);
   revalidatePath("/daily-planning");
 }
 
@@ -53,6 +54,7 @@ export async function updateDailySharedParameters(
 }
 
 export async function updateDailySlotSchedule(
+  part: string,
   id: number,
   startTime: string,
   endTime: string,
@@ -64,6 +66,7 @@ export async function updateDailySlotSchedule(
 ) {
   await requireUser();
   await updateDailySlotScheduleData(
+    part,
     id,
     startTime,
     endTime,

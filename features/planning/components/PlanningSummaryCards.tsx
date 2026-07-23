@@ -133,7 +133,8 @@ const partTone: Record<
 };
 
 function PlanningSummaryCard({ part }: { part: PlanningPartSummary }) {
-  const partTotal = part.oneTrTotal + part.twoTrTotal;
+  const isCamshaft = part.key === "camshaft";
+  const partTotal = isCamshaft ? part.oneTrTotal : part.oneTrTotal + part.twoTrTotal;
   const ratioParts = part.ratioText?.split(":").map((value) => value.trim());
   const oneTrPercentage = part.oneTrRatioPercentage ?? 0;
   const twoTrPercentage = part.twoTrRatioPercentage ?? 0;
@@ -200,13 +201,13 @@ function PlanningSummaryCard({ part }: { part: PlanningPartSummary }) {
       <div className="mt-3 grid overflow-hidden rounded-xl border border-[#e4e7ec] bg-white dark:border-[#273449] dark:bg-[#111827] sm:grid-cols-2">
         {[
           {
-            label: "1TR",
+            label: isCamshaft ? "01" : "1TR",
             value: part.oneTrTotal,
             percentage: oneTrPercentage,
             ratioLabel: oneTrRatioLabel,
           },
           {
-            label: "2TR",
+            label: isCamshaft ? "02" : "2TR",
             value: part.twoTrTotal,
             percentage: twoTrPercentage,
             ratioLabel: twoTrRatioLabel,
@@ -222,7 +223,7 @@ function PlanningSummaryCard({ part }: { part: PlanningPartSummary }) {
             <p className="mt-2 text-xl font-bold leading-none text-[#101828] dark:text-[#f8fafc]">
               {item.value.toLocaleString()}
             </p>
-            <div className="mt-3 flex items-center gap-2.5">
+            {!isCamshaft ? <div className="mt-3 flex items-center gap-2.5">
               <div className="h-1 flex-1 overflow-hidden rounded-full bg-[#d0d5dd] dark:bg-[#384860]">
                 <div
                   className={`h-full rounded-full ${partTotal > 0 ? tone.bar : "bg-[#98a2b3] dark:bg-[#7f8a9d]"}`}
@@ -234,7 +235,7 @@ function PlanningSummaryCard({ part }: { part: PlanningPartSummary }) {
               >
                 {item.ratioLabel}
               </span>
-            </div>
+            </div> : null}
           </div>
         ))}
       </div>

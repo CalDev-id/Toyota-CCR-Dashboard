@@ -116,7 +116,7 @@ function OeeMetricValue({
   target: number | null;
 }) {
   return (
-    <span className="whitespace-nowrap text-lg leading-none">
+    <span className="whitespace-nowrap text-xl leading-none">
       {formatPercent(value)}
       <span className="ml-1 text-xs font-semibold opacity-75">
         / {formatPercent(target)}
@@ -133,7 +133,7 @@ function TaktTimeMetricValue({
   plan: string;
 }) {
   return (
-    <span className="whitespace-nowrap text-lg leading-none">
+    <span className="whitespace-nowrap text-xl leading-none">
       {formatTt(actual)}
       <span className="ml-1 text-xs font-semibold opacity-75">
         / {formatTt(plan)}
@@ -144,7 +144,7 @@ function TaktTimeMetricValue({
 
 function ProductionMetricValue({ actual, plan }: { actual: number; plan: number }) {
   return (
-    <span className="whitespace-nowrap text-2xl leading-none">
+    <span className="whitespace-nowrap text-[1.65rem] leading-none">
       {formatNumberAuto(actual)}
       <span className="ml-1 text-xs font-semibold opacity-75">
         / {formatNumber(plan)}
@@ -155,7 +155,7 @@ function ProductionMetricValue({ actual, plan }: { actual: number; plan: number 
 
 function OvertimeMetricValue({ actual, plan }: { actual: number; plan: number }) {
   return (
-    <span className="whitespace-nowrap text-lg leading-none">
+    <span className="whitespace-nowrap text-xl leading-none">
       {formatNumberAuto(actual)}
       <span className="ml-1 text-xs font-semibold opacity-75">
         / {formatNumberAuto(plan)}
@@ -273,7 +273,7 @@ export default function ProductionAchievementCardView({
             label="OEE"
             value={<OeeMetricValue value={card.oee} target={card.oeeTarget} />}
             valueClassName={getOeeTargetClass(card.oee, card.oeeTarget)}
-            valueSizeClassName="text-lg"
+            valueSizeClassName="text-xl"
           />
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -287,19 +287,19 @@ export default function ProductionAchievementCardView({
             label="Overtime"
             value={<OvertimeMetricValue actual={card.otAct} plan={card.otPlan} />}
             valueClassName={getOvertimeClass(card.otAct, card.otPlan)}
-            valueSizeClassName="text-lg"
+            valueSizeClassName="text-xl"
           />
         </div>
         <div className="grid grid-cols-2 gap-2">
           <MetricTile
             label="Takt Time"
             value={<TaktTimeMetricValue actual={card.ttAct} plan={card.ttPlan} />}
-            valueSizeClassName="text-lg"
+            valueSizeClassName="text-xl"
           />
           <MetricTile
             label="Stop Time"
             value={formatStopTime(card.stopTime)}
-            valueSizeClassName="text-base"
+            valueSizeClassName="text-lg"
           />
         </div>
       </div>

@@ -14,6 +14,7 @@ const nightSlots: SlotTemplate[] = [{ order: 1, start: "20:05", end: "21:05", mi
 
 function parseRatio(value: unknown) { const [one, two] = String(value ?? "").split(":").map(Number); return [Math.max(0, one || 0), Math.max(0, two || 0)] as const; }
 function split(total: number, one: number, two: number) { const first = Math.round(total * one / (one + two || 1)); return [first, total - first] as const; }
+function splitTarget(part: string, total: number, one: number, two: number) { return part === "camshaft" ? [total, total] as const : split(total, one, two); }
 function addMinutes(time: string, minutes: number) { const [hour, minute] = time.split(":").map(Number); const total = ((hour * 60 + minute + minutes) % (24 * 60) + (24 * 60)) % (24 * 60); return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`; }
 function calculateDurationMinutes(startTime: string, endTime: string) { const [startHour,startMinute] = startTime.split(":").map(Number); const [endHour,endMinute] = endTime.split(":").map(Number); if (![startHour,startMinute,endHour,endMinute].every(Number.isFinite)) return 0; const startTotal = startHour * 60 + startMinute; const endTotal = endHour * 60 + endMinute; return Math.max(0,endTotal >= startTotal ? endTotal - startTotal : endTotal + 24 * 60 - startTotal); }
 function targetFor(minutes: number, tt: number, oee: number) { return tt > 0 ? Math.round(minutes / tt * oee / 100) : 0; }
@@ -41,7 +42,7 @@ async function getPlanContext(part: string, date: string, shift: string) {
 
   const sourceRatio = String(source[0]?.fratio ?? "").trim();
   const monthlyTt = toNullableNumber(source[0]?.ftt);
-  const monthlyRatio = sourceRatio;
+  const monthlyRatio = part === "camshaft" ? "" : sourceRatio;
   const monthlyOee = toNullableNumber(source[0]?.foee);
   const otMinutes = Math.max(0, Math.round(Number(source[0]?.fot ?? 0) * 60));
 
@@ -99,7 +100,7 @@ export async function loadDailyPlanningData(part: string, date: string, shift: s
     const existingSlot = existing.find((row: Slot) => Number(row.slot_order) === slot.order);
     const oeeForTarget = existingSlot?.is_oee_override ? Number(existingSlot.oee) : (monthlyOee ?? 0);
     const target = targetFor(slot.minutes, tt ?? 0, oeeForTarget);
-    const [oneTr,twoTr] = split(target,ratioOne,ratioTwo);
+    const [oneTr,twoTr] = splitTarget(part,target,ratioOne,ratioTwo);
 
     if (!existingSlot) {
       await db.$executeRawUnsafe("INSERT INTO t_daily_production_plan_slot (daily_plan_id,slot_order,start_time,end_time,prod_minutes,slot_type,total_target,one_tr,two_tr) VALUES (?,?,?,?,?,?,?,?,?)",plan.id,slot.order,slot.start,slot.end,slot.minutes,slot.type,target,oneTr,twoTr);
@@ -121,15 +122,22 @@ export async function loadDailyPlanningData(part: string, date: string, shift: s
     }
   }
 
+  if (part === "camshaft") {
+    await db.$executeRawUnsafe(
+      "UPDATE t_daily_production_plan_slot SET one_tr=total_target,two_tr=total_target WHERE daily_plan_id=? AND (one_tr<>total_target OR two_tr<>total_target)",
+      plan.id,
+    );
+  }
+
   const slots = await db.$queryRawUnsafe<Slot[]>("SELECT id,slot_order,TIME_FORMAT(start_time,'%H:%i') AS start_time,TIME_FORMAT(end_time,'%H:%i') AS end_time,prod_minutes,slot_type,oee,is_oee_override,total_target,one_tr,two_tr,is_schedule_override FROM t_daily_production_plan_slot WHERE daily_plan_id=? ORDER BY slot_order", plan.id);
-  const rows = slots.map((slot: Slot) => { const oee = slot.is_oee_override ? Number(slot.oee) : monthlyOee; const target = slot.is_schedule_override ? Number(slot.total_target) : targetFor(Number(slot.prod_minutes),tt ?? 0,oee ?? 0); const [oneTr,twoTr] = slot.is_schedule_override ? [Number(slot.one_tr),Number(slot.two_tr)] : split(target,ratioOne,ratioTwo); return { ...slot, oee: Number(slot.oee ?? 0), ftt: tt ?? "", foee: oee ?? "", fratio: ratio, ftotal_target:target, f1tr:oneTr, f2tr:twoTr }; });
+  const rows = slots.map((slot: Slot) => { const oee = slot.is_oee_override ? Number(slot.oee) : monthlyOee; const target = slot.is_schedule_override ? Number(slot.total_target) : targetFor(Number(slot.prod_minutes),tt ?? 0,oee ?? 0); const [oneTr,twoTr] = splitTarget(part,target,ratioOne,ratioTwo); return { ...slot, oee: Number(slot.oee ?? 0), ftt: tt ?? "", foee: oee ?? "", fratio: part === "camshaft" ? "" : ratio, ftotal_target:target, f1tr:oneTr, f2tr:twoTr }; });
   return { group: "all", tt, oee: monthlyOee, ratio, ratioOne, ratioTwo, hasMonthlyData: true, message: "", rows };
 }
 
-export async function updateDailyTargetData(id: number, target: number, ratioOne: number, ratioTwo: number) { const [oneTr,twoTr] = split(Math.max(0,target),ratioOne,ratioTwo); await prisma.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET total_target=?,one_tr=?,two_tr=?,is_schedule_override=1 WHERE id=?",target,oneTr,twoTr,id); }
+export async function updateDailyTargetData(part: string, id: number, target: number, ratioOne: number, ratioTwo: number) { const [oneTr,twoTr] = splitTarget(part,Math.max(0,target),ratioOne,ratioTwo); await prisma.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET total_target=?,one_tr=?,two_tr=?,is_schedule_override=1 WHERE id=?",target,oneTr,twoTr,id); }
 export async function updateDailyOeeData(id: number, oee: number) { if (oee <= 0) throw new Error("OEE harus valid"); await prisma.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET oee=?,is_oee_override=1 WHERE id=?",oee,id); }
-export async function updateDailySharedParametersData(part: string,date: string,shift: string,tt: number,ratio: string) { const [one,two] = parseRatio(ratio); if (tt<=0 || one+two<=0) throw new Error("TT dan Ratio harus valid"); const { db,plan,hasMonthlyData } = await getPlanContext(part,date,shift); if (!hasMonthlyData || !plan) throw new Error("Data monthly untuk tanggal ini belum diisi."); await db.$executeRawUnsafe("UPDATE t_daily_production_plan SET override_tt=?,override_ratio=? WHERE id=?",tt,`${one}:${two}`,plan.id); }
-export async function updateDailySlotScheduleData(id: number,startTime: string,endTime: string,_minutes: number,ratioOne: number,ratioTwo: number,tt: number,oee: number) { const minutes = calculateDurationMinutes(startTime,endTime); const target=targetFor(minutes,tt,oee*100); const [oneTr,twoTr]=split(target,ratioOne,ratioTwo); await prisma.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET start_time=?,end_time=?,prod_minutes=?,total_target=?,one_tr=?,two_tr=?,is_schedule_override=1 WHERE id=?",startTime,endTime,minutes,target,oneTr,twoTr,id); }
+export async function updateDailySharedParametersData(part: string,date: string,shift: string,tt: number,ratio: string) { const [one,two] = parseRatio(ratio); if (tt<=0 || (part !== "camshaft" && one+two<=0)) throw new Error(part === "camshaft" ? "TT harus valid" : "TT dan Ratio harus valid"); const { db,plan,hasMonthlyData } = await getPlanContext(part,date,shift); if (!hasMonthlyData || !plan) throw new Error("Data monthly untuk tanggal ini belum diisi."); if (part === "camshaft") { await db.$executeRawUnsafe("UPDATE t_daily_production_plan SET override_tt=?,override_ratio=NULL WHERE id=?",tt,plan.id); return; } await db.$executeRawUnsafe("UPDATE t_daily_production_plan SET override_tt=?,override_ratio=? WHERE id=?",tt,`${one}:${two}`,plan.id); }
+export async function updateDailySlotScheduleData(part: string,id: number,startTime: string,endTime: string,_minutes: number,ratioOne: number,ratioTwo: number,tt: number,oee: number) { const minutes = calculateDurationMinutes(startTime,endTime); const target=targetFor(minutes,tt,oee*100); const [oneTr,twoTr]=splitTarget(part,target,ratioOne,ratioTwo); await prisma.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET start_time=?,end_time=?,prod_minutes=?,total_target=?,one_tr=?,two_tr=?,is_schedule_override=1 WHERE id=?",startTime,endTime,minutes,target,oneTr,twoTr,id); }
 
 type OtPosition = "start" | "end";
 
@@ -185,7 +193,7 @@ export async function addDailyOtData(part: string, date: string, shift: string, 
   const endTime = position === "start" ? firstNormal.start_time : addMinutes(lastNormal.end_time, otMinutes);
   const [ratioOne, ratioTwo] = parseRatio(ratio);
   const target = targetFor(otMinutes, tt ?? 0, monthlyOee ?? 0);
-  const [oneTr, twoTr] = split(target, ratioOne, ratioTwo);
+  const [oneTr, twoTr] = splitTarget(part, target, ratioOne, ratioTwo);
 
   await db.$executeRawUnsafe(
     "INSERT INTO t_daily_production_plan_slot (daily_plan_id,slot_order,start_time,end_time,prod_minutes,slot_type,total_target,one_tr,two_tr,is_schedule_override) VALUES (?,?,?,?,?,?,?,?,?,1)",

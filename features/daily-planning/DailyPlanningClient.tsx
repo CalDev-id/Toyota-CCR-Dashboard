@@ -82,7 +82,7 @@ function makeEditingRows(rows: DailyRow[]) {
   ) as Record<number, EditingRow>;
 }
 
-function hasRowChanges(row: DailyRow, editing: EditingRow | undefined) {
+function hasRowChanges(row: DailyRow, editing: EditingRow | undefined, isCamshaft: boolean) {
   if (!editing) {
     return false;
   }
@@ -93,7 +93,7 @@ function hasRowChanges(row: DailyRow, editing: EditingRow | undefined) {
     parseDecimal(row.prod_minutes) !== parseDecimal(editing.prod_minutes) ||
     parseDecimal(row.ftt) !== parseDecimal(editing.ftt) ||
     parseDecimal(row.foee) !== parseDecimal(editing.foee) ||
-    row.fratio !== editing.fratio ||
+    (!isCamshaft && row.fratio !== editing.fratio) ||
     parseDecimal(row.ftotal_target) !== parseDecimal(editing.ftotal_target)
   );
 }
@@ -127,8 +127,9 @@ export default function DailyPlanningClient() {
   }, [date, part, shift]);
 
   const visibleRows = data?.rows ?? [];
+  const isCamshaft = part === "camshaft";
   const emptyMessage = data && !data.hasMonthlyData ? data.message : "Tidak ada data daily planning.";
-  const changedRows = visibleRows.filter((row: DailyRow) => hasRowChanges(row, editing[row.id]));
+  const changedRows = visibleRows.filter((row: DailyRow) => hasRowChanges(row, editing[row.id], isCamshaft));
   const hasPendingUpdates = changedRows.length > 0;
   const otRows = visibleRows.filter((row) => row.slot_type === "ot");
   const canAddOt = Boolean(data?.hasMonthlyData) && (shift === "1" ? otRows.length === 0 : otRows.length < 2);
@@ -180,7 +181,7 @@ export default function DailyPlanningClient() {
     try {
       const firstChangedShared = changedRows.find((row: DailyRow) => {
         const next = editing[row.id];
-        return next && (parseDecimal(row.ftt) !== parseDecimal(next.ftt) || row.fratio !== next.fratio);
+        return next && (parseDecimal(row.ftt) !== parseDecimal(next.ftt) || (!isCamshaft && row.fratio !== next.fratio));
       });
 
       if (firstChangedShared) {
@@ -208,6 +209,7 @@ export default function DailyPlanningClient() {
 
         if (scheduleChanged) {
           await updateDailySlotSchedule(
+            part,
             row.id,
             next.start_time,
             next.end_time,
@@ -221,6 +223,7 @@ export default function DailyPlanningClient() {
 
         if (parseDecimal(row.ftotal_target) !== parseDecimal(next.ftotal_target)) {
           await updateDailyTarget(
+            part,
             row.id,
             parseDecimal(next.ftotal_target),
             ratioOne,
@@ -326,11 +329,11 @@ export default function DailyPlanningClient() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
-            <thead className="bg-[#f9fafb] text-left text-xs font-medium uppercase tracking-wide text-[#667085]"><tr><th className="px-5 py-3">Jam</th><th className="pl-0 pr-8">Menit</th><th className="pl-8">TT</th><th className="px-2">OEE</th><th className="pl-2 pr-8">Ratio</th><th className="pl-8">Total Plan</th><th className="px-2">1TR</th><th className="pl-2 pr-5">2TR</th></tr></thead>
+            <thead className="bg-[#f9fafb] text-left text-xs font-medium uppercase tracking-wide text-[#667085]"><tr><th className="px-5 py-3">Jam</th><th className="pl-0 pr-8">Menit</th><th className="pl-8">TT</th><th className="px-2">OEE</th>{!isCamshaft ? <th className="pl-2 pr-8">Ratio</th> : null}<th className="pl-8">Total Plan</th><th className="px-2">{isCamshaft ? "01" : "1TR"}</th><th className="pl-2 pr-5">{isCamshaft ? "02" : "2TR"}</th></tr></thead>
             <tbody className="divide-y divide-[#e4e7ec]">
               {visibleRows.length === 0 ? (
                 <tr>
-                  <td className="px-5 py-10 text-center text-sm font-medium text-[#667085]" colSpan={8}>
+                  <td className="px-5 py-10 text-center text-sm font-medium text-[#667085]" colSpan={isCamshaft ? 7 : 8}>
                     {emptyMessage}
                   </td>
                 </tr>
@@ -339,7 +342,7 @@ export default function DailyPlanningClient() {
 
                 return (
                   <tr key={row.id} className={row.slot_type === "ot" ? "bg-[#f3f7ff] dark:bg-[#0b367c] dark:text-white" : ""} style={row.slot_type === "ot" ? { boxShadow: "inset 4px 0 #2f80ff" } : undefined}>
-                    <td className="px-5 py-3"><div className="flex items-center gap-1"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.start_time} onChange={(event) => setEditingTimeValue(row.id, "start_time", event.target.value)} /><span>-</span><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.end_time} onChange={(event) => setEditingTimeValue(row.id, "end_time", event.target.value)} />{row.slot_type === "ot" && row.is_schedule_override ? <button aria-label="Hapus OT manual" className="ml-1 grid size-8 place-items-center rounded-md text-[#b42318] transition hover:bg-[#fef3f2] disabled:opacity-60" disabled={isOtActionPending} title="Hapus OT manual" type="button" onClick={() => void handleDeleteManualOt(row.id)}><svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5M14 11v5" /></svg></button> : null}</div></td><td className="pl-0 pr-8"><span className="inline-flex h-9 min-w-16 items-center font-semibold text-[#101828]">{current.prod_minutes}</span></td><td className="pl-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.ftt} onChange={(event) => setEditingValue(row.id, "ftt", event.target.value)} /></td><td className="px-2"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.foee} onChange={(event) => setEditingValue(row.id, "foee", event.target.value)} /></td><td className="pl-2 pr-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" value={current.fratio} onChange={(event) => setEditingValue(row.id, "fratio", event.target.value)} /></td>
+                    <td className="px-5 py-3"><div className="flex items-center gap-1"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.start_time} onChange={(event) => setEditingTimeValue(row.id, "start_time", event.target.value)} /><span>-</span><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.end_time} onChange={(event) => setEditingTimeValue(row.id, "end_time", event.target.value)} />{row.slot_type === "ot" && row.is_schedule_override ? <button aria-label="Hapus OT manual" className="ml-1 grid size-8 place-items-center rounded-md text-[#b42318] transition hover:bg-[#fef3f2] disabled:opacity-60" disabled={isOtActionPending} title="Hapus OT manual" type="button" onClick={() => void handleDeleteManualOt(row.id)}><svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5M14 11v5" /></svg></button> : null}</div></td><td className="pl-0 pr-8"><span className="inline-flex h-9 min-w-16 items-center font-semibold text-[#101828]">{current.prod_minutes}</span></td><td className="pl-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.ftt} onChange={(event) => setEditingValue(row.id, "ftt", event.target.value)} /></td><td className="px-2"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.foee} onChange={(event) => setEditingValue(row.id, "foee", event.target.value)} /></td>{!isCamshaft ? <td className="pl-2 pr-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" value={current.fratio} onChange={(event) => setEditingValue(row.id, "fratio", event.target.value)} /></td> : null}
                     <td className="pl-8"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" inputMode="numeric" value={current.ftotal_target} onChange={(event) => setEditingValue(row.id, "ftotal_target", event.target.value)} /></td><td className="px-2 font-semibold">{row.f1tr}</td><td className="pl-2 pr-5 font-semibold">{row.f2tr}</td>
                   </tr>
                 );
@@ -358,7 +361,7 @@ export default function DailyPlanningClient() {
                 </td>
                 <td className="pl-8">-</td>
                 <td className="px-2">-</td>
-                <td className="pl-2 pr-8">-</td>
+                {!isCamshaft ? <td className="pl-2 pr-8">-</td> : null}
                 <td className="pl-8">{totals.target}</td>
                 <td className="px-2">{totals.oneTr}</td>
                 <td className="pl-2 pr-5">{totals.twoTr}</td>
