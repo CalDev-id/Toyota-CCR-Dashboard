@@ -146,7 +146,7 @@ function ProductionMetricValue({ actual, plan }: { actual: number; plan: number 
   return (
     <span className="whitespace-nowrap text-[1.65rem] leading-none">
       {formatNumberAuto(actual)}
-      <span className="ml-1 text-xs font-semibold opacity-75">
+      <span className="ml-1 text-base font-semibold opacity-75">
         / {formatNumber(plan)}
       </span>
     </span>
@@ -281,7 +281,7 @@ export default function ProductionAchievementCardView({
             label="Balance"
             value={formatNumber(card.balance)}
             valueClassName={getBalanceClass(card.balance)}
-            valueSizeClassName="text-lg"
+            valueSizeClassName="text-xl"
           />
           <MetricTile
             label="Overtime"

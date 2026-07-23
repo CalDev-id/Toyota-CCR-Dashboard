@@ -510,12 +510,12 @@ function buildVariantName(line: ProductionAchievementLineConfig, value: string |
     return name;
   }
 
-  if (name === "1TR") {
-    return "01";
+  if (name === "1TR" || name === "01") {
+    return "IN";
   }
 
-  if (name === "2TR") {
-    return "02";
+  if (name === "2TR" || name === "02") {
+    return "EX";
   }
 
   return name;
@@ -563,9 +563,14 @@ function buildVariants(
     }
   }
 
-  return Array.from(grouped.values()).sort((a, b) =>
-    a.name.localeCompare(b.name, undefined, { numeric: true }),
-  );
+  return Array.from(grouped.values()).sort((a, b) => {
+    if (line.key === "camshaft") {
+      return (a.name === "IN" ? 0 : a.name === "EX" ? 1 : 2) -
+        (b.name === "IN" ? 0 : b.name === "EX" ? 1 : 2);
+    }
+
+    return a.name.localeCompare(b.name, undefined, { numeric: true });
+  });
 }
 
 function buildLineCard(
