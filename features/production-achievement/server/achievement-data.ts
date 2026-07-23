@@ -29,7 +29,7 @@ const productionAchievementLineConfigs: ProductionAchievementLineConfig[] = [
     label: "Cylinder Block",
     summaryView: "v_cylblock_summary",
     detailProblemView: "v_cylblock_detail_problem",
-    imageSrc: "/images/cb.png",
+    imageSrc: "/images/block2.png",
   },
   {
     key: "cylhead",

@@ -256,9 +256,7 @@ export default function ProductionAchievementCardView({
           width={220}
           height={150}
           loading="eager"
-          className={`max-h-32 w-auto max-w-[88%] object-contain ${
-            card.key === "cylblock" ? "-scale-x-100" : ""
-          }`}
+          className="max-h-32 w-auto max-w-[88%] object-contain"
         />
       </div>
 
