@@ -1,7 +1,8 @@
 "use server";
 
 import { auth } from "@/auth";
-import type { UserItem, UserPayload } from "@/features/users/types";
+import { USER_ROLES, type UserItem, type UserPayload, type UserRole } from "@/features/users/types";
+import { requireRoles } from "@/lib/authorization";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
@@ -27,6 +28,8 @@ function parseUserPayload(payload: unknown, mode: "create" | "update"): UserPayl
   const name = String(body.name ?? "").trim();
   const email = String(body.email ?? "").trim().toLowerCase();
   const password = String(body.password ?? "");
+  const confirmPassword = String(body.confirmPassword ?? "");
+  const role = String(body.role ?? "");
 
   if (!name) {
     throw new Error("Name is required");
@@ -36,6 +39,14 @@ function parseUserPayload(payload: unknown, mode: "create" | "update"): UserPayl
     throw new Error("Valid email is required");
   }
 
+  if (!USER_ROLES.includes(role as UserRole)) {
+    throw new Error("Valid role is required");
+  }
+
+  if (mode === "create" && password !== confirmPassword) {
+    throw new Error("Password confirmation does not match");
+  }
+
   if (
     (mode === "create" && password.length < minPasswordLength) ||
     (mode === "update" && password && password.length < minPasswordLength)
@@ -43,7 +54,7 @@ function parseUserPayload(payload: unknown, mode: "create" | "update"): UserPayl
     throw new Error(`Password must be at least ${minPasswordLength} characters`);
   }
 
-  return { name, email, password };
+  return { name, email, password, role: role as UserRole };
 }
 
 function requireUserPayload(formData: FormData, mode: "create" | "update") {
@@ -51,30 +62,27 @@ function requireUserPayload(formData: FormData, mode: "create" | "update") {
 }
 
 async function requireSession() {
-  const session = await auth();
-
-  if (!session?.user) {
-    throw new Error("Unauthenticated");
-  }
-
-  return session;
+  await requireRoles("ADMIN");
 }
 
-function serializeUser(user: { id: number; name: string; email: string }): UserItem {
+function serializeUser(user: { id: number; name: string; email: string; role: UserRole }): UserItem {
   return {
     id: user.id,
     name: user.name,
     email: user.email,
+    role: user.role,
   };
 }
 
 export async function getUsers() {
+  await requireRoles("ADMIN");
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
       name: true,
       email: true,
+      role: true,
     },
   });
 
@@ -97,11 +105,13 @@ async function createUser(payload: UserPayload) {
       name: payload.name,
       email: payload.email,
       passwordHash,
+      role: payload.role,
     },
     select: {
       id: true,
       name: true,
       email: true,
+      role: true,
     },
   });
 
@@ -126,6 +136,7 @@ async function updateUser(id: number, payload: UserPayload) {
     data: {
       name: payload.name,
       email: payload.email,
+      role: payload.role,
       ...(payload.password
         ? { passwordHash: await bcrypt.hash(payload.password, 12) }
         : {}),
@@ -134,6 +145,7 @@ async function updateUser(id: number, payload: UserPayload) {
       id: true,
       name: true,
       email: true,
+      role: true,
     },
   });
 
@@ -172,10 +184,11 @@ export async function updateUserAction(id: number, formData: FormData) {
 }
 
 export async function deleteUserAction(id: number) {
-  const session = await requireSession();
+  await requireSession();
+  const session = await auth();
   const userId = parseUserId(String(id));
 
-  if (session.user.id === String(userId)) {
+  if (session?.user?.id === String(userId)) {
     throw new Error("You cannot delete your own active account");
   }
 

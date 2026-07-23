@@ -3,7 +3,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useState } from "react";
+import type { UserRole } from "@/features/users/types";
 
 type SidebarProps = {
   isCollapsed: boolean;
@@ -12,7 +14,18 @@ type SidebarProps = {
   onToggleCollapsed: () => void;
 };
 
-const menuItems = [
+type MenuChild = {
+  label: string;
+  href: string;
+  roles?: UserRole[];
+};
+
+type MenuItem = MenuChild & {
+  icon: React.ReactNode;
+  children?: MenuChild[];
+};
+
+const menuItems: MenuItem[] = [
   {
     label: "Home",
     href: "/",
@@ -84,12 +97,14 @@ const menuItems = [
       {
         label: "Prod Acv Packom",
         href: "/packom",
+        roles: ["ADMIN", "CCR"],
       },
     ],
   },
   {
     label: "Planning",
     href: "/planning",
+    roles: ["ADMIN", "CCR"],
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
         <path
@@ -116,6 +131,7 @@ const menuItems = [
   {
     label: "Users",
     href: "/users",
+    roles: ["ADMIN"],
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
         <path
@@ -168,12 +184,22 @@ function Menu({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const { data: session } = useSession();
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
+  const role = session?.user?.role ?? "USER";
+  const visibleItems = menuItems
+    .filter((item) => !item.roles || item.roles.includes(role))
+    .map((item) => ({
+      ...item,
+      children: item.children?.filter(
+        (child) => !child.roles || child.roles.includes(role),
+      ),
+    }));
 
   return (
     <nav className="space-y-1" aria-label="Dashboard navigation">
-      {menuItems.map((item) => {
-        const childItems = "children" in item ? item.children : undefined;
+      {visibleItems.map((item) => {
+        const childItems = item.children;
         const isActive =
           item.href === "/"
             ? pathname === "/"

@@ -31,7 +31,7 @@ export default function UserModals({
                   Edit User
                 </h2>
                 <p className="mt-1 text-sm text-[#667085]">
-                  Update nama, email, atau password user.
+                  Update nama, email, role, atau password user.
                 </p>
               </div>
               <button
@@ -67,6 +67,37 @@ export default function UserModals({
                   required
                   className="mt-2 h-11 w-full rounded-lg border border-[#d0d5dd] px-3 text-sm outline-none transition focus:border-[#465fff] focus:ring-4 focus:ring-[#ecf3ff]"
                 />
+              </div>
+
+              <div>
+                <label
+                  className="text-sm font-medium text-[#344054]"
+                  htmlFor="editRole"
+                >
+                  Role
+                </label>
+                <div className="relative mt-2">
+                  <select
+                    id="editRole"
+                    name="editRole"
+                    defaultValue={editingUser.role}
+                    className="h-11 w-full appearance-none rounded-lg border border-[#d0d5dd] bg-white px-3 pr-11 text-sm outline-none transition focus:border-[#465fff] focus:ring-4 focus:ring-[#ecf3ff]"
+                  >
+                    <option value="ADMIN">Admin</option>
+                    <option value="CCR">CCR</option>
+                    <option value="USER">User</option>
+                  </select>
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-[#667085]"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
               </div>
       
               <div>

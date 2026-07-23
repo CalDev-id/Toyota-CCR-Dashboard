@@ -26,6 +26,7 @@ type PlanningOverlaysProps = {
   importConflict: ImportConflict | null;
   setImportConflict: React.Dispatch<React.SetStateAction<ImportConflict | null>>;
   toast: Toast | null;
+  canManagePlanning: boolean;
 };
 
 export default function PlanningOverlays({
@@ -43,10 +44,11 @@ export default function PlanningOverlays({
   importConflict,
   setImportConflict,
   toast,
+  canManagePlanning,
 }: PlanningOverlaysProps) {
   return (
     <>
-      {isImportModalOpen ? (
+      {canManagePlanning && isImportModalOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#101828]/40 px-4 py-6">
           <section className="max-h-[calc(100vh-48px)] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
             <div className="flex items-start justify-between gap-4">
@@ -180,7 +182,7 @@ export default function PlanningOverlays({
         </div>
       ) : null}
       
-      {deleteTarget ? (
+      {canManagePlanning && deleteTarget ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#101828]/40 px-4">
           <section className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="flex items-start gap-4">
@@ -227,7 +229,7 @@ export default function PlanningOverlays({
         </div>
       ) : null}
       
-      {importConflict ? (
+      {canManagePlanning && importConflict ? (
         <div className="fixed inset-0 z-[55] grid place-items-center bg-[#101828]/40 px-4">
           <section className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
             <div className="flex items-start gap-4">

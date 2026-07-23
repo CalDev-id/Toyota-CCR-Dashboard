@@ -24,6 +24,7 @@ type PlanningTableProps = {
   saveDraftRow: (id: string) => void;
   setDraftRows: React.Dispatch<React.SetStateAction<Array<{ id: string }>>>;
   setDeleteTarget: React.Dispatch<React.SetStateAction<{ id: string; part: PlanningPartKey } | null>>;
+  canManagePlanning: boolean;
 };
 
 export default function PlanningTable({
@@ -39,6 +40,7 @@ export default function PlanningTable({
   saveDraftRow,
   setDraftRows,
   setDeleteTarget,
+  canManagePlanning,
 }: PlanningTableProps) {
   const isCamshaft = activePart === "camshaft";
   const isDateField = (column: PlanningColumn) => column.inputType === "date";
@@ -54,7 +56,11 @@ export default function PlanningTable({
   return (
     <section className="overflow-hidden rounded-b-2xl border border-t-0 border-[#e4e7ec] bg-white shadow-sm">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[920px] text-left text-sm">
+        <table
+          className={`w-full min-w-[920px] text-left text-sm ${
+            canManagePlanning ? "" : "table-fixed"
+          }`}
+        >
           <thead className="bg-[#f9fafb] text-xs font-medium uppercase tracking-wide text-[#667085]">
             <tr>
               {visibleColumns.map((column) => (
@@ -69,7 +75,7 @@ export default function PlanningTable({
                   {column.field.toLowerCase() === "f2tr" ? <th className="px-2 py-3 text-center">Total Plan</th> : null}
                 </Fragment>
               ))}
-              <th className="px-3 py-3 text-right">Actions</th>
+              {canManagePlanning ? <th className="px-3 py-3 text-right">Actions</th> : null}
             </tr>
           </thead>
           <tbody className="divide-y divide-[#e4e7ec]">
@@ -77,7 +83,7 @@ export default function PlanningTable({
               <tr>
                 <td
                   className="px-5 py-8 text-center text-[#667085]"
-                  colSpan={visibleColumns.length + 1}
+                  colSpan={visibleColumns.length + (canManagePlanning ? 1 : 0)}
                 >
                   Loading planning data...
                 </td>
@@ -86,7 +92,7 @@ export default function PlanningTable({
               <tr>
                 <td
                   className="px-5 py-8 text-center text-[#667085]"
-                  colSpan={visibleColumns.length + 1}
+                  colSpan={visibleColumns.length + (canManagePlanning ? 1 : 0)}
                 >
                   No planning data found.
                 </td>
@@ -100,13 +106,19 @@ export default function PlanningTable({
                     ? String(row[primaryColumn.field])
                     : String(rowIndex),
                 })),
-              ].map(({ row, rowId }) => {
+              ].map(({ row, rowId }, rowIndex) => {
                 const isDraft = row === null;
     
                 return (
                   <tr
                     key={rowId}
-                    className={`align-top ${isDraft ? "bg-[#fffcf5]" : ""}`}
+                    className={`align-top transition-colors duration-150 ${
+                      isDraft
+                        ? "bg-[#fffcf5] dark:bg-[#2c2411]"
+                        : rowIndex % 2 === 0
+                          ? "bg-white hover:bg-[#dbeafe] dark:bg-[#111827] dark:hover:bg-[#1d3a66]"
+                          : "bg-[#edf2f7] hover:bg-[#dbeafe] dark:bg-[#162033] dark:hover:bg-[#1d3a66]"
+                    }`}
                   >
                     {visibleColumns.map((column) => (
                       <Fragment key={column.field}>
@@ -115,7 +127,7 @@ export default function PlanningTable({
                           <span className="rounded-full bg-[#fef0c7] px-2.5 py-1 text-xs font-medium text-[#b54708]">
                             New
                           </span>
-                        ) : (isDraft || isUpdateField(column)) &&
+                        ) : canManagePlanning && (isDraft || isUpdateField(column)) &&
                           (isShiftColumn(column) || isGroupColumn(column)) ? (
                           <span
                             className={`relative block ${
@@ -184,7 +196,7 @@ export default function PlanningTable({
                               />
                             </svg>
                           </span>
-                        ) : isDraft || isUpdateField(column) ? (
+                        ) : canManagePlanning && (isDraft || isUpdateField(column)) ? (
                           <input
                             value={editing[rowId]?.[column.field] ?? ""}
                             onChange={(event) =>
@@ -214,7 +226,7 @@ export default function PlanningTable({
                           />
                         ) : (
                           <span
-                            className={`block truncate font-medium text-[#101828] ${
+                            className={`flex h-9 items-center truncate font-medium text-[#101828] ${
                               isRemarkField(column)
                                 ? "min-w-40"
                                 : isDateField(column)
@@ -247,7 +259,7 @@ export default function PlanningTable({
                       ) : null}
                       </Fragment>
                     ))}
-                    <td className="px-3 py-4">
+                    {canManagePlanning ? <td className="px-3 py-4">
                       <div className="flex justify-end gap-2">
                         {isDraft ? (
                           <button
@@ -277,7 +289,7 @@ export default function PlanningTable({
                           {isDraft ? "Cancel" : "Delete"}
                         </button>
                       </div>
-                    </td>
+                    </td> : null}
                   </tr>
                 );
               })

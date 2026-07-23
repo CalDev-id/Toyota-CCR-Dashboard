@@ -29,6 +29,7 @@ import {
   sortVisibleColumns,
 } from "@/features/planning/planning-ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 
 type PlanningResponse = {
   parts: PlanningPartSummary[];
@@ -90,6 +91,8 @@ function hasEditingChanges(
 }
 
 export default function PlanningPage() {
+  const { data: session } = useSession();
+  const canManagePlanning = session?.user?.role === "ADMIN";
   const [activePart, setActivePart] = useState<PlanningPartKey>(defaultPart);
   const [parts, setParts] = useState<PlanningPartSummary[]>([]);
   const [columns, setColumns] = useState<PlanningColumn[]>([]);
@@ -445,6 +448,7 @@ export default function PlanningPage() {
         updateChangedRows={() => void updateChangedRows()}
         hasPendingUpdates={changedRowIds.length > 0}
         isSaving={isSaving}
+        canManagePlanning={canManagePlanning}
       />
 
       <PlanningTable
@@ -460,6 +464,7 @@ export default function PlanningPage() {
         saveDraftRow={(id) => void saveDraftRow(id)}
         setDraftRows={setDraftRows}
         setDeleteTarget={setDeleteTarget}
+        canManagePlanning={canManagePlanning}
       />
 
       <PlanningOverlays
@@ -477,6 +482,7 @@ export default function PlanningPage() {
         importConflict={importConflict}
         setImportConflict={setImportConflict}
         toast={toast}
+        canManagePlanning={canManagePlanning}
       />
     </DefaultLayout>
   );

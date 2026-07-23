@@ -6,11 +6,22 @@ import {
   parsePlanningPart,
   planningParts,
 } from "@/features/planning/server/planning-data";
+import { getCurrentUserRole } from "@/lib/authorization";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
+    const role = await getCurrentUserRole();
+
+    if (!role) {
+      return Response.json({ error: "Unauthenticated" }, { status: 401 });
+    }
+
+    if (role === "USER") {
+      return Response.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const url = new URL(request.url);
     const part = parsePlanningPart(url.searchParams.get("part"));
     const now = new Date();

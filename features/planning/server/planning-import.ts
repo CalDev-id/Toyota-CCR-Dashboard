@@ -1,6 +1,5 @@
 "use server";
 
-import { auth } from "@/auth";
 import {
   getConflictColumns,
   getPlanningDateKey,
@@ -13,14 +12,11 @@ import { insertPlanningRows } from "@/features/planning/server/planning-mutation
 import type { PlanningColumn, PlanningPartKey } from "@/features/planning/types";
 import { getReportPrisma } from "@/lib/report-prisma";
 import { revalidatePath } from "next/cache";
+import { requireRoles } from "@/lib/authorization";
 import * as XLSX from "xlsx";
 
 async function requireSession() {
-  const session = await auth();
-
-  if (!session?.user) {
-    throw new Error("Unauthenticated");
-  }
+  await requireRoles("ADMIN");
 }
 
 function dateKey(value: unknown) {

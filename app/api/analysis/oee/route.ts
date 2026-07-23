@@ -1,9 +1,14 @@
 import { getAnalysisOee } from "@/features/analysis/server/analysis-data";
+import { getCurrentUserRole } from "@/lib/authorization";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
+    if (!(await getCurrentUserRole())) {
+      return Response.json({ error: "Unauthenticated" }, { status: 401 });
+    }
+
     const url = new URL(request.url);
     const data = await getAnalysisOee(url.searchParams.get("date"));
 

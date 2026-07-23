@@ -23,13 +23,14 @@ export default function UsersTable({ users, isLoading, setEditingUser, setDelete
             <tr>
               <th className="px-5 py-3">Name</th>
               <th className="px-5 py-3">Email</th>
+              <th className="px-5 py-3">Role</th>
               <th className="px-5 py-3 text-right">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#e4e7ec]">
             {isLoading ? (
               <tr>
-                <td className="px-5 py-6 text-[#667085]" colSpan={3}>
+                <td className="px-5 py-6 text-[#667085]" colSpan={4}>
                   Loading users...
                 </td>
               </tr>
@@ -42,6 +43,7 @@ export default function UsersTable({ users, isLoading, setEditingUser, setDelete
                   <td className="px-5 py-4 text-[#667085]">
                     {user.email}
                   </td>
+                  <td className="px-5 py-4 text-[#667085]">{user.role}</td>
                   <td className="px-5 py-4 text-right">
                     <div className="flex justify-end gap-2">
                     <button
@@ -64,7 +66,7 @@ export default function UsersTable({ users, isLoading, setEditingUser, setDelete
               ))
             ) : (
               <tr>
-                <td className="px-5 py-6 text-[#667085]" colSpan={3}>
+                <td className="px-5 py-6 text-[#667085]" colSpan={4}>
                   Belum ada user.
                 </td>
               </tr>

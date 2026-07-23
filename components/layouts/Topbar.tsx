@@ -57,6 +57,12 @@ const pageHeaders = [
   },
 ];
 
+const roleLabels = {
+  ADMIN: "Admin",
+  CCR: "CCR",
+  USER: "User",
+} as const;
+
 function getThemeSnapshot(): Theme {
   return window.localStorage.getItem(themeStorageKey) === "dark" ? "dark" : "light";
 }
@@ -96,6 +102,8 @@ export default function Topbar({
   const router = useRouter();
   const userName = session?.user?.name ?? "User CCR";
   const userEmail = session?.user?.email ?? "Signed in";
+  const userRole = session?.user?.role ?? "USER";
+  const userRoleLabel = roleLabels[userRole];
   const userInitials = userName
     .split(" ")
     .filter(Boolean)
@@ -220,12 +228,12 @@ export default function Topbar({
               <span className="grid size-9 place-items-center rounded-full bg-[#101828] text-xs font-semibold text-white">
                 {userInitials}
               </span>
-              <span className="hidden text-left sm:block">
-                <span className="block text-sm font-medium leading-4 text-[#101828]">
-                  {userName}
-                </span>
-                <span className="mt-0.5 block text-xs text-[#667085]">
-                  {userEmail}
+                <span className="hidden text-left sm:block">
+                  <span className="block text-sm font-medium leading-4 text-[#101828]">
+                    {userName}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-[#667085]">
+                    {userRoleLabel}
                 </span>
               </span>
               <svg
@@ -257,9 +265,14 @@ export default function Topbar({
                       {userInitials}
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-[#101828]">
-                        {userName}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-semibold text-[#101828]">
+                          {userName}
+                        </p>
+                        <span className="text-xs font-medium text-[#465fff]">
+                          {userRoleLabel}
+                        </span>
+                      </div>
                       <p className="mt-0.5 truncate text-xs text-[#667085]">
                         {userEmail}
                       </p>

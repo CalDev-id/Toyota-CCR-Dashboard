@@ -1,4 +1,5 @@
 import { getProductionAchievementDashboard } from "@/features/production-achievement/server/achievement-data";
+import { getCurrentUserRole } from "@/lib/authorization";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,10 @@ function getSearchValue(value: string | null) {
 
 export async function GET(request: Request) {
   try {
+    if (!(await getCurrentUserRole())) {
+      return Response.json({ error: "Unauthenticated" }, { status: 401 });
+    }
+
     const url = new URL(request.url);
     const dashboard = await getProductionAchievementDashboard({
       date: getSearchValue(url.searchParams.get("date")),

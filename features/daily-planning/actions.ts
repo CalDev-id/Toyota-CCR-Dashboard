@@ -1,6 +1,5 @@
 "use server";
 
-import { auth } from "@/auth";
 import {
   addDailyOtData,
   deleteDailyManualOtData,
@@ -11,11 +10,10 @@ import {
   updateDailyTargetData,
 } from "@/features/daily-planning/server/daily-planning-service";
 import { revalidatePath } from "next/cache";
+import { requireRoles } from "@/lib/authorization";
 
 async function requireUser() {
-  if (!(await auth())?.user) {
-    throw new Error("Unauthenticated");
-  }
+  await requireRoles("ADMIN", "CCR");
 }
 
 export async function loadDailyPlanning(part: string, date: string, shift: string) {

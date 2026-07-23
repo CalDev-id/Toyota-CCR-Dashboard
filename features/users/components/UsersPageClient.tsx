@@ -66,6 +66,7 @@ export default function UsersPage({ initialUsers }: UsersPageProps) {
       const actionFormData = new FormData();
       actionFormData.set("name", String(formData.get("editName") ?? ""));
       actionFormData.set("email", String(formData.get("editEmail") ?? ""));
+      actionFormData.set("role", String(formData.get("editRole") ?? ""));
       actionFormData.set(
         "password",
         String(formData.get("editPassword") ?? ""),
@@ -121,7 +122,7 @@ export default function UsersPage({ initialUsers }: UsersPageProps) {
 
   return (
     <DefaultLayout>
-      <section className="grid gap-6 xl:grid-cols-[0.42fr_0.58fr]">
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
         <CreateUserForm
           toast={toast}
           isSaving={isSaving}

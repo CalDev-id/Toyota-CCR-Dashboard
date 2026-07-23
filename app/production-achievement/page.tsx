@@ -1,6 +1,7 @@
 import DefaultLayout from "@/components/layouts/DefaultLayout";
 import ProductionAchievementRealtimeDashboard from "@/features/production-achievement/components/ProductionAchievementRealtimeDashboard";
 import { getProductionAchievementDashboard } from "@/features/production-achievement/server/achievement-data";
+import { requirePageAccess } from "@/lib/authorization";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ function getSearchValue(value: string | string[] | undefined) {
 export default async function ProductionAchievementPage({
   searchParams,
 }: ProductionAchievementPageProps) {
+  await requirePageAccess("/production-achievement");
   const params = await searchParams;
   const dashboard = await getProductionAchievementDashboard({
     date: getSearchValue(params.date),

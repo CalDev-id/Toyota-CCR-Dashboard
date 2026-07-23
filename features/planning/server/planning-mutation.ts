@@ -1,6 +1,5 @@
 "use server";
 
-import { auth } from "@/auth";
 import {
   getEditableColumns,
   getConflictColumns,
@@ -14,13 +13,10 @@ import {
 import type { PlanningColumn, PlanningPartKey } from "@/features/planning/types";
 import { getReportPrisma } from "@/lib/report-prisma";
 import { revalidatePath } from "next/cache";
+import { requireRoles } from "@/lib/authorization";
 
 async function requireSession() {
-  const session = await auth();
-
-  if (!session?.user) {
-    throw new Error("Unauthenticated");
-  }
+  await requireRoles("ADMIN");
 }
 
 function normalizeValue(value: unknown, column: PlanningColumn) {
@@ -146,6 +142,7 @@ export async function insertPlanningRows(
   rows: Record<string, unknown>[],
   options: { skipDuplicateCheck?: boolean } = {},
 ) {
+  await requireSession();
   const normalizedRows =
     part === "assy"
       ? rows.map((row) => {

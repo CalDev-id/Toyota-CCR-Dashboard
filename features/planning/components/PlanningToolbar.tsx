@@ -20,6 +20,7 @@ type PlanningToolbarProps = {
   updateChangedRows: () => void;
   hasPendingUpdates: boolean;
   isSaving: boolean;
+  canManagePlanning: boolean;
 };
 
 export default function PlanningToolbar({
@@ -41,12 +42,14 @@ export default function PlanningToolbar({
   updateChangedRows,
   hasPendingUpdates,
   isSaving,
+  canManagePlanning,
 }: PlanningToolbarProps) {
   const isAssy = activePart === "assy";
 
   return (
     <section className="mt-6">
       <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        {canManagePlanning ? (
         <div className="flex flex-col gap-2 sm:flex-row lg:ml-auto lg:justify-end">
           <button
             className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-transparent bg-white px-4 text-sm font-semibold text-[#344054] shadow-sm ring-1 ring-inset ring-[#e4e7ec] transition hover:bg-[#f9fafb]"
@@ -110,6 +113,7 @@ export default function PlanningToolbar({
             Update
           </button>
         </div>
+        ) : null}
       </div>
 
       <div
