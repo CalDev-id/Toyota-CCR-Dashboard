@@ -119,9 +119,9 @@ export default function CreateUserForm({ toast, isSaving, onSubmit }: CreateUser
               defaultValue="USER"
               className="h-11 w-full appearance-none rounded-lg border border-[#d0d5dd] bg-white px-3 pr-11 text-sm outline-none transition focus:border-[#465fff] focus:ring-4 focus:ring-[#ecf3ff]"
             >
-              <option value="ADMIN">Admin</option>
+              <option value="ADMIN">ADMIN</option>
               <option value="CCR">CCR</option>
-              <option value="USER">User</option>
+              <option value="USER">USER</option>
             </select>
             <ChevronDownIcon />
           </div>
