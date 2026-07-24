@@ -26,22 +26,25 @@ function LoginForm() {
     setIsSubmitting(true);
 
     const formData = new FormData(event.currentTarget);
-    const result = await signIn("credentials", {
-      email: String(formData.get("email") ?? ""),
-      password: String(formData.get("password") ?? ""),
-      redirect: false,
-      callbackUrl,
-    });
+    try {
+      const result = await signIn("credentials", {
+        email: String(formData.get("email") ?? ""),
+        password: String(formData.get("password") ?? ""),
+        redirect: false,
+        callbackUrl,
+      });
 
-    setIsSubmitting(false);
+      if (result?.error) {
+        setError("Email atau password tidak valid.");
+        setIsSubmitting(false);
+        return;
+      }
 
-    if (result?.error) {
-      setError("Email atau password tidak valid.");
-      return;
+      router.push(callbackUrl);
+    } catch {
+      setError("Login gagal. Silakan coba lagi.");
+      setIsSubmitting(false);
     }
-
-    router.push(callbackUrl);
-    router.refresh();
   }
 
   return (
@@ -89,6 +92,7 @@ function LoginForm() {
               type="email"
               autoComplete="email"
               required
+              disabled={isSubmitting}
               className="mt-2 h-11 w-full rounded-lg border border-[#d0d5dd] px-3 text-sm outline-none transition focus:border-[#465fff] focus:ring-4 focus:ring-[#ecf3ff] dark:border-[#384860] dark:bg-[#111827] dark:text-[#f8fafc] dark:focus:border-[#8da2ff] dark:focus:ring-[#14245a]"
               placeholder="admin@example.com"
             />
@@ -107,6 +111,7 @@ function LoginForm() {
               type="password"
               autoComplete="current-password"
               required
+              disabled={isSubmitting}
               className="mt-2 h-11 w-full rounded-lg border border-[#d0d5dd] px-3 text-sm outline-none transition focus:border-[#465fff] focus:ring-4 focus:ring-[#ecf3ff] dark:border-[#384860] dark:bg-[#111827] dark:text-[#f8fafc] dark:focus:border-[#8da2ff] dark:focus:ring-[#14245a]"
               placeholder="Masukkan password"
             />
@@ -119,11 +124,12 @@ function LoginForm() {
           ) : null}
 
           <button
-            className="h-11 w-full rounded-lg bg-[#465fff] px-4 text-sm font-semibold text-white transition hover:bg-[#3b50db] disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#465fff] px-4 text-sm font-semibold text-white transition hover:bg-[#3b50db] disabled:cursor-not-allowed disabled:opacity-70"
             type="submit"
             disabled={isSubmitting}
+            aria-busy={isSubmitting}
           >
-            {isSubmitting ? "Memproses..." : "Login"}
+            {isSubmitting ? <><span className="size-4 animate-spin rounded-full border-2 border-white/35 border-t-white" aria-hidden="true" />Memuat dashboard...</> : "Login"}
           </button>
         </form>
       </section>
