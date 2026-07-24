@@ -10,6 +10,8 @@ const daySlots: SlotTemplate[] = [
   { order: 1, start: "07:20", end: "08:20", minutes: 60, type: "normal" }, { order: 2, start: "08:20", end: "09:30", minutes: 70, type: "normal" }, { order: 3, start: "09:40", end: "10:40", minutes: 60, type: "normal" }, { order: 4, start: "10:40", end: "11:45", minutes: 65, type: "normal" }, { order: 5, start: "12:30", end: "14:00", minutes: 90, type: "normal" }, { order: 6, start: "14:10", end: "15:10", minutes: 60, type: "normal" }, { order: 7, start: "15:10", end: "16:00", minutes: 50, type: "normal" }, { order: 8, start: "16:00", end: "18:00", minutes: 120, type: "ot" },
 ];
 const fridaySlots = daySlots.map((slot) => slot.order === 5 ? { ...slot, start: "13:00", end: "14:30" } : slot.order === 6 ? { ...slot, start: "14:40", end: "15:40" } : slot.order === 7 ? { ...slot, start: "15:40", end: "16:30" } : slot.order === 8 ? { ...slot, start: "16:30", end: "18:30" } : { ...slot });
+const assyDaySlots = daySlots.map((slot) => slot.order === 5 ? { ...slot, start: "12:45", end: "14:00", minutes: 75 } : slot.order === 6 ? { ...slot, start: "14:10", end: "15:10" } : slot.order === 7 ? { ...slot, start: "15:10", end: "16:15", minutes: 60 } : slot.order === 8 ? { ...slot, start: "16:15", end: "18:15" } : { ...slot });
+const assyFridaySlots = assyDaySlots.map((slot) => slot.order === 5 ? { ...slot, start: "13:15", end: "14:30" } : slot.order === 6 ? { ...slot, start: "14:40", end: "15:40" } : slot.order === 7 ? { ...slot, start: "15:40", end: "16:45" } : slot.order === 8 ? { ...slot, start: "16:45", end: "18:45" } : { ...slot });
 const nightSlots: SlotTemplate[] = [{ order: 1, start: "20:05", end: "21:05", minutes: 60, type: "ot" }, { order: 2, start: "21:05", end: "22:00", minutes: 55, type: "normal" }, { order: 3, start: "22:10", end: "23:00", minutes: 50, type: "normal" }, { order: 4, start: "23:00", end: "00:00", minutes: 60, type: "normal" }, { order: 5, start: "00:30", end: "01:30", minutes: 60, type: "normal" }, { order: 6, start: "01:30", end: "02:30", minutes: 60, type: "normal" }, { order: 7, start: "02:40", end: "03:40", minutes: 60, type: "normal" }, { order: 8, start: "03:40", end: "04:45", minutes: 65, type: "normal" }, { order: 9, start: "05:00", end: "05:45", minutes: 45, type: "normal" }, { order: 10, start: "05:45", end: "06:15", minutes: 30, type: "ot" }];
 
 function parseRatio(value: unknown) { const [one, two] = String(value ?? "").split(":").map(Number); return [Math.max(0, one || 0), Math.max(0, two || 0)] as const; }
@@ -18,6 +20,7 @@ function splitTarget(part: string, total: number, one: number, two: number) { re
 function addMinutes(time: string, minutes: number) { const [hour, minute] = time.split(":").map(Number); const total = ((hour * 60 + minute + minutes) % (24 * 60) + (24 * 60)) % (24 * 60); return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`; }
 function calculateDurationMinutes(startTime: string, endTime: string) { const [startHour,startMinute] = startTime.split(":").map(Number); const [endHour,endMinute] = endTime.split(":").map(Number); if (![startHour,startMinute,endHour,endMinute].every(Number.isFinite)) return 0; const startTotal = startHour * 60 + startMinute; const endTotal = endHour * 60 + endMinute; return Math.max(0,endTotal >= startTotal ? endTotal - startTotal : endTotal + 24 * 60 - startTotal); }
 function targetFor(minutes: number, tt: number, oee: number) { return tt > 0 ? Math.round(minutes / tt * oee / 100) : 0; }
+function targetsForSlots(part: string, shift: string, slots: Array<{ key: number; minutes: number; oee: number }>, tt: number) { if (part !== "assy" || shift !== "1" || tt <= 0) return new Map(slots.map((slot) => [slot.key, targetFor(slot.minutes, tt, slot.oee)])); let accumulatedTarget = 0; let roundedTarget = 0; return new Map(slots.map((slot) => { accumulatedTarget += slot.minutes / tt * slot.oee / 100; const nextRoundedTarget = Math.round(accumulatedTarget); const target = nextRoundedTarget - roundedTarget; roundedTarget = nextRoundedTarget; return [slot.key, target] as const; })); }
 function tableFor(part: string) { if (!parts.has(part)) throw new Error("Invalid planning line"); return `t_plan_daily_production_${part}`; }
 function toNullableNumber(value: unknown) { if (value === null || value === undefined || value === "") return null; const numeric = Number(value); return Number.isFinite(numeric) ? numeric : null; }
 function sameNullableNumber(left: unknown, right: unknown) { const leftNumber = toNullableNumber(left); const rightNumber = toNullableNumber(right); return leftNumber === rightNumber; }
@@ -62,8 +65,9 @@ async function getPlanContext(part: string, date: string, shift: string) {
   return { hasMonthlyData: true as const, db, plan, tt, ratio, monthlyOee, otMinutes };
 }
 
-function getTemplate(date: string, shift: string, otMinutes: number) {
-  const base = shift === "1" ? (new Date(`${date}T00:00:00`).getDay() === 5 ? fridaySlots : daySlots) : nightSlots;
+function getTemplate(part: string, date: string, shift: string, otMinutes: number) {
+  const isFriday = new Date(`${date}T00:00:00`).getDay() === 5;
+  const base = shift === "1" ? (part === "assy" ? (isFriday ? assyFridaySlots : assyDaySlots) : (isFriday ? fridaySlots : daySlots)) : nightSlots;
   return base.flatMap((slot) => { if (slot.type === "normal") return [slot]; if (shift === "1") { const minutes = Math.min(otMinutes, slot.minutes); return minutes ? [{ ...slot, minutes, end: addMinutes(slot.start, minutes) }] : []; } const minutes = slot.order === 1 ? Math.min(otMinutes, 60) : Math.min(Math.max(otMinutes - 60, 0), 30); return minutes ? [{ ...slot, minutes, end: addMinutes(slot.start, minutes) }] : []; });
 }
 
@@ -84,8 +88,12 @@ export async function loadDailyPlanningData(part: string, date: string, shift: s
   }
 
   const existing = await db.$queryRawUnsafe<Slot[]>("SELECT id,slot_order,TIME_FORMAT(start_time,'%H:%i') AS start_time,TIME_FORMAT(end_time,'%H:%i') AS end_time,prod_minutes,slot_type,oee,is_oee_override,total_target,one_tr,two_tr,is_schedule_override FROM t_daily_production_plan_slot WHERE daily_plan_id=? ORDER BY slot_order", plan.id);
-  const template = getTemplate(date,shift,otMinutes);
+  const template = getTemplate(part,date,shift,otMinutes);
   const [ratioOne, ratioTwo] = parseRatio(ratio);
+  const templateTargets = targetsForSlots(part, shift, template.map((slot) => {
+    const existingSlot = existing.find((row: Slot) => Number(row.slot_order) === slot.order);
+    return { key: slot.order, minutes: slot.minutes, oee: existingSlot?.is_oee_override ? Number(existingSlot.oee) : (monthlyOee ?? 0) };
+  }), tt ?? 0);
   const templateOrders = new Set(template.map((slot) => slot.order));
   const staleSlots = existing.filter((row: Slot) => !templateOrders.has(Number(row.slot_order)) && !(row.slot_type === "ot" && row.is_schedule_override));
 
@@ -99,7 +107,7 @@ export async function loadDailyPlanningData(part: string, date: string, shift: s
   for (const slot of template) {
     const existingSlot = existing.find((row: Slot) => Number(row.slot_order) === slot.order);
     const oeeForTarget = existingSlot?.is_oee_override ? Number(existingSlot.oee) : (monthlyOee ?? 0);
-    const target = targetFor(slot.minutes, tt ?? 0, oeeForTarget);
+    const target = templateTargets.get(slot.order) ?? targetFor(slot.minutes, tt ?? 0, oeeForTarget);
     const [oneTr,twoTr] = splitTarget(part,target,ratioOne,ratioTwo);
 
     if (!existingSlot) {
@@ -130,7 +138,8 @@ export async function loadDailyPlanningData(part: string, date: string, shift: s
   }
 
   const slots = await db.$queryRawUnsafe<Slot[]>("SELECT id,slot_order,TIME_FORMAT(start_time,'%H:%i') AS start_time,TIME_FORMAT(end_time,'%H:%i') AS end_time,prod_minutes,slot_type,oee,is_oee_override,total_target,one_tr,two_tr,is_schedule_override FROM t_daily_production_plan_slot WHERE daily_plan_id=? ORDER BY slot_order", plan.id);
-  const rows = slots.map((slot: Slot) => { const oee = slot.is_oee_override ? Number(slot.oee) : monthlyOee; const target = slot.is_schedule_override ? Number(slot.total_target) : targetFor(Number(slot.prod_minutes),tt ?? 0,oee ?? 0); const [oneTr,twoTr] = splitTarget(part,target,ratioOne,ratioTwo); return { ...slot, oee: Number(slot.oee ?? 0), ftt: tt ?? "", foee: oee ?? "", fratio: part === "camshaft" ? "" : ratio, ftotal_target:target, f1tr:oneTr, f2tr:twoTr }; });
+  const rowTargets = targetsForSlots(part, shift, slots.map((slot: Slot) => ({ key: Number(slot.slot_order), minutes: Number(slot.prod_minutes), oee: slot.is_oee_override ? Number(slot.oee) : (monthlyOee ?? 0) })), tt ?? 0);
+  const rows = slots.map((slot: Slot) => { const oee = slot.is_oee_override ? Number(slot.oee) : monthlyOee; const calculatedTarget = rowTargets.get(Number(slot.slot_order)) ?? targetFor(Number(slot.prod_minutes),tt ?? 0,oee ?? 0); const target = slot.is_schedule_override ? Number(slot.total_target) : calculatedTarget; const [oneTr,twoTr] = splitTarget(part,target,ratioOne,ratioTwo); return { ...slot, oee: Number(slot.oee ?? 0), ftt: tt ?? "", foee: oee ?? "", fratio: part === "camshaft" ? "" : ratio, ftotal_target:target, f1tr:oneTr, f2tr:twoTr }; });
   return { group: "all", tt, oee: monthlyOee, ratio, ratioOne, ratioTwo, hasMonthlyData: true, message: "", rows };
 }
 
