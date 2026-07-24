@@ -2,6 +2,7 @@
 
 import Sidebar from "@/components/layouts/Sidebar";
 import Topbar from "@/components/layouts/Topbar";
+import AuthSessionProvider from "@/components/auth/AuthSessionProvider";
 import { useState } from "react";
 
 type DefaultLayoutProps = {
@@ -17,28 +18,30 @@ export default function DefaultLayout({
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   return (
-    <div className="h-screen overflow-hidden bg-[#f9fafb] text-[#101828]">
-      <div className="flex h-full overflow-hidden">
-        <Sidebar
-          isCollapsed={isSidebarCollapsed}
-          isMobileOpen={isMobileSidebarOpen}
-          onCloseMobile={() => setIsMobileSidebarOpen(false)}
-          onToggleCollapsed={() => setIsSidebarCollapsed((current) => !current)}
-        />
-
-        <div className="relative flex min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable]">
-          <Topbar
-            isMobileSidebarOpen={isMobileSidebarOpen}
-            onToggleMobileSidebar={() =>
-              setIsMobileSidebarOpen((current) => !current)
-            }
+    <AuthSessionProvider>
+      <div className="h-screen overflow-hidden bg-[#f9fafb] text-[#101828]">
+        <div className="flex h-full overflow-hidden">
+          <Sidebar
+            isCollapsed={isSidebarCollapsed}
+            isMobileOpen={isMobileSidebarOpen}
+            onCloseMobile={() => setIsMobileSidebarOpen(false)}
+            onToggleCollapsed={() => setIsSidebarCollapsed((current) => !current)}
           />
 
-          <main>
-            <div className={contentClassName}>{children}</div>
-          </main>
+          <div className="relative flex min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable]">
+            <Topbar
+              isMobileSidebarOpen={isMobileSidebarOpen}
+              onToggleMobileSidebar={() =>
+                setIsMobileSidebarOpen((current) => !current)
+              }
+            />
+
+            <main>
+              <div className={contentClassName}>{children}</div>
+            </main>
+          </div>
         </div>
       </div>
-    </div>
+    </AuthSessionProvider>
   );
 }
