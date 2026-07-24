@@ -102,11 +102,9 @@ export default function ProductionAchievementRealtimeDashboard({
   const [isFilterLoading, setIsFilterLoading] = useState(false);
   const filterRequestRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const soundTestTimeoutRef = useRef<number | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [decisions, setDecisions] = useState<Record<string, DecisionResponse>>({});
   const [isSoundBlocked, setIsSoundBlocked] = useState(false);
-  const [isTestingSound, setIsTestingSound] = useState(false);
   const [isSavingDecision, setIsSavingDecision] = useState(false);
   const canDecide = viewerRole === "ADMIN" || viewerRole === "CCR_GROUP_LEADER";
 
@@ -221,32 +219,6 @@ export default function ProductionAchievementRealtimeDashboard({
     void audio.play().then(() => setIsSoundBlocked(false)).catch(() => setIsSoundBlocked(true));
   }
 
-  function stopSoundTest() {
-    if (soundTestTimeoutRef.current !== null) {
-      window.clearTimeout(soundTestTimeoutRef.current);
-      soundTestTimeoutRef.current = null;
-    }
-    const audio = audioRef.current;
-    if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
-      audio.loop = true;
-    }
-    setIsTestingSound(false);
-  }
-
-  function testAlarmSound() {
-    const audio = audioRef.current;
-    if (!audio) return;
-    stopSoundTest();
-    audio.loop = false;
-    void audio.play().then(() => {
-      setIsSoundBlocked(false);
-      setIsTestingSound(true);
-      soundTestTimeoutRef.current = window.setTimeout(stopSoundTest, 5000);
-    }).catch(() => setIsSoundBlocked(true));
-  }
-
   async function saveDecision(alarm: Alarm, decision: DecisionResponse["decision"]) {
     setIsSavingDecision(true);
     try {
@@ -267,7 +239,7 @@ export default function ProductionAchievementRealtimeDashboard({
     <section>
       <audio ref={audioRef} src="/audio/line_stop.mp3" loop preload="auto" />
       <div className="mb-4 min-h-[118px] rounded-2xl border border-[#e4e7ec] bg-white px-4 py-5 shadow-sm dark:border-[#273449] dark:bg-[#111827]">
-        <div className="grid gap-4 lg:grid-cols-[minmax(280px,1fr)_auto_auto_auto] lg:items-center">
+        <div className="grid gap-4 lg:grid-cols-[minmax(280px,1fr)_auto_auto] lg:items-center">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight text-[#101828] dark:text-[#f8fafc] md:text-3xl">
               Production Achievement ({formatShiftLabel(dashboard.shift)})
@@ -304,15 +276,6 @@ export default function ProductionAchievementRealtimeDashboard({
 
           <ProductionAchievementClock />
 
-          {canDecide ? (
-            <button
-              type="button"
-              onClick={isTestingSound ? stopSoundTest : testAlarmSound}
-              className="h-10 rounded-lg border border-[#8a5b24] bg-[#fffaeb] px-3 text-sm font-bold text-[#8a4b08] transition hover:bg-[#fef0c7] dark:border-[#8a5b24] dark:bg-[#3a2604] dark:text-[#fdb022] dark:hover:bg-[#4a3105]"
-            >
-              {isTestingSound ? "Stop test" : "Test alarm sound"}
-            </button>
-          ) : null}
         </div>
       </div>
 
