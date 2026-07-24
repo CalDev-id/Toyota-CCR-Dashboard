@@ -13,7 +13,7 @@ import { revalidatePath } from "next/cache";
 import { requireRoles } from "@/lib/authorization";
 
 async function requireUser() {
-  await requireRoles("ADMIN", "CCR");
+  await requireRoles("ADMIN", "CCR_OPERATION", "CCR_GROUP_LEADER");
 }
 
 export async function loadDailyPlanning(part: string, date: string, shift: string) {

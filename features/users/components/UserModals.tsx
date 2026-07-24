@@ -84,7 +84,8 @@ export default function UserModals({
                     className="h-11 w-full appearance-none rounded-lg border border-[#d0d5dd] bg-white px-3 pr-11 text-sm outline-none transition focus:border-[#465fff] focus:ring-4 focus:ring-[#ecf3ff]"
                   >
                     <option value="ADMIN">ADMIN</option>
-                    <option value="CCR">CCR</option>
+                    <option value="CCR_OPERATION">CCR Operation</option>
+                    <option value="CCR_GROUP_LEADER">CCR Group Leader</option>
                     <option value="USER">USER</option>
                   </select>
                   <svg

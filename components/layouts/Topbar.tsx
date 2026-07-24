@@ -59,7 +59,8 @@ const pageHeaders = [
 
 const roleLabels = {
   ADMIN: "Admin",
-  CCR: "CCR",
+  CCR_OPERATION: "CCR Operation",
+  CCR_GROUP_LEADER: "CCR Group Leader",
   USER: "User",
 } as const;
 

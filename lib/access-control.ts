@@ -1,6 +1,7 @@
 import type { UserRole } from "@/features/users/types";
 
-export const MANAGER_ROLES: UserRole[] = ["ADMIN", "CCR"];
+export const CCR_ROLES: UserRole[] = ["CCR_OPERATION", "CCR_GROUP_LEADER"];
+export const MANAGER_ROLES: UserRole[] = ["ADMIN", ...CCR_ROLES];
 
 const userAllowedPaths = [
   "/",
@@ -14,7 +15,7 @@ export function canAccessPath(role: UserRole, pathname: string) {
     return true;
   }
 
-  if (role === "CCR") {
+  if (CCR_ROLES.includes(role)) {
     return pathname !== "/users" && !pathname.startsWith("/users/");
   }
 

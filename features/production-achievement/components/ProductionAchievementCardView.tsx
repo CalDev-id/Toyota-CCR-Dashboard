@@ -1,4 +1,4 @@
-import type { ProductionAchievementCard } from "@/features/production-achievement/types";
+import type { ProductionAchievementCard, ProductionLineStopDecision } from "@/features/production-achievement/types";
 import Image from "next/image";
 import type { ReactNode } from "react";
 
@@ -187,8 +187,10 @@ function ProblemTypeBadge({ type }: { type?: "AV" | "PE" | "RQ" }) {
 
 export default function ProductionAchievementCardView({
   card,
+  lineStopDecision,
 }: {
   card: ProductionAchievementCard;
+  lineStopDecision?: ProductionLineStopDecision;
 }) {
   const isTargetMet = meetsOeeTarget(card.oee, card.oeeTarget);
   const targetLabel = formatPercent(card.oeeTarget);
@@ -205,6 +207,12 @@ export default function ProductionAchievementCardView({
             <p className="mt-1 text-xs font-medium text-[#667085] dark:text-[#a7b0c0]">
               Last updated: {formatLastUpdated(card.lastUpdatedAt)}
             </p>
+          ) : null}
+          {lineStopDecision ? (
+            <div className="mt-2 rounded-lg border border-[#fec84b] bg-[#fffaeb] px-2.5 py-2 text-xs text-[#7a2e0e] dark:border-[#8a5300] dark:bg-[#3a2604] dark:text-[#fdb022]">
+              <p className="font-bold">LINE STOP · {lineStopDecision.decision.replaceAll("_", " ")}</p>
+              <p className="mt-0.5">PIC: {lineStopDecision.decidedByName} · {formatLastUpdated(lineStopDecision.decidedAt)}</p>
+            </div>
           ) : null}
         </div>
         <span

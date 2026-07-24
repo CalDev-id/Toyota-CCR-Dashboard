@@ -64,6 +64,7 @@ export type ProductionAchievementCard = {
   otPlan: number;
   balance: number;
   lastUpdatedAt: string | null;
+  workSchedule: Array<{ start: string; end: string }>;
   stopTime: number;
   problems: ProductionAchievementProblem[];
   variants: ProductionAchievementVariant[];
@@ -73,4 +74,10 @@ export type ProductionAchievementDashboard = {
   date: string;
   shift: string;
   cards: ProductionAchievementCard[];
+};
+
+export type ProductionLineStopDecision = {
+  decision: "RUNNING" | "LINE_STOP" | "CHOKOTEI";
+  decidedByName: string;
+  decidedAt: string;
 };

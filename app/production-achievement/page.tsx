@@ -19,7 +19,7 @@ function getSearchValue(value: string | string[] | undefined) {
 export default async function ProductionAchievementPage({
   searchParams,
 }: ProductionAchievementPageProps) {
-  await requirePageAccess("/production-achievement");
+  const role = await requirePageAccess("/production-achievement");
   const params = await searchParams;
   const dashboard = await getProductionAchievementDashboard({
     date: getSearchValue(params.date),
@@ -31,6 +31,7 @@ export default async function ProductionAchievementPage({
       <ProductionAchievementRealtimeDashboard
         key={`${dashboard.date}-${dashboard.shift}`}
         initialDashboard={dashboard}
+        viewerRole={role}
       />
     </DefaultLayout>
   );

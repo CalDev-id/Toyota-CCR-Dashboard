@@ -314,6 +314,7 @@ type DailyPlanningPlanOverride = {
   variants: Map<string, number>;
   tt: number;
   workHoursMinutes: number;
+  workSchedule: Array<{ start: string; end: string }>;
 };
 
 function getLocalDate(value: string) {
@@ -439,6 +440,7 @@ async function getDailyPlanningPlanOverrides(date: string, shift: string) {
       variants: new Map<string, number>(),
       tt: toNumber(row.tt),
       workHoursMinutes: 0,
+      workSchedule: [],
     };
     const oneTr = toNumber(row.oneTr);
     const twoTr = toNumber(row.twoTr);
@@ -469,6 +471,10 @@ async function getDailyPlanningPlanOverrides(date: string, shift: string) {
     const current = overrides.get(firstRow.lineKey);
     if (current) {
       current.workHoursMinutes += getPlanningWorkHoursMinutes(date, sortedRows, now);
+      current.workSchedule = sortedRows.map((row) => ({
+        start: row.startTime,
+        end: row.endTime,
+      }));
     }
   }
 
@@ -638,6 +644,7 @@ function buildLineCard(
     otPlan: monthlyParameters.otPlan,
     balance: prodAct - prodPlan,
     lastUpdatedAt,
+    workSchedule: planOverride?.workSchedule ?? [],
     stopTime: buildStopTime(problemRows),
     problems: buildProblems(problemRows),
     variants: buildVariants(line, summaryRows, planOverride),

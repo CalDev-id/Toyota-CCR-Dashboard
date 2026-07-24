@@ -97,14 +97,14 @@ const menuItems: MenuItem[] = [
       {
         label: "Prod Acv Packom",
         href: "/packom",
-        roles: ["ADMIN", "CCR"],
+        roles: ["ADMIN", "CCR_OPERATION", "CCR_GROUP_LEADER"],
       },
     ],
   },
   {
     label: "Planning",
     href: "/planning",
-    roles: ["ADMIN", "CCR"],
+    roles: ["ADMIN", "CCR_OPERATION", "CCR_GROUP_LEADER"],
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
         <path
