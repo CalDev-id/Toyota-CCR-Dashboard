@@ -83,6 +83,41 @@ function getOvertimeClass(actual: number, plan: number) {
   return actual < plan ? "text-[#b42318]" : "text-[#101828]";
 }
 
+function getDecisionStyle(decision?: ProductionLineStopDecision["decision"]) {
+  if (decision === "RUNNING") {
+    return {
+      card: "border-[#e4e7ec] bg-white dark:border-[#273449] dark:bg-[#111827]",
+      footer: "border-[#e4e7ec] bg-[#f9fafb] text-[#344054] dark:border-[#273449] dark:bg-[#162033] dark:text-[#d0d5dd]",
+    };
+  }
+
+  if (decision === "CHOKOTEI") {
+    return {
+      card: "border-[#d6a15d] bg-[#fffcf5] dark:border-[#8a5b24] dark:bg-[#332408]",
+      footer: "border-[#fec84b] bg-[#fffaeb] text-[#b54708] dark:border-[#b54708] dark:bg-[#3a2604] dark:text-[#fdb022]",
+    };
+  }
+
+  if (decision === "LINE_STOP") {
+    return {
+      card: "border-[#f97066] bg-[#fffbfa] dark:border-[#b42318] dark:bg-[#351313]",
+      footer: "border-[#fda29b] bg-[#fef3f2] text-[#b42318] dark:border-[#b42318] dark:bg-[#3b1111] dark:text-[#fda29b]",
+    };
+  }
+
+  if (decision === "NO_PRODUCTION") {
+    return {
+      card: "border-[#f97066] bg-[#fffbfa] dark:border-[#b42318] dark:bg-[#351313]",
+      footer: "border-[#fda29b] bg-[#fef3f2] text-[#b42318] dark:border-[#b42318] dark:bg-[#3b1111] dark:text-[#fda29b]",
+    };
+  }
+
+  return {
+    card: "border-[#e4e7ec] bg-white dark:border-[#273449] dark:bg-[#111827]",
+    footer: "",
+  };
+}
+
 function MetricTile({
   label,
   value,
@@ -195,9 +230,11 @@ export default function ProductionAchievementCardView({
   const isTargetMet = meetsOeeTarget(card.oee, card.oeeTarget);
   const targetLabel = formatPercent(card.oeeTarget);
   const hasProblems = card.problems.length > 0;
+  const decisionStyle = getDecisionStyle(lineStopDecision?.decision);
 
   return (
-    <article className="flex min-h-[500px] w-[320px] shrink-0 flex-col rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm dark:border-[#273449] dark:bg-[#111827] xl:w-full xl:min-w-0 xl:shrink">
+    <div className="w-[320px] shrink-0 xl:w-full xl:min-w-0 xl:shrink">
+      <article className={`flex min-h-[500px] w-full flex-col rounded-2xl border p-4 shadow-sm ${decisionStyle.card}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="truncate text-lg font-semibold text-[#101828] dark:text-[#f8fafc]">
@@ -207,12 +244,6 @@ export default function ProductionAchievementCardView({
             <p className="mt-1 text-xs font-medium text-[#667085] dark:text-[#a7b0c0]">
               Last updated: {formatLastUpdated(card.lastUpdatedAt)}
             </p>
-          ) : null}
-          {lineStopDecision ? (
-            <div className="mt-2 rounded-lg border border-[#fec84b] bg-[#fffaeb] px-2.5 py-2 text-xs text-[#7a2e0e] dark:border-[#8a5300] dark:bg-[#3a2604] dark:text-[#fdb022]">
-              <p className="font-bold">LINE STOP · {lineStopDecision.decision.replaceAll("_", " ")}</p>
-              <p className="mt-0.5">PIC: {lineStopDecision.decidedByName} · {formatLastUpdated(lineStopDecision.decidedAt)}</p>
-            </div>
           ) : null}
         </div>
         <span
@@ -405,6 +436,16 @@ export default function ProductionAchievementCardView({
           </p>
         )}
       </div>
-    </article>
+
+      </article>
+
+      {lineStopDecision ? (
+        <div className={`mt-3 rounded-xl border px-3 py-3 shadow-sm ${decisionStyle.footer}`}>
+          <p className="text-sm font-bold tracking-wide">{lineStopDecision.decision.replaceAll("_", " ")}</p>
+          <p className="mt-1 text-xs font-medium opacity-85">PIC: {lineStopDecision.decidedByName} · {formatLastUpdated(lineStopDecision.decidedAt)}</p>
+        </div>
+      ) : null}
+
+    </div>
   );
 }

@@ -292,7 +292,11 @@ export default function ProductionAchievementRealtimeDashboard({
         >
           <div className="grid auto-cols-[320px] grid-flow-col gap-3 xl:grid-flow-row xl:grid-cols-5 xl:auto-cols-auto">
             {dashboard.cards.map((card) => (
-              <ProductionAchievementCardView key={card.key} card={card} lineStopDecision={displayedDecisions[card.key]} />
+              <ProductionAchievementCardView
+                key={card.key}
+                card={card}
+                lineStopDecision={displayedDecisions[card.key]}
+              />
             ))}
           </div>
         </div>
