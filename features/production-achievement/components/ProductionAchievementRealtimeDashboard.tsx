@@ -16,6 +16,7 @@ type ProductionAchievementRealtimeDashboardProps = {
 type Alarm = { card: ProductionAchievementCard; alertStartedAt: string };
 type DecisionResponse = ProductionLineStopDecision & { sourceLastUpdatedAt: string; alertStartedAt: string };
 const machiningKeys = new Set(["cylblock", "cylhead", "crankshaft", "camshaft"]);
+const LINE_STOP_ALERT_WORK_MINUTES = 15;
 const lineIconSources = {
   assy: "/images/icon/assyicon.png",
   cylblock: "/images/icon/chicon.png",
@@ -114,10 +115,14 @@ export default function ProductionAchievementRealtimeDashboard({
     if (Number.isNaN(lastUpdated.getTime()) || lastUpdated > now) return [];
     const decision = decisions[card.key];
     if (decision && decision.sourceLastUpdatedAt !== card.lastUpdatedAt) return [];
-    if (decision?.decision === "LINE_STOP" || decision?.decision === "CHOKOTEI") return [];
+    if (
+      decision?.decision === "LINE_STOP"
+      || decision?.decision === "CHOKOTEI"
+      || decision?.decision === "NO_PRODUCTION"
+    ) return [];
     const reference = decision?.decision === "RUNNING" ? new Date(decision.decidedAt) : lastUpdated;
     const elapsed = workMinutesSince(card, dashboard.date, dashboard.shift, reference, now);
-    return elapsed.isWorkingNow && elapsed.minutes >= 10 ? [{ card, alertStartedAt: decision?.decision === "RUNNING" ? decision.decidedAt : card.lastUpdatedAt }] : [];
+    return elapsed.isWorkingNow && elapsed.minutes >= LINE_STOP_ALERT_WORK_MINUTES ? [{ card, alertStartedAt: decision?.decision === "RUNNING" ? decision.decidedAt : card.lastUpdatedAt }] : [];
   }), [dashboard, decisions, now]);
 
   const displayedDecisions = useMemo(() => Object.fromEntries(
@@ -182,7 +187,7 @@ export default function ProductionAchievementRealtimeDashboard({
     const candidates = dashboard.cards.filter((card) => {
       if (!machiningKeys.has(card.key) || !card.lastUpdatedAt || card.workSchedule.length === 0) return false;
       const elapsed = workMinutesSince(card, dashboard.date, dashboard.shift, new Date(card.lastUpdatedAt), now);
-      return elapsed.isWorkingNow && elapsed.minutes >= 10;
+      return elapsed.isWorkingNow && elapsed.minutes >= LINE_STOP_ALERT_WORK_MINUTES;
     });
     if (!candidates.length) return;
     let active = true;
@@ -323,7 +328,7 @@ export default function ProductionAchievementRealtimeDashboard({
       </div>
       {canDecide && alarms.length > 0 ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#101828]/55 p-4" role="dialog" aria-modal="true" aria-labelledby="line-stop-title">
-          <div className="w-full max-w-md rounded-2xl border border-[#873b43] bg-white p-5 shadow-2xl dark:border-[#873b43] dark:bg-[#111827]">
+          <div className="w-full max-w-xl rounded-2xl border border-[#873b43] bg-white p-5 shadow-2xl dark:border-[#873b43] dark:bg-[#111827]">
             <div className="relative overflow-hidden rounded-xl border border-[#f1d5d8] bg-[linear-gradient(120deg,#fff7f7_0%,#ffffff_56%,#f8fafc_100%)] px-4 py-4 dark:border-[#542b35] dark:bg-[linear-gradient(120deg,#24151c_0%,#111827_62%,#162033_100%)]">
               <Image
                 src={lineIconSources[alarms[0].card.key]}
@@ -336,17 +341,18 @@ export default function ProductionAchievementRealtimeDashboard({
                 <p className="text-sm font-bold tracking-wide text-[#b42318]">LINE STOP ALERT</p>
                 <h2 id="line-stop-title" className="mt-1 text-xl font-semibold text-[#101828] dark:text-white">
                   <span className="block">{alarms[0].card.label} tidak</span>
-                  <span className="block">update ≥ 10 menit kerja</span>
+                  <span className="block">update ≥ {LINE_STOP_ALERT_WORK_MINUTES} menit kerja</span>
                 </h2>
                 <p className="mt-2 text-sm text-[#667085] dark:text-[#a7b0c0]">Tentukan decision. PIC lain akan menerima status yang sama pada pengecekan berikutnya.</p>
               </div>
             </div>
             {isSoundBlocked ? <button type="button" onClick={enableAlarmSound} className="mt-4 rounded-lg border border-[#f04438] px-3 py-2 text-sm font-semibold text-[#b42318]">Aktifkan suara alarm</button> : null}
-            <div className="mt-5 grid gap-2 sm:grid-cols-3">
+            <div className="mt-5 grid grid-cols-4 gap-2">
               {([
                 ["RUNNING", "border border-[#1d704d] bg-[linear-gradient(120deg,#101b2a_18%,#06452f_100%)] text-[#b7f7cf] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:border-[#2ba86d] hover:from-[#132137] hover:to-[#07583b]"],
                 ["CHOKOTEI", "border border-[#8a5b24] bg-[linear-gradient(120deg,#101b2a_18%,#5c310c_100%)] text-[#ffe0ad] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:border-[#c77b25] hover:from-[#132137] hover:to-[#733d0d]"],
                 ["LINE_STOP", "border border-[#873b43] bg-[linear-gradient(120deg,#101b2a_18%,#581d2a_100%)] text-[#ffc4c7] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:border-[#c8515b] hover:from-[#132137] hover:to-[#6b2230]"],
+                ["NO_PRODUCTION", "border border-[#475467] bg-[linear-gradient(120deg,#101b2a_18%,#344054_100%)] text-[#d0d5dd] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:border-[#667085] hover:from-[#132137] hover:to-[#475467]"],
               ] as const).map(([decision, colorClass]) => (
                 <button
                   key={decision}
@@ -355,7 +361,7 @@ export default function ProductionAchievementRealtimeDashboard({
                   onClick={() => void saveDecision(alarms[0], decision)}
                   className={`rounded-xl px-3 py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${colorClass}`}
                 >
-                  {decision.replaceAll("_", " ")}
+                  {decision === "NO_PRODUCTION" ? <>NO<br />PRODUCTION</> : decision.replaceAll("_", " ")}
                 </button>
               ))}
             </div>

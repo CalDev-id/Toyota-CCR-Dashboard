@@ -77,7 +77,7 @@ export type ProductionAchievementDashboard = {
 };
 
 export type ProductionLineStopDecision = {
-  decision: "RUNNING" | "LINE_STOP" | "CHOKOTEI";
+  decision: "RUNNING" | "LINE_STOP" | "CHOKOTEI" | "NO_PRODUCTION";
   decidedByName: string;
   decidedAt: string;
 };

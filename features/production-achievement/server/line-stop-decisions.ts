@@ -4,7 +4,7 @@ import type { ProductionAchievementLineKey } from "@/features/production-achieve
 import { prisma } from "@/lib/prisma";
 
 const machiningLines = ["cylblock", "cylhead", "crankshaft", "camshaft"] as const;
-export const LINE_STOP_DECISIONS = ["RUNNING", "LINE_STOP", "CHOKOTEI"] as const;
+export const LINE_STOP_DECISIONS = ["RUNNING", "LINE_STOP", "CHOKOTEI", "NO_PRODUCTION"] as const;
 
 export type LineStopDecisionValue = (typeof LINE_STOP_DECISIONS)[number];
 export type LineStopDecision = {

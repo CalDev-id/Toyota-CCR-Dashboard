@@ -38,6 +38,7 @@ export async function trackProductionRealtimeStatus(
   reportDate: string,
   shift: string,
   rows: RawProductionAchievementSummaryRow[],
+  shiftStartedAt: Date,
 ) {
   if (!isTrackedLine(lineKey)) {
     return;
@@ -51,7 +52,7 @@ export async function trackProductionRealtimeStatus(
       (line_key, report_date, shift, last_changed_at, checked_at, source_signature)
      VALUES (?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
-       last_changed_at = IF(source_signature <> VALUES(source_signature), VALUES(last_changed_at), last_changed_at),
+       last_changed_at = IF(last_changed_at < ? OR source_signature <> VALUES(source_signature), VALUES(last_changed_at), last_changed_at),
        checked_at = VALUES(checked_at),
        source_signature = VALUES(source_signature)`,
     lineKey,
@@ -60,6 +61,7 @@ export async function trackProductionRealtimeStatus(
     checkedAt,
     checkedAt,
     signature,
+    shiftStartedAt,
   );
 }
 

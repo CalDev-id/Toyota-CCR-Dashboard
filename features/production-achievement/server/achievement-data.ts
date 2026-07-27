@@ -288,6 +288,13 @@ function getActiveProductionDateKey() {
   return getDateKey(date);
 }
 
+function getShiftStartedAt(date: string, shift: string) {
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute] = shift === "DAY" ? [7, 0] : [19, 30];
+
+  return new Date(year, month - 1, day, hour, minute, 0, 0);
+}
+
 function getActiveShiftValue() {
   return getActiveShiftLabel() === "DAY" ? "1" : "2";
 }
@@ -674,13 +681,18 @@ export async function getProductionAchievementDashboard(filters?: {
     }),
   );
 
-  await Promise.all(
-    lineData.map(({ line, summaryRows }) =>
-      trackProductionRealtimeStatus(line.key, date, shift, summaryRows),
-    ),
-  ).catch(() => {
-    // Keep the dashboard available if the app status table is unavailable.
-  });
+  const isActiveProductionShift = date === getActiveProductionDateKey() && shift === getActiveShiftLabel();
+
+  if (isActiveProductionShift) {
+    const shiftStartedAt = getShiftStartedAt(date, shift);
+    await Promise.all(
+      lineData.map(({ line, summaryRows }) =>
+        trackProductionRealtimeStatus(line.key, date, shift, summaryRows, shiftStartedAt),
+      ),
+    ).catch(() => {
+      // Keep the dashboard available if the app status table is unavailable.
+    });
+  }
 
   const realtimeStatuses: ProductionRealtimeStatus = await getProductionRealtimeStatus(
     date,
