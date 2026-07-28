@@ -1,9 +1,7 @@
-import DefaultLayout from "@/components/layouts/DefaultLayout";
 
 export default function DashboardPageSkeleton() {
   return (
-    <DefaultLayout>
-      <section aria-label="Loading page" aria-busy="true" className="animate-pulse">
+    <section aria-label="Loading page" aria-busy="true" className="animate-pulse">
         <div className="rounded-2xl border border-[#e4e7ec] bg-white p-5 shadow-sm dark:border-[#273449] dark:bg-[#111827]">
           <div className="h-6 w-44 rounded bg-[#eaecf0] dark:bg-[#273449]" />
           <div className="mt-3 h-4 w-72 max-w-full rounded bg-[#f2f4f7] dark:bg-[#202d40]" />
@@ -26,7 +24,6 @@ export default function DashboardPageSkeleton() {
           <div className="h-5 w-40 rounded bg-[#eaecf0] dark:bg-[#273449]" />
           <div className="mt-6 h-[245px] w-full rounded-xl bg-[#f2f4f7] dark:bg-[#202d40]" />
         </article>
-      </section>
-    </DefaultLayout>
+    </section>
   );
 }

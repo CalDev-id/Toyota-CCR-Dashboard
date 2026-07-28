@@ -1,6 +1,5 @@
 "use client";
 
-import DefaultLayout from "@/components/layouts/DefaultLayout";
 import DailyProductionTable from "@/features/production/components/DailyProductionTable";
 import DetailProblemTable from "@/features/production/components/DetailProblemTable";
 import {
@@ -325,7 +324,7 @@ export default function ProductionPage() {
   );
 
   return (
-    <DefaultLayout>
+    <>
       <section className="rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <label className="grid gap-1.5 text-sm font-medium text-[#344054]">
@@ -416,6 +415,6 @@ export default function ProductionPage() {
             date={date}
           />        </>
       )}
-    </DefaultLayout>
+    </>
   );
 }

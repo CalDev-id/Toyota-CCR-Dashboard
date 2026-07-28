@@ -1,4 +1,3 @@
-import DefaultLayout from "@/components/layouts/DefaultLayout";
 
 function Block({ className }: { className: string }) {
   return <div className={`rounded-lg bg-[#eaecf0] dark:bg-[#273449] ${className}`} />;
@@ -6,8 +5,7 @@ function Block({ className }: { className: string }) {
 
 export default function ProductionLoading() {
   return (
-    <DefaultLayout>
-      <section aria-label="Loading daily production" aria-busy="true" className="animate-pulse">
+    <section aria-label="Loading daily production" aria-busy="true" className="animate-pulse">
         <div className="rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm dark:border-[#273449] dark:bg-[#111827]">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, index) => (
@@ -47,7 +45,6 @@ export default function ProductionLoading() {
           <Block className="h-5 w-44" />
           <Block className="mt-5 h-52 w-full bg-[#f2f4f7] dark:bg-[#202d40]" />
         </article>
-      </section>
-    </DefaultLayout>
+    </section>
   );
 }

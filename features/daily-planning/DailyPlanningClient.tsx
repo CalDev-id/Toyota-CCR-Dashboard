@@ -1,6 +1,5 @@
 "use client";
 
-import DefaultLayout from "@/components/layouts/DefaultLayout";
 import {
   addDailyOt,
   deleteDailyManualOt,
@@ -292,7 +291,7 @@ export default function DailyPlanningClient() {
   }
 
   return (
-    <DefaultLayout>
+    <>
       <section className="overflow-hidden rounded-2xl border border-[#e4e7ec] bg-white shadow-sm">
         <div
           className="flex flex-col gap-4 border-b-2 border-[#e4e7ec] px-5 py-5 lg:flex-row lg:items-center lg:justify-between"
@@ -428,6 +427,6 @@ export default function DailyPlanningClient() {
           </div>
         </div>
       ) : null}
-    </DefaultLayout>
+    </>
   );
 }

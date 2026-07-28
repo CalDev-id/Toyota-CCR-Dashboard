@@ -1,4 +1,3 @@
-import DefaultLayout from "@/components/layouts/DefaultLayout";
 import ProductionAchievementRealtimeDashboard from "@/features/production-achievement/components/ProductionAchievementRealtimeDashboard";
 import { getProductionAchievementDashboard } from "@/features/production-achievement/server/achievement-data";
 import { requirePageAccess } from "@/lib/authorization";
@@ -27,12 +26,12 @@ export default async function ProductionAchievementPage({
   });
 
   return (
-    <DefaultLayout contentClassName="w-full max-w-none p-4 md:p-5 2xl:p-5">
+    <div className="w-full max-w-none p-1 md:p-1 2xl:p-1">
       <ProductionAchievementRealtimeDashboard
         key={`${dashboard.date}-${dashboard.shift}`}
         initialDashboard={dashboard}
         viewerRole={role}
       />
-    </DefaultLayout>
+    </div>
   );
 }

@@ -1,6 +1,5 @@
 "use client";
 
-import DefaultLayout from "@/components/layouts/DefaultLayout";
 import type {
   AnalysisLineKey as LineKey,
   AnalysisResponse,
@@ -154,7 +153,7 @@ export default function AnalysisPage() {
   }
 
   return (
-    <DefaultLayout contentClassName="w-full max-w-none p-4 md:p-5 2xl:p-5">
+    <div className="w-full max-w-none p-1 md:p-1 2xl:p-1">
       <section className="flex flex-col gap-4 rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-[#101828]">Asakai Board</h2>
@@ -222,6 +221,6 @@ export default function AnalysisPage() {
           </section>
         </>
       )}
-    </DefaultLayout>
+    </div>
   );
 }

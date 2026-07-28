@@ -2,24 +2,20 @@
 
 import Sidebar from "@/components/layouts/Sidebar";
 import Topbar from "@/components/layouts/Topbar";
-import AuthSessionProvider from "@/components/auth/AuthSessionProvider";
 import { useState } from "react";
 
 type DefaultLayoutProps = {
   children: React.ReactNode;
-  contentClassName?: string;
 };
 
 export default function DefaultLayout({
   children,
-  contentClassName = "mx-auto max-w-screen-2xl p-3 md:p-4 2xl:p-5",
 }: DefaultLayoutProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   return (
-    <AuthSessionProvider>
-      <div className="h-screen overflow-hidden bg-[#f9fafb] text-[#101828]">
+    <div className="h-screen overflow-hidden bg-[#f9fafb] text-[#101828]">
         <div className="flex h-full overflow-hidden">
           <Sidebar
             isCollapsed={isSidebarCollapsed}
@@ -37,11 +33,10 @@ export default function DefaultLayout({
             />
 
             <main>
-              <div className={contentClassName}>{children}</div>
+              <div className="mx-auto max-w-screen-2xl p-3 md:p-4 2xl:p-5">{children}</div>
             </main>
           </div>
         </div>
-      </div>
-    </AuthSessionProvider>
+    </div>
   );
 }

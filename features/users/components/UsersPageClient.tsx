@@ -1,6 +1,5 @@
 "use client";
 
-import DefaultLayout from "@/components/layouts/DefaultLayout";
 import {
   createUserAction,
   deleteUserAction,
@@ -121,7 +120,7 @@ export default function UsersPage({ initialUsers }: UsersPageProps) {
   }
 
   return (
-    <DefaultLayout>
+    <>
       <section className="grid gap-6 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
         <CreateUserForm
           toast={toast}
@@ -149,6 +148,6 @@ export default function UsersPage({ initialUsers }: UsersPageProps) {
         handleUpdateUser={handleUpdateUser}
         handleDeleteUser={handleDeleteUser}
       />
-    </DefaultLayout>
+    </>
   );
 }

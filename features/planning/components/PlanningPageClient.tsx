@@ -1,6 +1,5 @@
 "use client";
 
-import DefaultLayout from "@/components/layouts/DefaultLayout";
 import {
   createPlanningRowAction,
   deletePlanningRowAction,
@@ -426,7 +425,7 @@ export default function PlanningPage() {
   }
 
   return (
-    <DefaultLayout>
+    <>
       <PlanningSummaryCards parts={parts} />
 
       <PlanningToolbar
@@ -484,6 +483,6 @@ export default function PlanningPage() {
         toast={toast}
         canManagePlanning={canManagePlanning}
       />
-    </DefaultLayout>
+    </>
   );
 }

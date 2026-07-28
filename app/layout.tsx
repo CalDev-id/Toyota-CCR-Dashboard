@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { auth } from "@/auth";
 import AuthSessionProvider from "@/components/auth/AuthSessionProvider";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
@@ -19,11 +20,13 @@ export const metadata: Metadata = {
   description: "Production Planning and Inventory Control dashboard for Toyota CCR",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await auth();
+
   return (
     <html
       lang="en"
@@ -42,7 +45,7 @@ try {
         </Script>
       </head>
       <body className="min-h-full">
-        <AuthSessionProvider>{children}</AuthSessionProvider>
+        <AuthSessionProvider session={session}>{children}</AuthSessionProvider>
       </body>
     </html>
   );

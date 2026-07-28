@@ -1,6 +1,5 @@
 "use client";
 
-import DefaultLayout from "@/components/layouts/DefaultLayout";
 import ProductionAchievementClock from "@/features/production-achievement/components/ProductionAchievementClock";
 import { useState } from "react";
 
@@ -69,7 +68,7 @@ export default function ProductionAchievementLoading() {
   const [header] = useState<LoadingHeaderState>(getLoadingHeaderState);
 
   return (
-    <DefaultLayout contentClassName="w-full max-w-none p-4 md:p-5 2xl:p-5">
+    <div className="w-full max-w-none p-1 md:p-1 2xl:p-1">
       <section aria-label="Loading production achievement" aria-busy="true">
         <div className="mb-4 min-h-[118px] rounded-2xl border border-[#e4e7ec] bg-white px-4 py-5 shadow-sm dark:border-[#273449] dark:bg-[#111827]">
           <div className="grid gap-4 lg:grid-cols-[minmax(280px,1fr)_auto_auto] lg:items-center">
@@ -118,6 +117,6 @@ export default function ProductionAchievementLoading() {
           ))}
         </div>
       </section>
-    </DefaultLayout>
+    </div>
   );
 }

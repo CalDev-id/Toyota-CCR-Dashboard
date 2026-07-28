@@ -1,4 +1,3 @@
-import DefaultLayout from "@/components/layouts/DefaultLayout";
 
 function Block({ className }: { className: string }) {
   return <div className={`rounded-lg bg-[#eaecf0] dark:bg-[#273449] ${className}`} />;
@@ -6,7 +5,7 @@ function Block({ className }: { className: string }) {
 
 export default function HomeDashboardSkeleton() {
   return (
-    <DefaultLayout>
+    <>
       <section aria-label="Loading home dashboard" aria-busy="true" className="animate-pulse">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
@@ -40,6 +39,6 @@ export default function HomeDashboardSkeleton() {
           </article>
         </div>
       </section>
-    </DefaultLayout>
+    </>
   );
 }
