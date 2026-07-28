@@ -166,7 +166,7 @@ function Brand({ collapsed = false }: { collapsed?: boolean }) {
       </div>
       <div className={collapsed ? "hidden" : "min-w-0"}>
         <p className="truncate text-base font-semibold tracking-tight text-[#101828]">
-          Toyota CCR
+          CCR Dashboard
         </p>
         <p className="truncate text-xs font-medium text-[#667085]">
           PPIC & Warehouse
@@ -403,7 +403,7 @@ export default function Sidebar({
             </div>
             <div className="min-w-0">
               <p className="truncate text-base font-semibold tracking-tight text-[#101828]">
-                Toyota CCR
+                CCR Dashboard
               </p>
               <p className="truncate text-xs font-medium text-[#667085]">
                 PPIC & Warehouse
