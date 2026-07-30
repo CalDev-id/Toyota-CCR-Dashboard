@@ -53,7 +53,6 @@ export async function trackProductionRealtimeStatus(
      VALUES (?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        last_changed_at = IF(last_changed_at < ? OR source_signature <> VALUES(source_signature), VALUES(last_changed_at), last_changed_at),
-       checked_at = VALUES(checked_at),
        source_signature = VALUES(source_signature)`,
     lineKey,
     reportDate,

@@ -75,6 +75,44 @@ const autoNoProductionLines = new Set<ProductionAchievementLineConfig["key"]>([
   "camshaft",
 ]);
 
+type MonthlyPlanningParameters = {
+  hasMonthlyPlan: boolean;
+  tt: string;
+  oeeTarget: number;
+  otPlan: number;
+  totalPlan: number;
+};
+
+type TimedCacheEntry<T> = {
+  value: T;
+  expiresAt: number;
+};
+
+const problemRowsCache = new Map<
+  string,
+  TimedCacheEntry<RawProductionAchievementProblemRow[]>
+>();
+const dailyPlanningSlotsCache = new Map<string, RawDailyPlanningSlotRow[]>();
+const monthlyPlanningParametersCache = new Map<string, MonthlyPlanningParameters>();
+const PROBLEM_ROWS_CACHE_MS = 5 * 60 * 1000;
+const STATIC_DATA_CACHE_MAX_ENTRIES = 30;
+
+function setLimitedCacheValue<T>(cache: Map<string, T>, key: string, value: T) {
+  cache.delete(key);
+
+  while (cache.size >= STATIC_DATA_CACHE_MAX_ENTRIES) {
+    const oldestKey = cache.keys().next().value;
+
+    if (!oldestKey) {
+      break;
+    }
+
+    cache.delete(oldestKey);
+  }
+
+  cache.set(key, value);
+}
+
 function quoteIdentifier(value: string) {
   return `\`${value.replaceAll("`", "``")}\``;
 }
@@ -125,7 +163,15 @@ async function getMonthlyPlanningParameters(
   line: ProductionAchievementLineConfig,
   date: string,
   shift: string,
-) {
+  refreshStaticData = false,
+): Promise<MonthlyPlanningParameters> {
+  const cacheKey = `${line.key}:${date}:${shift}`;
+  const cached = monthlyPlanningParametersCache.get(cacheKey);
+
+  if (cached && !refreshStaticData) {
+    return cached;
+  }
+
   const shifts = shiftAliases(shift);
   const rows = await getReportPrisma().$queryRawUnsafe<
     Array<{ tt: unknown; oeeTarget: unknown; otPlan: unknown; oneTr: unknown; twoTr: unknown }>
@@ -139,13 +185,16 @@ async function getMonthlyPlanningParameters(
     ...shifts,
   );
 
-  return {
+  const parameters = {
     hasMonthlyPlan: rows.length > 0,
     tt: toPlainString(rows[0]?.tt),
     oeeTarget: toNumber(rows[0]?.oeeTarget),
     otPlan: toNumber(rows[0]?.otPlan),
     totalPlan: toNumber(rows[0]?.oneTr) + toNumber(rows[0]?.twoTr),
   };
+
+  setLimitedCacheValue(monthlyPlanningParametersCache, cacheKey, parameters);
+  return parameters;
 }
 
 async function getProductionAchievementSummaryRows(
@@ -179,11 +228,18 @@ async function getProductionAchievementProblemRows(
   line: ProductionAchievementLineConfig,
   date: string,
   shift: string,
+  refreshStaticData = false,
 ) {
-  const { where, values } = buildDateShiftWhere(date, shift);
+  const cacheKey = `${line.key}:${date}:${shift}`;
+  const cached = problemRowsCache.get(cacheKey);
 
-  return getReportPrisma()
-    .$queryRawUnsafe<RawProductionAchievementProblemRow[]>(
+  if (cached && !refreshStaticData && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
+  const { where, values } = buildDateShiftWhere(date, shift);
+  try {
+    const rows = await getReportPrisma().$queryRawUnsafe<RawProductionAchievementProblemRow[]>(
       `SELECT
         Problem_AV AS problemAv,
         LS_AV_min AS lsAvMin,
@@ -199,8 +255,16 @@ async function getProductionAchievementProblemRows(
       ORDER BY \`DATE\` ASC, SHIFT ASC, JAM ASC, SHOP ASC
       LIMIT 300`,
       ...values,
-    )
-    .catch(() => []);
+    );
+
+    setLimitedCacheValue(problemRowsCache, cacheKey, {
+      value: rows,
+      expiresAt: Date.now() + PROBLEM_ROWS_CACHE_MS,
+    });
+    return rows;
+  } catch {
+    return [];
+  }
 }
 
 function toNumber(value: unknown) {
@@ -371,7 +435,18 @@ function getPlanningWorkHoursMinutes(
   );
 }
 
-async function getDailyPlanningPlanOverrides(date: string, shift: string) {
+async function getDailyPlanningSlotRows(
+  date: string,
+  shift: string,
+  refreshStaticData: boolean,
+) {
+  const cacheKey = `${date}:${shift}`;
+  const cached = dailyPlanningSlotsCache.get(cacheKey);
+
+  if (cached && !refreshStaticData) {
+    return cached;
+  }
+
   const requestedShift = getProductionAchievementShiftValue(shift);
   const shiftValues = requestedShift
     ? [requestedShift]
@@ -411,6 +486,16 @@ async function getDailyPlanningPlanOverrides(date: string, shift: string) {
     date,
     ...shiftValues,
   );
+  setLimitedCacheValue(dailyPlanningSlotsCache, cacheKey, rows);
+  return rows;
+}
+
+async function getDailyPlanningPlanOverrides(
+  date: string,
+  shift: string,
+  refreshStaticData = false,
+) {
+  const rows = await getDailyPlanningSlotRows(date, shift, refreshStaticData);
   const overrides = new Map<string, DailyPlanningPlanOverride>();
   const groupedRows = new Map<string, RawDailyPlanningSlotRow[]>();
 
@@ -642,16 +727,20 @@ function buildLineCard(
 export async function getProductionAchievementDashboard(filters?: {
   date?: string | null;
   shift?: string | null;
-}, options?: { initializeAutoNoProduction?: boolean }): Promise<ProductionAchievementDashboard> {
+}, options?: {
+  initializeAutoNoProduction?: boolean;
+  refreshStaticData?: boolean;
+}): Promise<ProductionAchievementDashboard> {
   const date = normalizeDate(filters?.date);
   const shift = normalizeShift(filters?.shift);
-  const planOverrides = await getDailyPlanningPlanOverrides(date, shift);
+  const refreshStaticData = options?.refreshStaticData ?? false;
+  const planOverrides = await getDailyPlanningPlanOverrides(date, shift, refreshStaticData);
   const lineData = await Promise.all(
     productionAchievementLineConfigs.map(async (line) => {
       const [summaryRows, problemRows, monthlyParameters] = await Promise.all([
         getProductionAchievementSummaryRows(line, date, shift),
-        getProductionAchievementProblemRows(line, date, shift),
-        getMonthlyPlanningParameters(line, date, shift).catch(() => null),
+        getProductionAchievementProblemRows(line, date, shift, refreshStaticData),
+        getMonthlyPlanningParameters(line, date, shift, refreshStaticData).catch(() => null),
       ]);
 
       return { line, summaryRows, problemRows, monthlyParameters };

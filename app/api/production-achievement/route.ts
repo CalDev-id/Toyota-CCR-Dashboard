@@ -23,6 +23,7 @@ export async function GET(request: Request) {
       shift: getSearchValue(url.searchParams.get("shift")),
     }, {
       initializeAutoNoProduction: shouldInitializeAutoNoProduction(url.searchParams.get("initializeAutoNoProduction")),
+      refreshStaticData: shouldInitializeAutoNoProduction(url.searchParams.get("initializeAutoNoProduction")),
     });
 
     return Response.json({ data: dashboard });
