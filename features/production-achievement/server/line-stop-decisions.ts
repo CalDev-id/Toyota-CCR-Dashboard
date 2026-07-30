@@ -16,6 +16,8 @@ export type LineStopDecision = {
   decidedAt: string;
 };
 
+const SYSTEM_AUTO_NO_PRODUCTION_NAME = "SYSTEM";
+
 type DecisionRow = {
   lineKey: ProductionAchievementLineKey;
   sourceLastUpdatedAt: Date | string;
@@ -84,7 +86,7 @@ export async function createLineStopDecision(input: {
   sourceLastUpdatedAt: Date;
   alertStartedAt: Date;
   decision: LineStopDecisionValue;
-  decidedByUserId: number;
+  decidedByUserId: number | null;
   decidedByName: string;
 }) {
   const latest = await getLatestLineStopDecision(
@@ -124,4 +126,53 @@ export async function createLineStopDecision(input: {
     input.sourceLastUpdatedAt,
     input.alertStartedAt,
   );
+}
+
+async function findAutomaticNoProductionDecision(
+  lineKey: string,
+  reportDate: string,
+  shift: string,
+) {
+  const rows = await prisma.$queryRawUnsafe<DecisionRow[]>(
+    `SELECT line_key AS lineKey, source_last_updated_at AS sourceLastUpdatedAt,
+      alert_started_at AS alertStartedAt, decision, decided_by_name AS decidedByName,
+      decided_at AS decidedAt
+     FROM production_line_stop_decision
+     WHERE line_key = ? AND report_date = ? AND shift = ?
+       AND decision = 'NO_PRODUCTION' AND decided_by_name = ?
+     ORDER BY decided_at DESC LIMIT 1`,
+    lineKey,
+    reportDate,
+    shift,
+    SYSTEM_AUTO_NO_PRODUCTION_NAME,
+  );
+
+  return rows[0] ? serialize(rows[0]) : null;
+}
+
+export async function ensureAutomaticNoProductionDecision(input: {
+  lineKey: string;
+  reportDate: string;
+  shift: string;
+  sourceLastUpdatedAt: Date;
+}) {
+  const automaticDecision = await findAutomaticNoProductionDecision(
+    input.lineKey,
+    input.reportDate,
+    input.shift,
+  );
+
+  if (automaticDecision) {
+    return automaticDecision.sourceLastUpdatedAt === input.sourceLastUpdatedAt.toISOString()
+      ? automaticDecision
+      : null;
+  }
+
+  return createLineStopDecision({
+    ...input,
+    alertStartedAt: input.sourceLastUpdatedAt,
+    decision: "NO_PRODUCTION",
+    decidedByUserId: null,
+    decidedByName: SYSTEM_AUTO_NO_PRODUCTION_NAME,
+  });
 }

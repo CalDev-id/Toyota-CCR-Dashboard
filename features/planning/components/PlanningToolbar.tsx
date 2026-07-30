@@ -45,6 +45,7 @@ export default function PlanningToolbar({
   canManagePlanning,
 }: PlanningToolbarProps) {
   const isAssy = activePart === "assy";
+  const availableGroupOptions = isAssy ? ["N"] : groupOptions;
 
   return (
     <section className="mt-6">
@@ -126,18 +127,12 @@ export default function PlanningToolbar({
               {activePartSummary?.label ?? "Planning"} Detail
             </h2>
             <p className="mt-1 text-sm text-[#667085]">
-              {isAssy
-                ? "Monthly planning filtered by period and shift"
-                : "Monthly planning filtered by period, shift, and group"}
+              Monthly planning filtered by period, shift, and group
             </p>
           </div>
 
           <div
-            className={`grid gap-2 ${
-              isAssy
-                ? "sm:grid-cols-[160px_150px_96px]"
-                : "sm:grid-cols-[160px_150px_96px_96px]"
-            }`}
+            className="grid gap-2 sm:grid-cols-[160px_150px_96px_96px]"
           >
             <label className="block">
               <span className="sr-only">Month</span>
@@ -222,7 +217,6 @@ export default function PlanningToolbar({
               </span>
             </label>
 
-            {isAssy ? null : (
             <label className="block">
               <span className="sr-only">Group</span>
               <span className="relative block">
@@ -236,7 +230,7 @@ export default function PlanningToolbar({
                   }}
                 >
                   <option value="all">All</option>
-                  {groupOptions.map((group) => (
+                  {availableGroupOptions.map((group) => (
                     <option key={group} value={group}>
                       {group}
                     </option>
@@ -258,7 +252,6 @@ export default function PlanningToolbar({
                 </svg>
               </span>
             </label>
-            )}
           </div>
         </div>
       </div>

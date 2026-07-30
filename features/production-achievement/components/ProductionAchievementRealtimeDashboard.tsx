@@ -80,8 +80,9 @@ function formatShiftLabel(value: string) {
   return value.toUpperCase() === "NIGHT" ? "Night" : "Day";
 }
 
-async function fetchDashboard(date: string, shift: string) {
+async function fetchDashboard(date: string, shift: string, initializeAutoNoProduction = false) {
   const params = new URLSearchParams({ date, shift });
+  if (initializeAutoNoProduction) params.set("initializeAutoNoProduction", "1");
   const response = await fetch(`/api/production-achievement?${params.toString()}`, {
     cache: "no-store",
   });
@@ -104,17 +105,30 @@ export default function ProductionAchievementRealtimeDashboard({
   const filterRequestRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [now, setNow] = useState(() => new Date());
-  const [decisions, setDecisions] = useState<Record<string, DecisionResponse>>({});
+  const [decisions, setDecisions] = useState<Record<string, DecisionResponse>>(initialDashboard.initialDecisions);
+  const [resolvedDecisionSources, setResolvedDecisionSources] = useState<Record<string, string>>(() => Object.fromEntries(
+    Object.entries(initialDashboard.initialDecisions).map(([key, decision]) => [key, decision.sourceLastUpdatedAt]),
+  ));
   const [isSoundBlocked, setIsSoundBlocked] = useState(false);
   const [isSavingDecision, setIsSavingDecision] = useState(false);
   const canDecide = viewerRole === "ADMIN" || viewerRole === "CCR_GROUP_LEADER";
 
+  function applyDashboard(nextDashboard: ProductionAchievementDashboard) {
+    setDashboard(nextDashboard);
+    setDecisions((current) => ({ ...current, ...nextDashboard.initialDecisions }));
+    setResolvedDecisionSources((current) => ({
+      ...current,
+      ...Object.fromEntries(Object.entries(nextDashboard.initialDecisions).map(([key, decision]) => [key, decision.sourceLastUpdatedAt])),
+    }));
+  }
+
   const alarms = useMemo(() => dashboard.cards.flatMap((card): Alarm[] => {
-    if (!machiningKeys.has(card.key) || !card.lastUpdatedAt || card.workSchedule.length === 0) return [];
+    if (!machiningKeys.has(card.key) || !card.hasData || !card.lastUpdatedAt || card.workSchedule.length === 0) return [];
     const lastUpdated = new Date(card.lastUpdatedAt);
     if (Number.isNaN(lastUpdated.getTime()) || lastUpdated > now) return [];
     const decision = decisions[card.key];
     if (decision && decision.sourceLastUpdatedAt !== card.lastUpdatedAt) return [];
+    if (resolvedDecisionSources[card.key] !== card.lastUpdatedAt) return [];
     if (
       decision?.decision === "LINE_STOP"
       || decision?.decision === "CHOKOTEI"
@@ -123,7 +137,7 @@ export default function ProductionAchievementRealtimeDashboard({
     const reference = decision?.decision === "RUNNING" ? new Date(decision.decidedAt) : lastUpdated;
     const elapsed = workMinutesSince(card, dashboard.date, dashboard.shift, reference, now);
     return elapsed.isWorkingNow && elapsed.minutes >= LINE_STOP_ALERT_WORK_MINUTES ? [{ card, alertStartedAt: decision?.decision === "RUNNING" ? decision.decidedAt : card.lastUpdatedAt }] : [];
-  }), [dashboard, decisions, now]);
+  }), [dashboard, decisions, now, resolvedDecisionSources]);
 
   const displayedDecisions = useMemo(() => Object.fromEntries(
     Object.entries(decisions).filter(([key, decision]) => dashboard.cards.some((card) => card.key === key && card.lastUpdatedAt === decision.sourceLastUpdatedAt)),
@@ -143,10 +157,10 @@ export default function ProductionAchievementRealtimeDashboard({
     setIsFilterLoading(true);
 
     try {
-      const nextDashboard = await fetchDashboard(nextDate, nextShift);
+      const nextDashboard = await fetchDashboard(nextDate, nextShift, true);
 
       if (requestId === filterRequestRef.current) {
-        setDashboard(nextDashboard);
+        applyDashboard(nextDashboard);
       }
     } catch {
       // Keep the last successful snapshot visible if a filter refresh fails.
@@ -165,7 +179,7 @@ export default function ProductionAchievementRealtimeDashboard({
         const nextDashboard = await fetchDashboard(dashboard.date, dashboard.shift);
 
         if (isActive) {
-          setDashboard(nextDashboard);
+          applyDashboard(nextDashboard);
         }
       } catch {
         // Keep the last successful snapshot visible if a refresh fails.
@@ -186,26 +200,30 @@ export default function ProductionAchievementRealtimeDashboard({
   useEffect(() => {
     const candidates = dashboard.cards.filter((card) => {
       if (!machiningKeys.has(card.key) || !card.lastUpdatedAt || card.workSchedule.length === 0) return false;
-      const elapsed = workMinutesSince(card, dashboard.date, dashboard.shift, new Date(card.lastUpdatedAt), now);
-      return elapsed.isWorkingNow && elapsed.minutes >= LINE_STOP_ALERT_WORK_MINUTES;
+      return resolvedDecisionSources[card.key] !== card.lastUpdatedAt;
     });
     if (!candidates.length) return;
     let active = true;
     const load = async () => {
-      const loaded = await Promise.all(candidates.map(async (card) => [card.key, await fetchLineStopDecision(card, dashboard.date, dashboard.shift)] as const));
+      const loaded = await Promise.all(candidates.map(async (card) => [card.key, card.lastUpdatedAt!, await fetchLineStopDecision(card, dashboard.date, dashboard.shift)] as const));
       if (!active) return;
       setDecisions((current) => {
         const next = { ...current };
-        for (const [key, decision] of loaded) {
+        for (const [key, , decision] of loaded) {
           if (decision) next[key] = decision;
+          else delete next[key];
         }
         return next;
       });
+      setResolvedDecisionSources((current) => ({
+        ...current,
+        ...Object.fromEntries(loaded.map(([key, sourceLastUpdatedAt]) => [key, sourceLastUpdatedAt])),
+      }));
     };
     void load();
     const interval = window.setInterval(() => void load(), 30000);
     return () => { active = false; window.clearInterval(interval); };
-  }, [dashboard, now]);
+  }, [dashboard, resolvedDecisionSources]);
 
   useEffect(() => {
     const audio = audioRef.current;

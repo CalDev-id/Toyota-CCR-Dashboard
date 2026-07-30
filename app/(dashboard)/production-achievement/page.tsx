@@ -23,7 +23,7 @@ export default async function ProductionAchievementPage({
   const dashboard = await getProductionAchievementDashboard({
     date: getSearchValue(params.date),
     shift: getSearchValue(params.shift),
-  });
+  }, { initializeAutoNoProduction: true });
 
   return (
     <div className="w-full max-w-none p-1 md:p-1 2xl:p-1">

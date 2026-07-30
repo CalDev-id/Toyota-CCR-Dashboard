@@ -63,6 +63,8 @@ export type ProductionAchievementCard = {
   otAct: number;
   otPlan: number;
   balance: number;
+  hasData: boolean;
+  isAutoNoProduction: boolean;
   lastUpdatedAt: string | null;
   workSchedule: Array<{ start: string; end: string }>;
   stopTime: number;
@@ -74,10 +76,13 @@ export type ProductionAchievementDashboard = {
   date: string;
   shift: string;
   cards: ProductionAchievementCard[];
+  initialDecisions: Partial<Record<ProductionAchievementLineKey, ProductionLineStopDecision>>;
 };
 
 export type ProductionLineStopDecision = {
   decision: "RUNNING" | "LINE_STOP" | "CHOKOTEI" | "NO_PRODUCTION";
   decidedByName: string;
   decidedAt: string;
+  sourceLastUpdatedAt: string;
+  alertStartedAt: string;
 };

@@ -6,12 +6,16 @@ import type {
   RawProductionAchievementProblemRow,
   RawProductionAchievementSummaryRow,
 } from "@/features/production-achievement/types";
-import { loadDailyPlanningData } from "@/features/daily-planning/server/daily-planning-service";
 import {
   getProductionRealtimeStatus,
   trackProductionRealtimeStatus,
   type ProductionRealtimeStatus,
 } from "@/features/production-achievement/server/realtime-status";
+import {
+  ensureAutomaticNoProductionDecision,
+  isMachiningLine,
+  type LineStopDecision,
+} from "@/features/production-achievement/server/line-stop-decisions";
 import { prisma } from "@/lib/prisma";
 import { getReportPrisma } from "@/lib/report-prisma";
 import { summaryViewName } from "@/lib/report-views";
@@ -118,9 +122,9 @@ async function getMonthlyPlanningParameters(
 ) {
   const shifts = shiftAliases(shift);
   const rows = await getReportPrisma().$queryRawUnsafe<
-    Array<{ tt: unknown; oeeTarget: unknown; otPlan: unknown }>
+    Array<{ tt: unknown; oeeTarget: unknown; otPlan: unknown; oneTr: unknown; twoTr: unknown }>
   >(
-    `SELECT ftt AS tt, foee AS oeeTarget, fot AS otPlan FROM ${quoteIdentifier(
+    `SELECT ftt AS tt, foee AS oeeTarget, fot AS otPlan, f1tr AS oneTr, f2tr AS twoTr FROM ${quoteIdentifier(
       monthlyPlanningTables[line.key],
     )} WHERE DATE(fdate)=? AND TRIM(fshift) IN (${shifts
       .map(() => "?")
@@ -130,9 +134,11 @@ async function getMonthlyPlanningParameters(
   );
 
   return {
+    hasMonthlyPlan: rows.length > 0,
     tt: toPlainString(rows[0]?.tt),
     oeeTarget: toNumber(rows[0]?.oeeTarget),
     otPlan: toNumber(rows[0]?.otPlan),
+    totalPlan: toNumber(rows[0]?.oneTr) + toNumber(rows[0]?.twoTr),
   };
 }
 
@@ -157,34 +163,10 @@ async function getProductionAchievementSummaryRows(
     ${where}
     ORDER BY SHIFT ASC, SHOP ASC, Variant ASC`;
 
-  try {
-    return await getReportPrisma().$queryRawUnsafe<RawProductionAchievementSummaryRow[]>(
-      sql,
-      ...values,
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-
-    if (line.key === "assy" || !message.includes("Prod_realtime")) {
-      throw error;
-    }
-
-    return getReportPrisma().$queryRawUnsafe<RawProductionAchievementSummaryRow[]>(
-      `SELECT
-      SHOP AS shop,
-      Variant AS variant,
-      TT AS tt,
-      Prod_plan AS prodPlan,
-      NULL AS prodAct,
-      Balance AS balance,
-      OEE AS oee,
-      NULL AS otAct
-    FROM ${quoteIdentifier(summaryView)}
-    ${where}
-    ORDER BY SHIFT ASC, SHOP ASC, Variant ASC`,
-      ...values,
-    );
-  }
+  return getReportPrisma().$queryRawUnsafe<RawProductionAchievementSummaryRow[]>(
+    sql,
+    ...values,
+  );
 }
 
 async function getProductionAchievementProblemRows(
@@ -390,16 +372,6 @@ async function getDailyPlanningPlanOverrides(date: string, shift: string) {
     : isToday(date)
       ? [getActiveShiftValue()]
       : ["1", "2"];
-  await Promise.all(
-    productionAchievementLineConfigs.map((line) =>
-      Promise.all(
-        shiftValues.map((shiftValue) =>
-          loadDailyPlanningData(line.key, date, shiftValue).catch(() => null),
-        ),
-      ),
-    ),
-  );
-
   const rows = await prisma.$queryRawUnsafe<RawDailyPlanningSlotRow[]>(
     `
     SELECT
@@ -613,6 +585,7 @@ function buildLineCard(
   monthlyParameters: { tt: string; oeeTarget: number; otPlan: number },
   planOverride?: DailyPlanningPlanOverride,
   lastUpdatedAt: string | null = null,
+  isAutoNoProduction = false,
 ): ProductionAchievementCard {
   const pairDivisor = line.key === "camshaft" ? 2 : 1;
   const prodPlan = planOverride?.prodPlan ?? 0;
@@ -650,6 +623,8 @@ function buildLineCard(
     otAct,
     otPlan: monthlyParameters.otPlan,
     balance: prodAct - prodPlan,
+    hasData: summaryRows.length > 0,
+    isAutoNoProduction,
     lastUpdatedAt,
     workSchedule: planOverride?.workSchedule ?? [],
     stopTime: buildStopTime(problemRows),
@@ -661,7 +636,7 @@ function buildLineCard(
 export async function getProductionAchievementDashboard(filters?: {
   date?: string | null;
   shift?: string | null;
-}): Promise<ProductionAchievementDashboard> {
+}, options?: { initializeAutoNoProduction?: boolean }): Promise<ProductionAchievementDashboard> {
   const date = normalizeDate(filters?.date);
   const shift = normalizeShift(filters?.shift);
   const planOverrides = await getDailyPlanningPlanOverrides(date, shift);
@@ -670,17 +645,12 @@ export async function getProductionAchievementDashboard(filters?: {
       const [summaryRows, problemRows, monthlyParameters] = await Promise.all([
         getProductionAchievementSummaryRows(line, date, shift),
         getProductionAchievementProblemRows(line, date, shift),
-        getMonthlyPlanningParameters(line, date, shift).catch(() => ({
-          tt: "",
-          oeeTarget: 0,
-          otPlan: 0,
-        })),
+        getMonthlyPlanningParameters(line, date, shift).catch(() => null),
       ]);
 
       return { line, summaryRows, problemRows, monthlyParameters };
     }),
   );
-
   const isActiveProductionShift = date === getActiveProductionDateKey() && shift === getActiveShiftLabel();
 
   if (isActiveProductionShift) {
@@ -698,15 +668,38 @@ export async function getProductionAchievementDashboard(filters?: {
     date,
     shift,
   ).catch(() => ({}));
+  const automaticDecisions = new Map<string, LineStopDecision>();
+
+  if (options?.initializeAutoNoProduction && isActiveProductionShift) {
+    await Promise.all(
+      lineData.map(async ({ line, summaryRows, monthlyParameters }) => {
+        if (!isMachiningLine(line.key) || summaryRows.length > 0 || !monthlyParameters) return;
+        if (monthlyParameters.hasMonthlyPlan && monthlyParameters.totalPlan > 0) return;
+
+        const lastUpdatedAt = realtimeStatuses[line.key];
+        if (!lastUpdatedAt) return;
+
+        const decision = await ensureAutomaticNoProductionDecision({
+          lineKey: line.key,
+          reportDate: date,
+          shift,
+          sourceLastUpdatedAt: new Date(lastUpdatedAt),
+        });
+        if (decision) automaticDecisions.set(line.key, decision);
+      }),
+    );
+  }
+
   const lineCards = lineData.map(
     ({ line, summaryRows, problemRows, monthlyParameters }) =>
       buildLineCard(
         line,
         summaryRows,
         problemRows,
-        monthlyParameters,
+        monthlyParameters ?? { tt: "", oeeTarget: 0, otPlan: 0 },
         planOverrides.get(line.key),
         realtimeStatuses[line.key] ?? null,
+        automaticDecisions.has(line.key),
       ),
   );
 
@@ -714,5 +707,6 @@ export async function getProductionAchievementDashboard(filters?: {
     date,
     shift,
     cards: lineCards,
+    initialDecisions: Object.fromEntries(automaticDecisions),
   };
 }

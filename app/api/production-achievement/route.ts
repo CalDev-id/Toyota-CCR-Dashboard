@@ -7,6 +7,10 @@ function getSearchValue(value: string | null) {
   return value || undefined;
 }
 
+function shouldInitializeAutoNoProduction(value: string | null) {
+  return value === "1";
+}
+
 export async function GET(request: Request) {
   try {
     if (!(await getCurrentUserRole())) {
@@ -17,6 +21,8 @@ export async function GET(request: Request) {
     const dashboard = await getProductionAchievementDashboard({
       date: getSearchValue(url.searchParams.get("date")),
       shift: getSearchValue(url.searchParams.get("shift")),
+    }, {
+      initializeAutoNoProduction: shouldInitializeAutoNoProduction(url.searchParams.get("initializeAutoNoProduction")),
     });
 
     return Response.json({ data: dashboard });

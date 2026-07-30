@@ -7,11 +7,11 @@ type Slot = { id: number; slot_order: number; start_time: string; end_time: stri
 
 const parts = new Set(["assy", "cylblock", "cylhead", "camshaft", "crankshaft"]);
 const daySlots: SlotTemplate[] = [
-  { order: 1, start: "07:20", end: "08:20", minutes: 60, type: "normal" }, { order: 2, start: "08:20", end: "09:30", minutes: 70, type: "normal" }, { order: 3, start: "09:40", end: "10:40", minutes: 60, type: "normal" }, { order: 4, start: "10:40", end: "11:45", minutes: 65, type: "normal" }, { order: 5, start: "12:30", end: "14:00", minutes: 90, type: "normal" }, { order: 6, start: "14:10", end: "15:10", minutes: 60, type: "normal" }, { order: 7, start: "15:10", end: "16:00", minutes: 50, type: "normal" }, { order: 8, start: "16:00", end: "18:00", minutes: 120, type: "ot" },
+  { order: 1, start: "07:20", end: "08:20", minutes: 60, type: "normal" }, { order: 2, start: "08:20", end: "09:30", minutes: 70, type: "normal" }, { order: 3, start: "09:40", end: "10:40", minutes: 60, type: "normal" }, { order: 4, start: "10:40", end: "11:45", minutes: 65, type: "normal" }, { order: 5, start: "12:30", end: "14:00", minutes: 90, type: "normal" }, { order: 6, start: "14:10", end: "15:10", minutes: 60, type: "normal" }, { order: 7, start: "15:10", end: "16:00", minutes: 50, type: "normal" }, { order: 8, start: "16:30", end: "18:30", minutes: 120, type: "ot" },
 ];
-const fridaySlots = daySlots.map((slot) => slot.order === 5 ? { ...slot, start: "13:00", end: "14:30" } : slot.order === 6 ? { ...slot, start: "14:40", end: "15:40" } : slot.order === 7 ? { ...slot, start: "15:40", end: "16:30" } : slot.order === 8 ? { ...slot, start: "16:30", end: "18:30" } : { ...slot });
-const assyDaySlots = daySlots.map((slot) => slot.order === 5 ? { ...slot, start: "12:45", end: "14:00", minutes: 75 } : slot.order === 6 ? { ...slot, start: "14:10", end: "15:10" } : slot.order === 7 ? { ...slot, start: "15:10", end: "16:15", minutes: 60 } : slot.order === 8 ? { ...slot, start: "16:15", end: "18:15" } : { ...slot });
-const assyFridaySlots = assyDaySlots.map((slot) => slot.order === 5 ? { ...slot, start: "13:15", end: "14:30" } : slot.order === 6 ? { ...slot, start: "14:40", end: "15:40" } : slot.order === 7 ? { ...slot, start: "15:40", end: "16:45" } : slot.order === 8 ? { ...slot, start: "16:45", end: "18:45" } : { ...slot });
+const fridaySlots = daySlots.map((slot) => slot.order === 5 ? { ...slot, start: "13:00", end: "14:30" } : slot.order === 6 ? { ...slot, start: "14:40", end: "15:40" } : slot.order === 7 ? { ...slot, start: "15:40", end: "16:30" } : slot.order === 8 ? { ...slot, start: "17:00", end: "19:00" } : { ...slot });
+const assyDaySlots = daySlots.map((slot) => slot.order === 5 ? { ...slot, start: "12:45", end: "14:00", minutes: 75 } : slot.order === 6 ? { ...slot, start: "14:10", end: "15:10" } : slot.order === 7 ? { ...slot, start: "15:10", end: "16:15", minutes: 60 } : slot.order === 8 ? { ...slot, start: "16:45", end: "18:45" } : { ...slot });
+const assyFridaySlots = assyDaySlots.map((slot) => slot.order === 5 ? { ...slot, start: "13:15", end: "14:30" } : slot.order === 6 ? { ...slot, start: "14:40", end: "15:40" } : slot.order === 7 ? { ...slot, start: "15:40", end: "16:45" } : slot.order === 8 ? { ...slot, start: "17:15", end: "19:15" } : { ...slot });
 const nightSlots: SlotTemplate[] = [{ order: 1, start: "20:05", end: "21:05", minutes: 60, type: "ot" }, { order: 2, start: "21:05", end: "22:00", minutes: 55, type: "normal" }, { order: 3, start: "22:10", end: "23:00", minutes: 50, type: "normal" }, { order: 4, start: "23:00", end: "00:00", minutes: 60, type: "normal" }, { order: 5, start: "00:30", end: "01:30", minutes: 60, type: "normal" }, { order: 6, start: "01:30", end: "02:30", minutes: 60, type: "normal" }, { order: 7, start: "02:40", end: "03:40", minutes: 60, type: "normal" }, { order: 8, start: "03:40", end: "04:45", minutes: 65, type: "normal" }, { order: 9, start: "05:00", end: "05:45", minutes: 45, type: "normal" }, { order: 10, start: "05:45", end: "06:15", minutes: 30, type: "ot" }];
 
 function parseRatio(value: unknown) { const [one, two] = String(value ?? "").split(":").map(Number); return [Math.max(0, one || 0), Math.max(0, two || 0)] as const; }
@@ -68,7 +68,7 @@ async function getPlanContext(part: string, date: string, shift: string) {
 function getTemplate(part: string, date: string, shift: string, otMinutes: number) {
   const isFriday = new Date(`${date}T00:00:00`).getDay() === 5;
   const base = shift === "1" ? (part === "assy" ? (isFriday ? assyFridaySlots : assyDaySlots) : (isFriday ? fridaySlots : daySlots)) : nightSlots;
-  return base.flatMap((slot) => { if (slot.type === "normal") return [slot]; if (shift === "1") { const minutes = Math.min(otMinutes, slot.minutes); return minutes ? [{ ...slot, minutes, end: addMinutes(slot.start, minutes) }] : []; } const minutes = slot.order === 1 ? Math.min(otMinutes, 60) : Math.min(Math.max(otMinutes - 60, 0), 30); return minutes ? [{ ...slot, minutes, end: addMinutes(slot.start, minutes) }] : []; });
+  return base.flatMap((slot) => { if (slot.type === "normal") return [slot]; if (shift === "1") { const minutes = otMinutes; return minutes ? [{ ...slot, minutes, end: addMinutes(slot.start, minutes) }] : []; } const minutes = slot.order === 1 ? Math.min(otMinutes, 60) : Math.min(Math.max(otMinutes - 60, 0), 30); return minutes ? [{ ...slot, minutes, end: addMinutes(slot.start, minutes) }] : []; });
 }
 
 export async function loadDailyPlanningData(part: string, date: string, shift: string) {
@@ -198,8 +198,8 @@ export async function addDailyOtData(part: string, date: string, shift: string, 
   }
 
   const otMinutes = shift === "2" && position === "end" ? 30 : 60;
-  const startTime = position === "start" ? addMinutes(firstNormal.start_time, -otMinutes) : lastNormal.end_time;
-  const endTime = position === "start" ? firstNormal.start_time : addMinutes(lastNormal.end_time, otMinutes);
+  const startTime = position === "start" ? addMinutes(firstNormal.start_time, -otMinutes) : addMinutes(lastNormal.end_time, shift === "1" ? 30 : 0);
+  const endTime = position === "start" ? firstNormal.start_time : addMinutes(startTime, otMinutes);
   const [ratioOne, ratioTwo] = parseRatio(ratio);
   const target = targetFor(otMinutes, tt ?? 0, monthlyOee ?? 0);
   const [oneTr, twoTr] = splitTarget(part, target, ratioOne, ratioTwo);

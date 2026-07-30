@@ -234,7 +234,7 @@ export default function ProductionAchievementCardView({
 
   return (
     <div className="w-[320px] shrink-0 xl:w-full xl:min-w-0 xl:shrink">
-      <article className={`flex min-h-[500px] w-full flex-col rounded-2xl border p-4 shadow-sm ${decisionStyle.card}`}>
+      <article className={`relative flex min-h-[500px] w-full flex-col rounded-2xl border p-4 shadow-sm ${decisionStyle.card}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="truncate text-lg font-semibold text-[#101828] dark:text-[#f8fafc]">
@@ -299,6 +299,7 @@ export default function ProductionAchievementCardView({
         />
       </div>
 
+      <div className="relative">
       <div className="mt-4 grid gap-2">
         <div className="grid grid-cols-2 gap-2">
           <MetricTile
@@ -341,7 +342,7 @@ export default function ProductionAchievementCardView({
         </div>
       </div>
 
-      <div className="mt-5 min-h-[100px]">
+      <div className="mt-5 min-h-[122px]">
         {card.variants.length ? (
           <div className="overflow-hidden rounded-xl border border-[#e4e7ec] dark:border-[#273449]">
             <table className="w-full table-fixed text-sm">
@@ -386,7 +387,7 @@ export default function ProductionAchievementCardView({
             </table>
           </div>
         ) : (
-          <div className="grid h-full place-items-center rounded-xl border border-dashed border-[#d0d5dd] px-3 py-4 text-center text-xs font-medium text-[#98a2b3] dark:border-[#384860] dark:text-[#7f8a9d]">
+          <div className="grid min-h-[122px] place-items-center rounded-xl border border-dashed border-[#d0d5dd] px-3 py-4 text-center text-xs font-medium text-[#98a2b3] dark:border-[#384860] dark:text-[#7f8a9d]">
             No variant breakdown
           </div>
         )}
@@ -435,6 +436,12 @@ export default function ProductionAchievementCardView({
             No problem data
           </p>
         )}
+      </div>
+      {!card.hasData ? (
+        <div className="absolute inset-0 z-10 grid place-items-center rounded-xl bg-white/55 text-lg font-semibold text-[#344054] backdrop-blur-sm dark:bg-[#111827]/55 dark:text-[#d4dae5]">
+          No Data
+        </div>
+      ) : null}
       </div>
 
       </article>

@@ -11,11 +11,13 @@ function formatClock(date: Date) {
 }
 
 export default function ProductionAchievementClock() {
-  const [time, setTime] = useState(() => formatClock(new Date()));
+  const [time, setTime] = useState<string | null>(null);
 
   useEffect(() => {
+    const updateTime = () => setTime(formatClock(new Date()));
+    updateTime();
     const interval = window.setInterval(() => {
-      setTime(formatClock(new Date()));
+      updateTime();
     }, 1000);
 
     return () => window.clearInterval(interval);
@@ -38,7 +40,7 @@ export default function ProductionAchievementClock() {
       </svg>
       <div className="text-center">
         <div className="text-2xl font-semibold tabular-nums tracking-tight text-[#101828] dark:text-[#f8fafc]">
-          {time}
+          {time ?? "--:--"}
         </div>
         <div className="mt-1 text-xs font-semibold text-[#667085] dark:text-[#a7b0c0]">
           Local Time

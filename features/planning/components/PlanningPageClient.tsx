@@ -158,7 +158,7 @@ export default function PlanningPage() {
         part,
         month: filterMonth,
         shift: filterShift,
-        group: part === "assy" ? "all" : filterGroup,
+        group: filterGroup,
       });
 
       return `/api/planning?${params.toString()}`;
