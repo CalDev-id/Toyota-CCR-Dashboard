@@ -75,6 +75,7 @@ export type ProductionAchievementCard = {
 export type ProductionAchievementDashboard = {
   date: string;
   shift: string;
+  isActiveProductionShift: boolean;
   cards: ProductionAchievementCard[];
   initialDecisions: Partial<Record<ProductionAchievementLineKey, ProductionLineStopDecision>>;
 };

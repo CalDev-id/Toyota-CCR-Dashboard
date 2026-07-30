@@ -13,7 +13,6 @@ import {
 } from "@/features/production-achievement/server/realtime-status";
 import {
   ensureAutomaticNoProductionDecision,
-  isMachiningLine,
   type LineStopDecision,
 } from "@/features/production-achievement/server/line-stop-decisions";
 import { prisma } from "@/lib/prisma";
@@ -68,6 +67,13 @@ const monthlyPlanningTables: Record<
   crankshaft: "t_plan_daily_production_crankshaft",
   camshaft: "t_plan_daily_production_camshaft",
 };
+const autoNoProductionLines = new Set<ProductionAchievementLineConfig["key"]>([
+  "assy",
+  "cylblock",
+  "cylhead",
+  "crankshaft",
+  "camshaft",
+]);
 
 function quoteIdentifier(value: string) {
   return `\`${value.replaceAll("`", "``")}\``;
@@ -673,7 +679,7 @@ export async function getProductionAchievementDashboard(filters?: {
   if (options?.initializeAutoNoProduction && isActiveProductionShift) {
     await Promise.all(
       lineData.map(async ({ line, summaryRows, monthlyParameters }) => {
-        if (!isMachiningLine(line.key) || summaryRows.length > 0 || !monthlyParameters) return;
+        if (!autoNoProductionLines.has(line.key) || summaryRows.length > 0 || !monthlyParameters) return;
         if (monthlyParameters.hasMonthlyPlan && monthlyParameters.totalPlan > 0) return;
 
         const lastUpdatedAt = realtimeStatuses[line.key];
@@ -706,6 +712,7 @@ export async function getProductionAchievementDashboard(filters?: {
   return {
     date,
     shift,
+    isActiveProductionShift,
     cards: lineCards,
     initialDecisions: Object.fromEntries(automaticDecisions),
   };

@@ -115,6 +115,11 @@ export default function ProductionAchievementRealtimeDashboard({
 
   function applyDashboard(nextDashboard: ProductionAchievementDashboard) {
     setDashboard(nextDashboard);
+    if (!nextDashboard.isActiveProductionShift) {
+      setDecisions({});
+      setResolvedDecisionSources({});
+      return;
+    }
     setDecisions((current) => ({ ...current, ...nextDashboard.initialDecisions }));
     setResolvedDecisionSources((current) => ({
       ...current,
@@ -123,6 +128,7 @@ export default function ProductionAchievementRealtimeDashboard({
   }
 
   const alarms = useMemo(() => dashboard.cards.flatMap((card): Alarm[] => {
+    if (!dashboard.isActiveProductionShift) return [];
     if (!machiningKeys.has(card.key) || !card.hasData || !card.lastUpdatedAt || card.workSchedule.length === 0) return [];
     const lastUpdated = new Date(card.lastUpdatedAt);
     if (Number.isNaN(lastUpdated.getTime()) || lastUpdated > now) return [];
@@ -198,6 +204,7 @@ export default function ProductionAchievementRealtimeDashboard({
   }, [dashboard.date, dashboard.shift]);
 
   useEffect(() => {
+    if (!dashboard.isActiveProductionShift) return;
     const candidates = dashboard.cards.filter((card) => {
       if (!machiningKeys.has(card.key) || !card.lastUpdatedAt || card.workSchedule.length === 0) return false;
       return resolvedDecisionSources[card.key] !== card.lastUpdatedAt;
@@ -310,11 +317,11 @@ export default function ProductionAchievementRealtimeDashboard({
         >
           <div className="grid auto-cols-[320px] grid-flow-col gap-3 xl:grid-flow-row xl:grid-cols-5 xl:auto-cols-auto">
             {dashboard.cards.map((card) => (
-              <ProductionAchievementCardView
-                key={card.key}
-                card={card}
-                lineStopDecision={displayedDecisions[card.key]}
-              />
+                <ProductionAchievementCardView
+                  key={card.key}
+                  card={card}
+                  lineStopDecision={dashboard.isActiveProductionShift ? displayedDecisions[card.key] : undefined}
+                />
             ))}
           </div>
         </div>

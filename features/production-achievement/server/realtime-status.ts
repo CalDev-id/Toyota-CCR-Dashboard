@@ -6,7 +6,7 @@ import type {
 } from "@/features/production-achievement/types";
 import { prisma } from "@/lib/prisma";
 
-const trackedLines = ["cylblock", "cylhead", "crankshaft", "camshaft"] as const;
+const trackedLines = ["assy", "cylblock", "cylhead", "crankshaft", "camshaft"] as const;
 
 type StatusRow = {
   lineKey: string;
