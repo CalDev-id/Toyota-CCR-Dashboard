@@ -595,12 +595,18 @@ function buildProblems(rows: RawProductionAchievementProblemRow[]) {
         unit: "min" as const,
         type: "PE" as const,
       },
+      {
+        label: item.problemRq ?? "",
+        value: toNumber(item.defectCMin) + toNumber(item.defectMMin),
+        unit: "min" as const,
+        type: "RQ" as const,
+      },
     ])
     .filter((item) => item.label.trim() && item.value > 0);
 
   const groupedProblems = new Map<
     string,
-    { label: string; value: number; unit: "min"; type: "AV" | "PE" }
+    { label: string; value: number; unit: "min"; type: "AV" | "PE" | "RQ" }
   >();
 
   for (const problem of problems) {
@@ -623,7 +629,12 @@ function buildProblems(rows: RawProductionAchievementProblemRow[]) {
 
 function buildStopTime(rows: RawProductionAchievementProblemRow[]) {
   return rows.reduce(
-    (total, row) => total + toNumber(row.lsAvMin) + toNumber(row.lsPeMin),
+    (total, row) =>
+      total +
+      toNumber(row.lsAvMin) +
+      toNumber(row.lsPeMin) +
+      toNumber(row.defectCMin) +
+      toNumber(row.defectMMin),
     0,
   );
 }
