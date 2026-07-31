@@ -15,6 +15,7 @@ import {
   ensureAutomaticNoProductionDecision,
   type LineStopDecision,
 } from "@/features/production-achievement/server/line-stop-decisions";
+import { loadDailyPlanningData } from "@/features/daily-planning/server/daily-planning-service";
 import { prisma } from "@/lib/prisma";
 import { getReportPrisma } from "@/lib/report-prisma";
 import { summaryViewName } from "@/lib/report-views";
@@ -495,7 +496,25 @@ async function getDailyPlanningPlanOverrides(
   shift: string,
   refreshStaticData = false,
 ) {
-  const rows = await getDailyPlanningSlotRows(date, shift, refreshStaticData);
+  let rows = await getDailyPlanningSlotRows(date, shift, refreshStaticData);
+
+  if (refreshStaticData) {
+    const dailyShift = getProductionAchievementShiftValue(shift);
+    const linesWithSlots = new Set(rows.map((row) => row.lineKey));
+    const missingLines = productionAchievementLineConfigs.filter(
+      (line) => !linesWithSlots.has(line.key),
+    );
+
+    if (dailyShift && missingLines.length > 0) {
+      await Promise.all(
+        missingLines.map((line) =>
+          loadDailyPlanningData(line.key, date, dailyShift).catch(() => null),
+        ),
+      );
+      rows = await getDailyPlanningSlotRows(date, shift, true);
+    }
+  }
+
   const overrides = new Map<string, DailyPlanningPlanOverride>();
   const groupedRows = new Map<string, RawDailyPlanningSlotRow[]>();
 

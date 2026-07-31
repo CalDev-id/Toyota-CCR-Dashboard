@@ -13,6 +13,10 @@ ENV DATABASE_URL="mysql://root:password@localhost:3306/toyota_ccr"
 RUN npm run prisma:generate
 RUN npm run build
 
+FROM base AS migration-deps
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
 FROM node:22-alpine AS runner
 WORKDIR /app
 
@@ -34,9 +38,14 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 COPY --from=builder --chown=nextjs:nodejs /app/database ./database
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=migration-deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/docker-entrypoint.sh ./docker-entrypoint.sh
+
+RUN chmod 755 ./docker-entrypoint.sh
 
 USER nextjs
 
 EXPOSE 3000
 
+ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["node", "server.js"]

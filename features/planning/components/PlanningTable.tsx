@@ -49,6 +49,8 @@ export default function PlanningTable({
     ["ot", "fot"].includes(column.field.toLowerCase());
   const isTrField = (column: PlanningColumn) =>
     ["f1tr", "f2tr"].includes(column.field.toLowerCase());
+  const isRatioField = (column: PlanningColumn) =>
+    ["ratio", "fratio"].includes(column.field.toLowerCase());
   const isNumberField = (column: PlanningColumn) => column.inputType === "number";
   const isCompactField = (column: PlanningColumn) =>
     ["shift", "fshift", "group", "fgroup", "tt", "ftt", "oee", "foee", "ratio", "fratio", "f1tr", "f2tr"].includes(column.field.toLowerCase());
@@ -139,6 +141,8 @@ export default function PlanningTable({
                                     ? "w-24"
                                   : isTrField(column)
                                     ? "w-20"
+                                  : isRatioField(column)
+                                    ? "w-20"
                                   : isOtField(column)
                                     ? "w-12"
                                   : isCompactField(column)
@@ -163,6 +167,8 @@ export default function PlanningTable({
                                   : isShiftColumn(column)
                                     ? "min-w-24"
                                   : isTrField(column)
+                                    ? "min-w-20"
+                                  : isRatioField(column)
                                     ? "min-w-20"
                                   : isOtField(column)
                                     ? "min-w-12"
@@ -215,6 +221,8 @@ export default function PlanningTable({
                                     ? "w-24 min-w-24"
                                   : isTrField(column)
                                     ? "w-20 min-w-20"
+                                  : isRatioField(column)
+                                    ? "w-20 min-w-20"
                                   : isOtField(column)
                                     ? "w-12 min-w-12"
                                   : isCompactField(column)
@@ -234,6 +242,8 @@ export default function PlanningTable({
                                   : isShiftColumn(column)
                                     ? "min-w-24"
                                   : isTrField(column)
+                                    ? "min-w-20"
+                                  : isRatioField(column)
                                     ? "min-w-20"
                                   : isOtField(column)
                                     ? "min-w-12"

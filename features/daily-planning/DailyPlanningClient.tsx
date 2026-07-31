@@ -7,6 +7,7 @@ import {
   updateDailySlotSchedule,
   updateDailySharedParameters,
   updateDailyOee,
+  updateDailySlotRemark,
   updateDailyTarget,
 } from "@/features/daily-planning/actions";
 import { Fragment, startTransition, useEffect, useState } from "react";
@@ -17,7 +18,7 @@ const partLabels: Record<string, string> = { assy: "Assy", cylblock: "Cylinder B
 
 type DailyData = Awaited<ReturnType<typeof loadDailyPlanning>>;
 type DailyRow = DailyData["rows"][number];
-type EditingRow = Pick<DailyRow, "start_time" | "end_time" | "fratio"> & {
+type EditingRow = Pick<DailyRow, "start_time" | "end_time" | "fratio" | "remark"> & {
   prod_minutes: number | string;
   ftt: number | string;
   foee: number | string;
@@ -25,6 +26,7 @@ type EditingRow = Pick<DailyRow, "start_time" | "end_time" | "fratio"> & {
 };
 type DailyTotals = { minutes: number; target: number; oneTr: number; twoTr: number };
 type BreakSchedule = { label: string; start: string; end: string };
+const maghribBreak: BreakSchedule = { label: "Istirahat Salat Maghrib", start: "18:00", end: "18:15" };
 
 function formatPart(value: string) {
   return partLabels[value] ?? value;
@@ -45,12 +47,19 @@ function formatMinutesAsHours(minutes: number) {
   return `${hours.toFixed(hours % 1 === 0 ? 0 : 1)} jam`;
 }
 
+function formatRemarkAudit(value: Date | string | null, userName: string | null) {
+  if (!value) return "Audit remark belum tersedia";
+  const timestamp = new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return userName ? `Terakhir diubah oleh ${userName} pada ${timestamp}` : `Terakhir diubah pada ${timestamp}`;
+}
+
 function getBreakSchedule(date: string, part: string, shift: string): BreakSchedule[] {
   if (shift === "2") {
     return [
       { label: "Istirahat 1", start: "22:00", end: "22:10" },
       { label: "Istirahat makan", start: "00:00", end: "00:30" },
       { label: "Istirahat 2", start: "02:30", end: "02:40" },
+      { label: "Istirahat Salat Subuh", start: "04:45", end: "05:00" },
     ];
   }
 
@@ -95,6 +104,7 @@ function makeEditingRows(rows: DailyRow[]) {
         ftt: row.ftt,
         foee: row.foee,
         fratio: row.fratio,
+        remark: row.remark ?? "",
         ftotal_target: row.ftotal_target,
       },
     ]),
@@ -113,6 +123,7 @@ function hasRowChanges(row: DailyRow, editing: EditingRow | undefined, isCamshaf
     parseDecimal(row.ftt) !== parseDecimal(editing.ftt) ||
     parseDecimal(row.foee) !== parseDecimal(editing.foee) ||
     (!isCamshaft && row.fratio !== editing.fratio) ||
+    (row.remark ?? "") !== editing.remark ||
     parseDecimal(row.ftotal_target) !== parseDecimal(editing.ftotal_target)
   );
 }
@@ -176,9 +187,15 @@ export default function DailyPlanningClient() {
   function setEditingTimeValue(id: number, field: "start_time" | "end_time", value: string) {
     setEditing((current) => {
       const row = current[id];
+      const dailyRow = visibleRows.find((item) => item.id === id);
+      const isDayOt = shift === "1" && dailyRow?.slot_type === "ot";
+      const isDuringMaghrib = value >= maghribBreak.start && value < maghribBreak.end;
+      const normalizedValue = isDayOt && isDuringMaghrib
+        ? field === "start_time" ? maghribBreak.end : maghribBreak.start
+        : value;
       const next = {
         ...row,
-        [field]: value,
+        [field]: normalizedValue,
       };
 
       return {
@@ -249,6 +266,10 @@ export default function DailyPlanningClient() {
             ratioOne,
             ratioTwo,
           );
+        }
+
+        if ((row.remark ?? "") !== next.remark) {
+          await updateDailySlotRemark(row.id, next.remark ?? "");
         }
       }
 
@@ -348,18 +369,23 @@ export default function DailyPlanningClient() {
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead className="bg-[#f9fafb] text-left text-xs font-medium uppercase tracking-wide text-[#667085]"><tr><th className="px-5 py-3">Jam</th><th className="pl-0 pr-8">Menit</th><th className="pl-8">TT</th><th className="px-2">OEE</th>{!isCamshaft ? <th className="pl-2 pr-8">Ratio</th> : null}<th className="pl-8">Total Plan</th><th className="px-2">{isCamshaft ? "01" : "1TR"}</th><th className="pl-2 pr-5">{isCamshaft ? "02" : "2TR"}</th></tr></thead>
+          <table className="w-full min-w-[840px] text-sm">
+            <thead className="bg-[#f9fafb] text-left text-xs font-medium uppercase tracking-wide text-[#667085]"><tr><th className="px-5 py-3">Jam</th><th className="pl-0 pr-8">Menit</th><th className="pl-8">TT</th><th className="px-2">OEE</th>{!isCamshaft ? <th className="pl-2 pr-8">Ratio</th> : null}<th className="pl-8">Total Plan</th><th className="px-2">{isCamshaft ? "01" : "1TR"}</th><th className="pl-2 pr-5">{isCamshaft ? "02" : "2TR"}</th><th className="px-3 py-3 normal-case">Remark</th></tr></thead>
             <tbody className="divide-y divide-[#e4e7ec]">
               {visibleRows.length === 0 ? (
                 <tr>
-                  <td className="px-5 py-10 text-center text-sm font-medium text-[#667085]" colSpan={isCamshaft ? 7 : 8}>
+                  <td className="px-5 py-10 text-center text-sm font-medium text-[#667085]" colSpan={isCamshaft ? 8 : 9}>
                     {emptyMessage}
                   </td>
                 </tr>
-              ) : visibleRows.map((row: DailyRow) => {
+              ) : visibleRows.map((row: DailyRow, index) => {
                 const current = editing[row.id] ?? row;
-                const breaksBeforeRow = breakSchedule.filter((breakItem) => breakItem.end === current.start_time);
+                const scheduledBreaks = breakSchedule.filter((breakItem) => breakItem.end === current.start_time);
+                const previousRow = visibleRows[index - 1];
+                const followsMaghrib = row.slot_type === "ot" && shift === "1" && current.start_time === maghribBreak.end && previousRow?.slot_type === "ot" && previousRow.end_time === maghribBreak.start;
+                const breaksBeforeRow = followsMaghrib
+                  ? [...scheduledBreaks, maghribBreak]
+                  : scheduledBreaks;
 
                 return (
                   <Fragment key={row.id}>
@@ -369,11 +395,12 @@ export default function DailyPlanningClient() {
                         <td />
                         <td className="px-0 py-2.5 text-center text-sm font-semibold" colSpan={isCamshaft ? 2 : 3}>{breakItem.label}</td>
                         <td colSpan={3} />
+                        <td />
                       </tr>
                     ))}
                   <tr className={row.slot_type === "ot" ? "bg-[#f3f7ff] dark:bg-[#0b367c] dark:text-white" : ""} style={row.slot_type === "ot" ? { boxShadow: "inset 4px 0 #2f80ff" } : undefined}>
                     <td className="px-5 py-3"><div className="flex items-center gap-1"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.start_time} onChange={(event) => setEditingTimeValue(row.id, "start_time", event.target.value)} /><span>-</span><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.end_time} onChange={(event) => setEditingTimeValue(row.id, "end_time", event.target.value)} />{row.slot_type === "ot" && row.is_schedule_override ? <button aria-label="Hapus OT manual" className="ml-1 grid size-8 place-items-center rounded-md text-[#b42318] transition hover:bg-[#fef3f2] disabled:opacity-60" disabled={isOtActionPending} title="Hapus OT manual" type="button" onClick={() => void handleDeleteManualOt(row.id)}><svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5M14 11v5" /></svg></button> : null}</div></td><td className="pl-0 pr-8"><span className="inline-flex h-9 min-w-16 items-center font-semibold text-[#101828]">{current.prod_minutes}</span></td><td className="pl-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.ftt} onChange={(event) => setEditingValue(row.id, "ftt", event.target.value)} /></td><td className="px-2"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.foee} onChange={(event) => setEditingValue(row.id, "foee", event.target.value)} /></td>{!isCamshaft ? <td className="pl-2 pr-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" value={current.fratio} onChange={(event) => setEditingValue(row.id, "fratio", event.target.value)} /></td> : null}
-                    <td className="pl-8"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" inputMode="numeric" value={current.ftotal_target} onChange={(event) => setEditingValue(row.id, "ftotal_target", event.target.value)} /></td><td className="px-2 font-semibold">{row.f1tr}</td><td className="pl-2 pr-5 font-semibold">{row.f2tr}</td>
+                    <td className="pl-8"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" inputMode="numeric" value={current.ftotal_target} onChange={(event) => setEditingValue(row.id, "ftotal_target", event.target.value)} /></td><td className="px-2 font-semibold">{row.f1tr}</td><td className="pl-2 pr-5 font-semibold">{row.f2tr}</td><td className="px-3 py-3"><div className="flex min-w-56 items-center gap-1"><input aria-label={`Remark ${current.start_time} sampai ${current.end_time}`} className="h-9 min-w-0 flex-1 rounded-lg border border-[#e4e7ec] px-2" maxLength={500} placeholder="Tambah remark" value={current.remark ?? ""} onChange={(event) => setEditingValue(row.id, "remark", event.target.value)} /><span aria-label={formatRemarkAudit(row.remark_updated_at, row.remark_updated_by_name)} className="group relative grid size-7 shrink-0 cursor-help place-items-center rounded-full text-[#667085] outline-none hover:bg-[#f2f4f7] focus:bg-[#f2f4f7]" tabIndex={0}><svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg><span role="tooltip" className="invisible absolute bottom-full right-0 z-20 mb-2 w-56 rounded-lg bg-[#101828] px-3 py-2 text-xs font-medium normal-case leading-5 text-white opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus:visible group-focus:opacity-100">{formatRemarkAudit(row.remark_updated_at, row.remark_updated_by_name)}</span></span></div></td>
                   </tr>
                   </Fragment>
                 );
@@ -390,12 +417,13 @@ export default function DailyPlanningClient() {
                     </span>
                   </div>
                 </td>
-                <td className="pl-8">-</td>
-                <td className="px-2">-</td>
-                {!isCamshaft ? <td className="pl-2 pr-8">-</td> : null}
+                <td className="pl-8" />
+                <td className="px-2" />
+                {!isCamshaft ? <td className="pl-2 pr-8" /> : null}
                 <td className="pl-8">{totals.target}</td>
                 <td className="px-2">{totals.oneTr}</td>
                 <td className="pl-2 pr-5">{totals.twoTr}</td>
+                <td className="px-3" />
               </tr>
             </tfoot> : null}
           </table>
