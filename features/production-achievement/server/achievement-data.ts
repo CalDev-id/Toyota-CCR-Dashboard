@@ -491,12 +491,22 @@ async function getDailyPlanningSlotRows(
   return rows;
 }
 
+function hasAllDailyPlanningLines(rows: RawDailyPlanningSlotRow[]) {
+  const linesWithSlots = new Set(rows.map((row) => row.lineKey));
+
+  return productionAchievementLineConfigs.every((line) => linesWithSlots.has(line.key));
+}
+
 async function getDailyPlanningPlanOverrides(
   date: string,
   shift: string,
   refreshStaticData = false,
 ) {
   let rows = await getDailyPlanningSlotRows(date, shift, refreshStaticData);
+
+  if (!refreshStaticData && !hasAllDailyPlanningLines(rows)) {
+    rows = await getDailyPlanningSlotRows(date, shift, true);
+  }
 
   if (refreshStaticData) {
     const dailyShift = getProductionAchievementShiftValue(shift);
