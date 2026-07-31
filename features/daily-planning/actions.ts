@@ -6,6 +6,7 @@ import {
   loadDailyPlanningData,
   updateDailyOeeData,
   updateDailySharedParametersData,
+  updateDailySlotParametersData,
   updateDailySlotScheduleData,
   updateDailySlotRemarkData,
   updateDailyTargetData,
@@ -62,6 +63,17 @@ export async function updateDailySharedParameters(
 ) {
   await requireUser();
   await updateDailySharedParametersData(part, date, shift, tt, ratio, await getCurrentUserId());
+  revalidatePath("/daily-planning");
+}
+
+export async function updateDailySlotParameters(
+  part: string,
+  id: number,
+  tt: number,
+  ratio: string,
+) {
+  await requireUser();
+  await updateDailySlotParametersData(part, Number(id), tt, ratio, await getCurrentUserId());
   revalidatePath("/daily-planning");
 }
 

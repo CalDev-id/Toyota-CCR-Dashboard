@@ -5,7 +5,7 @@ import {
   deleteDailyManualOt,
   loadDailyPlanning,
   updateDailySlotSchedule,
-  updateDailySharedParameters,
+  updateDailySlotParameters,
   updateDailyOee,
   updateDailySlotRemark,
   updateDailyTarget,
@@ -40,6 +40,36 @@ function parseRatio(value: string) {
 function parseDecimal(value: unknown) {
   const numeric = Number(String(value ?? "").trim().replace(",", "."));
   return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function calculateRowPlan(
+  savedRow: DailyRow,
+  row: Pick<EditingRow, "prod_minutes" | "ftt" | "foee" | "fratio" | "ftotal_target">,
+  isCamshaft: boolean,
+) {
+  const minutes = parseDecimal(row.prod_minutes);
+  const tt = parseDecimal(row.ftt);
+  const oee = parseDecimal(row.foee);
+  const isManualTarget = savedRow.is_schedule_override || parseDecimal(row.ftotal_target) !== parseDecimal(savedRow.ftotal_target);
+  const inputsAffectingTargetChanged =
+    minutes !== parseDecimal(savedRow.prod_minutes) ||
+    tt !== parseDecimal(savedRow.ftt) ||
+    oee !== parseDecimal(savedRow.foee);
+  // Retain the server's existing target (including Assy's cumulative rounding)
+  // until an input affecting this slot's target is actually edited.
+  const target = isManualTarget
+    ? parseDecimal(row.ftotal_target)
+    : inputsAffectingTargetChanged && tt > 0
+      ? Math.round((minutes / tt) * (oee / 100))
+      : parseDecimal(savedRow.ftotal_target);
+
+  if (isCamshaft) {
+    return { target, oneTr: target, twoTr: target };
+  }
+
+  const [ratioOne, ratioTwo] = parseRatio(String(row.fratio));
+  const oneTr = Math.round((target * ratioOne) / (ratioOne + ratioTwo || 1));
+  return { target, oneTr, twoTr: target - oneTr };
 }
 
 function formatMinutesAsHours(minutes: number) {
@@ -164,15 +194,17 @@ export default function DailyPlanningClient() {
   const hasPendingUpdates = changedRows.length > 0;
   const otRows = visibleRows.filter((row) => row.slot_type === "ot");
   const canAddOt = Boolean(data?.hasMonthlyData) && (shift === "1" ? otRows.length === 0 : otRows.length < 2);
-  const totals = visibleRows.reduce(
-    (result: DailyTotals, row: DailyRow) => ({
-      minutes: result.minutes + Number(editing[row.id]?.prod_minutes ?? row.prod_minutes),
-      target: result.target + Number(editing[row.id]?.ftotal_target ?? row.ftotal_target),
-      oneTr: result.oneTr + row.f1tr,
-      twoTr: result.twoTr + row.f2tr,
-    }),
-    { minutes: 0, target: 0, oneTr: 0, twoTr: 0 },
-  );
+  const totals = visibleRows.reduce((result: DailyTotals, row: DailyRow) => {
+    const current = editing[row.id] ?? row;
+    const calculated = calculateRowPlan(row, current, isCamshaft);
+
+    return {
+      minutes: result.minutes + parseDecimal(current.prod_minutes),
+      target: result.target + calculated.target,
+      oneTr: result.oneTr + calculated.oneTr,
+      twoTr: result.twoTr + calculated.twoTr,
+    };
+  }, { minutes: 0, target: 0, oneTr: 0, twoTr: 0 });
 
   function setEditingValue<T extends keyof EditingRow>(id: number, field: T, value: EditingRow[T]) {
     setEditing((current) => ({
@@ -216,25 +248,12 @@ export default function DailyPlanningClient() {
     setIsSaving(true);
 
     try {
-      const firstChangedShared = changedRows.find((row: DailyRow) => {
-        const next = editing[row.id];
-        return next && (parseDecimal(row.ftt) !== parseDecimal(next.ftt) || (!isCamshaft && row.fratio !== next.fratio));
-      });
-
-      if (firstChangedShared) {
-        const next = editing[firstChangedShared.id];
-        await updateDailySharedParameters(
-          part,
-          date,
-          shift,
-          parseDecimal(next.ftt),
-          next.fratio,
-        );
-      }
-
       for (const row of changedRows) {
         const next = editing[row.id];
         const [ratioOne, ratioTwo] = parseRatio(next.fratio);
+        const parametersChanged =
+          parseDecimal(row.ftt) !== parseDecimal(next.ftt) ||
+          (!isCamshaft && row.fratio !== next.fratio);
         const scheduleChanged =
           row.start_time !== next.start_time ||
           row.end_time !== next.end_time ||
@@ -242,6 +261,10 @@ export default function DailyPlanningClient() {
 
         if (parseDecimal(row.foee) !== parseDecimal(next.foee)) {
           await updateDailyOee(row.id, parseDecimal(next.foee));
+        }
+
+        if (parametersChanged) {
+          await updateDailySlotParameters(part, row.id, parseDecimal(next.ftt), next.fratio);
         }
 
         if (scheduleChanged) {
@@ -380,6 +403,10 @@ export default function DailyPlanningClient() {
                 </tr>
               ) : visibleRows.map((row: DailyRow, index) => {
                 const current = editing[row.id] ?? row;
+                const calculated = calculateRowPlan(row, current, isCamshaft);
+                const displayedTarget = calculated.target;
+                const displayedOneTr = calculated.oneTr;
+                const displayedTwoTr = calculated.twoTr;
                 const scheduledBreaks = breakSchedule.filter((breakItem) => breakItem.end === current.start_time);
                 const previousRow = visibleRows[index - 1];
                 const followsMaghrib = row.slot_type === "ot" && shift === "1" && current.start_time === maghribBreak.end && previousRow?.slot_type === "ot" && previousRow.end_time === maghribBreak.start;
@@ -400,7 +427,7 @@ export default function DailyPlanningClient() {
                     ))}
                   <tr className={row.slot_type === "ot" ? "bg-[#f3f7ff] dark:bg-[#0b367c] dark:text-white" : ""} style={row.slot_type === "ot" ? { boxShadow: "inset 4px 0 #2f80ff" } : undefined}>
                     <td className="px-5 py-3"><div className="flex items-center gap-1"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.start_time} onChange={(event) => setEditingTimeValue(row.id, "start_time", event.target.value)} /><span>-</span><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.end_time} onChange={(event) => setEditingTimeValue(row.id, "end_time", event.target.value)} />{row.slot_type === "ot" && row.is_schedule_override ? <button aria-label="Hapus OT manual" className="ml-1 grid size-8 place-items-center rounded-md text-[#b42318] transition hover:bg-[#fef3f2] disabled:opacity-60" disabled={isOtActionPending} title="Hapus OT manual" type="button" onClick={() => void handleDeleteManualOt(row.id)}><svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5M14 11v5" /></svg></button> : null}</div></td><td className="pl-0 pr-8"><span className="inline-flex h-9 min-w-16 items-center font-semibold text-[#101828]">{current.prod_minutes}</span></td><td className="pl-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.ftt} onChange={(event) => setEditingValue(row.id, "ftt", event.target.value)} /></td><td className="px-2"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.foee} onChange={(event) => setEditingValue(row.id, "foee", event.target.value)} /></td>{!isCamshaft ? <td className="pl-2 pr-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" value={current.fratio} onChange={(event) => setEditingValue(row.id, "fratio", event.target.value)} /></td> : null}
-                    <td className="pl-8"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" inputMode="numeric" value={current.ftotal_target} onChange={(event) => setEditingValue(row.id, "ftotal_target", event.target.value)} /></td><td className="px-2 font-semibold">{row.f1tr}</td><td className="pl-2 pr-5 font-semibold">{row.f2tr}</td><td className="px-3 py-3"><div className="flex min-w-56 items-center gap-1"><input aria-label={`Remark ${current.start_time} sampai ${current.end_time}`} className="h-9 min-w-0 flex-1 rounded-lg border border-[#e4e7ec] px-2" maxLength={500} placeholder="Tambah remark" value={current.remark ?? ""} onChange={(event) => setEditingValue(row.id, "remark", event.target.value)} /><span aria-label={formatRemarkAudit(row.remark_updated_at, row.remark_updated_by_name)} className="group relative grid size-7 shrink-0 cursor-help place-items-center rounded-full text-[#667085] outline-none hover:bg-[#f2f4f7] focus:bg-[#f2f4f7]" tabIndex={0}><svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg><span role="tooltip" className="invisible absolute bottom-full right-0 z-20 mb-2 w-56 rounded-lg bg-[#101828] px-3 py-2 text-xs font-medium normal-case leading-5 text-white opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus:visible group-focus:opacity-100">{formatRemarkAudit(row.remark_updated_at, row.remark_updated_by_name)}</span></span></div></td>
+                    <td className="pl-8"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" inputMode="numeric" value={displayedTarget} onChange={(event) => setEditingValue(row.id, "ftotal_target", event.target.value)} /></td><td className="px-2 font-semibold">{displayedOneTr}</td><td className="pl-2 pr-5 font-semibold">{displayedTwoTr}</td><td className="px-3 py-3"><div className="flex min-w-56 items-center gap-1"><input aria-label={`Remark ${current.start_time} sampai ${current.end_time}`} className="h-9 min-w-0 flex-1 rounded-lg border border-[#e4e7ec] px-2" maxLength={500} placeholder="Tambah remark" value={current.remark ?? ""} onChange={(event) => setEditingValue(row.id, "remark", event.target.value)} /><span aria-label={formatRemarkAudit(row.remark_updated_at, row.remark_updated_by_name)} className="group relative grid size-7 shrink-0 cursor-help place-items-center rounded-full text-[#667085] outline-none hover:bg-[#f2f4f7] focus:bg-[#f2f4f7]" tabIndex={0}><svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M14 11v5" /></svg><span role="tooltip" className="invisible absolute bottom-full right-0 z-20 mb-2 w-56 rounded-lg bg-[#101828] px-3 py-2 text-xs font-medium normal-case leading-5 text-white opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus:visible group-focus:opacity-100">{formatRemarkAudit(row.remark_updated_at, row.remark_updated_by_name)}</span></span></div></td>
                   </tr>
                   </Fragment>
                 );

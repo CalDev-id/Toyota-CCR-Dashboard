@@ -3,7 +3,7 @@ import { getReportPrisma } from "@/lib/report-prisma";
 
 type SlotTemplate = { order: number; start: string; end: string; minutes: number; type: "normal" | "ot" };
 type Plan = { id: number; override_tt: number | null; override_ratio: string | null; source_tt: number | null; source_oee: number | null; source_ratio: string | null; source_ot_minutes: number | null };
-type Slot = { id: number; slot_order: number; start_time: string; end_time: string; prod_minutes: number; slot_type: "normal" | "ot"; oee: number | null; is_oee_override: number; total_target: number; one_tr: number; two_tr: number; is_schedule_override: number; remark: string | null; remark_updated_at: Date | null; remark_updated_by_name: string | null };
+type Slot = { id: number; slot_order: number; start_time: string; end_time: string; prod_minutes: number; slot_type: "normal" | "ot"; oee: number | null; is_oee_override: number; tt_override: number | null; ratio_override: string | null; total_target: number; one_tr: number; two_tr: number; is_schedule_override: number; remark: string | null; remark_updated_at: Date | null; remark_updated_by_name: string | null };
 
 const parts = new Set(["assy", "cylblock", "cylhead", "camshaft", "crankshaft"]);
 const maghribBreak = { start: "18:00", end: "18:15" };
@@ -145,8 +145,15 @@ export async function loadDailyPlanningData(part: string, date: string, shift: s
   for (const slot of template) {
     const existingSlot = existing.find((row: Slot) => Number(row.slot_order) === slot.order);
     const oeeForTarget = existingSlot?.is_oee_override ? Number(existingSlot.oee) : (monthlyOee ?? 0);
-    const target = templateTargets.get(slot.order) ?? targetFor(slot.minutes, tt ?? 0, oeeForTarget);
-    const [oneTr,twoTr] = splitTarget(part,target,ratioOne,ratioTwo);
+    const slotTtOverride = toNullableNumber(existingSlot?.tt_override);
+    const slotRatioOverride = existingSlot?.ratio_override;
+    // Preserve the established template calculation unless this specific slot
+    // has an explicit parameter override.
+    const target = slotTtOverride === null
+      ? (templateTargets.get(slot.order) ?? targetFor(slot.minutes, tt ?? 0, oeeForTarget))
+      : targetFor(slot.minutes, slotTtOverride, oeeForTarget);
+    const [slotRatioOne,slotRatioTwo] = parseRatio(part === "camshaft" ? "" : (slotRatioOverride ?? ratio));
+    const [oneTr,twoTr] = splitTarget(part,target,slotRatioOne,slotRatioTwo);
 
     if (!existingSlot) {
       await db.$executeRawUnsafe("INSERT INTO t_daily_production_plan_slot (daily_plan_id,slot_order,start_time,end_time,prod_minutes,slot_type,total_target,one_tr,two_tr) VALUES (?,?,?,?,?,?,?,?,?)",plan.id,slot.order,slot.start,slot.end,slot.minutes,slot.type,target,oneTr,twoTr);
@@ -176,16 +183,16 @@ export async function loadDailyPlanningData(part: string, date: string, shift: s
   }
 
   const slots = await getDailyPlanSlots(plan.id);
-  const rowTargets = targetsForSlots(part, shift, slots.map((slot: Slot) => ({ key: Number(slot.slot_order), minutes: Number(slot.prod_minutes), oee: slot.is_oee_override ? Number(slot.oee) : (monthlyOee ?? 0) })), tt ?? 0);
-  const rows = slots.map((slot: Slot) => { const oee = slot.is_oee_override ? Number(slot.oee) : monthlyOee; const calculatedTarget = rowTargets.get(Number(slot.slot_order)) ?? targetFor(Number(slot.prod_minutes),tt ?? 0,oee ?? 0); const target = slot.is_schedule_override ? Number(slot.total_target) : calculatedTarget; const [oneTr,twoTr] = splitTarget(part,target,ratioOne,ratioTwo); return { ...slot, oee: Number(slot.oee ?? 0), ftt: tt ?? "", foee: oee ?? "", fratio: part === "camshaft" ? "" : ratio, ftotal_target:target, f1tr:oneTr, f2tr:twoTr }; });
+  const rows = slots.map((slot: Slot) => { const { tt_override, ratio_override, ...serializableSlot } = slot; const oee = slot.is_oee_override ? Number(slot.oee) : monthlyOee; const slotTt = toNullableNumber(tt_override) ?? tt ?? 0; const slotRatio = part === "camshaft" ? "" : (ratio_override ?? ratio); const [slotRatioOne,slotRatioTwo] = parseRatio(slotRatio); const calculatedTarget = targetFor(Number(slot.prod_minutes),slotTt,oee ?? 0); const target = slot.is_schedule_override ? Number(slot.total_target) : calculatedTarget; const [oneTr,twoTr] = splitTarget(part,target,slotRatioOne,slotRatioTwo); return { ...serializableSlot, oee: Number(slot.oee ?? 0), ftt: slotTt || "", foee: oee ?? "", fratio: slotRatio, ftotal_target:target, f1tr:oneTr, f2tr:twoTr }; });
   return { group: "all", tt, oee: monthlyOee, ratio, ratioOne, ratioTwo, hasMonthlyData: true, message: "", rows };
 }
 
 export async function updateDailyTargetData(part: string, id: number, target: number, ratioOne: number, ratioTwo: number, userId: number) { const [oneTr,twoTr] = splitTarget(part,Math.max(0,target),ratioOne,ratioTwo); await prisma.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET total_target=?,one_tr=?,two_tr=?,is_schedule_override=1,remark_updated_by=?,remark_updated_at=CURRENT_TIMESTAMP WHERE id=?",target,oneTr,twoTr,userId,id); }
 export async function updateDailyOeeData(id: number, oee: number, userId: number) { if (oee <= 0) throw new Error("OEE harus valid"); await prisma.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET oee=?,is_oee_override=1,remark_updated_by=?,remark_updated_at=CURRENT_TIMESTAMP WHERE id=?",oee,userId,id); }
+export async function updateDailySlotParametersData(part: string, id: number, tt: number, ratio: string, userId: number) { const [one,two] = parseRatio(ratio); if (tt <= 0 || (part !== "camshaft" && one + two <= 0)) throw new Error(part === "camshaft" ? "TT harus valid" : "TT dan Ratio harus valid"); const slots = await prisma.$queryRawUnsafe<Array<{ prod_minutes: number; oee: number | null; is_oee_override: number; source_oee: number | null }>>("SELECT s.prod_minutes,s.oee,s.is_oee_override,p.source_oee FROM t_daily_production_plan_slot s JOIN t_daily_production_plan p ON p.id=s.daily_plan_id WHERE s.id=? LIMIT 1",id); const slot = slots[0]; if (!slot) throw new Error("Slot tidak ditemukan"); const oee = slot.is_oee_override ? Number(slot.oee) : Number(slot.source_oee); const target = targetFor(Number(slot.prod_minutes),tt,oee); const [oneTr,twoTr] = splitTarget(part,target,one,two); await prisma.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET tt_override=?,ratio_override=?,total_target=?,one_tr=?,two_tr=?,remark_updated_by=?,remark_updated_at=CURRENT_TIMESTAMP WHERE id=?",tt,part === "camshaft" ? null : `${one}:${two}`,target,oneTr,twoTr,userId,id); }
 export async function updateDailySharedParametersData(part: string,date: string,shift: string,tt: number,ratio: string,userId: number) { const [one,two] = parseRatio(ratio); if (tt<=0 || (part !== "camshaft" && one+two<=0)) throw new Error(part === "camshaft" ? "TT harus valid" : "TT dan Ratio harus valid"); const { db,plan,hasMonthlyData } = await getPlanContext(part,date,shift); if (!hasMonthlyData || !plan) throw new Error("Data monthly untuk tanggal ini belum diisi."); if (part === "camshaft") { await db.$executeRawUnsafe("UPDATE t_daily_production_plan SET override_tt=?,override_ratio=NULL WHERE id=?",tt,plan.id); } else { await db.$executeRawUnsafe("UPDATE t_daily_production_plan SET override_tt=?,override_ratio=? WHERE id=?",tt,`${one}:${two}`,plan.id); } await db.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET remark_updated_by=?,remark_updated_at=CURRENT_TIMESTAMP WHERE daily_plan_id=?",userId,plan.id); }
 export async function updateDailySlotScheduleData(part: string,id: number,startTime: string,endTime: string,_minutes: number,ratioOne: number,ratioTwo: number,tt: number,oee: number,userId: number) {
-  const slot = await prisma.$queryRawUnsafe<Array<{ fshift: string; slot_type: string; daily_plan_id: number; slot_order: number }>>("SELECT p.fshift,s.slot_type,s.daily_plan_id,s.slot_order FROM t_daily_production_plan_slot s JOIN t_daily_production_plan p ON p.id=s.daily_plan_id WHERE s.id=? LIMIT 1", id);
+  const slot = await prisma.$queryRawUnsafe<Array<{ fshift: string; slot_type: string; daily_plan_id: number; slot_order: number; tt_override: number | null; ratio_override: string | null }>>("SELECT p.fshift,s.slot_type,s.daily_plan_id,s.slot_order,s.tt_override,s.ratio_override FROM t_daily_production_plan_slot s JOIN t_daily_production_plan p ON p.id=s.daily_plan_id WHERE s.id=? LIMIT 1", id);
   if (!slot[0]) throw new Error("Slot tidak ditemukan");
   const isDayOt = String(slot[0].fshift) === "1" && slot[0].slot_type === "ot";
   const minutes = calculateDurationMinutes(startTime,endTime);
@@ -202,7 +209,7 @@ export async function updateDailySlotScheduleData(part: string,id: number,startT
       await prisma.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET slot_order=?,start_time=?,end_time=?,prod_minutes=?,total_target=?,one_tr=?,two_tr=?,is_schedule_override=1,remark_updated_by=?,remark_updated_at=CURRENT_TIMESTAMP WHERE id=?",segment.order,segment.start,segment.end,segment.minutes,target,oneTr,twoTr,userId,id);
       continue;
     }
-    await prisma.$executeRawUnsafe("INSERT INTO t_daily_production_plan_slot (daily_plan_id,slot_order,start_time,end_time,prod_minutes,slot_type,total_target,one_tr,two_tr,is_schedule_override,remark_updated_by,remark_updated_at) VALUES (?,?,?,?,?,?,?,?,?,1,?,CURRENT_TIMESTAMP)",slot[0].daily_plan_id,segment.order,segment.start,segment.end,segment.minutes,"ot",target,oneTr,twoTr,userId);
+    await prisma.$executeRawUnsafe("INSERT INTO t_daily_production_plan_slot (daily_plan_id,slot_order,start_time,end_time,prod_minutes,slot_type,tt_override,ratio_override,total_target,one_tr,two_tr,is_schedule_override,remark_updated_by,remark_updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,1,?,CURRENT_TIMESTAMP)",slot[0].daily_plan_id,segment.order,segment.start,segment.end,"ot",slot[0].tt_override,slot[0].ratio_override,target,oneTr,twoTr,userId);
   }
 }
 
@@ -223,7 +230,7 @@ export async function updateDailySlotRemarkData(id: number, remark: string, user
 type OtPosition = "start" | "end";
 
 async function getDailyPlanSlots(planId: number) {
-  return prisma.$queryRawUnsafe<Slot[]>("SELECT s.id,s.slot_order,TIME_FORMAT(s.start_time,'%H:%i') AS start_time,TIME_FORMAT(s.end_time,'%H:%i') AS end_time,s.prod_minutes,s.slot_type,s.oee,s.is_oee_override,s.total_target,s.one_tr,s.two_tr,s.is_schedule_override,s.remark,s.remark_updated_at,u.name AS remark_updated_by_name FROM t_daily_production_plan_slot s LEFT JOIN `User` u ON u.id=s.remark_updated_by WHERE s.daily_plan_id=? ORDER BY s.slot_order", planId);
+  return prisma.$queryRawUnsafe<Slot[]>("SELECT s.id,s.slot_order,TIME_FORMAT(s.start_time,'%H:%i') AS start_time,TIME_FORMAT(s.end_time,'%H:%i') AS end_time,s.prod_minutes,s.slot_type,s.oee,s.is_oee_override,s.tt_override,s.ratio_override,s.total_target,s.one_tr,s.two_tr,s.is_schedule_override,s.remark,s.remark_updated_at,u.name AS remark_updated_by_name FROM t_daily_production_plan_slot s LEFT JOIN `User` u ON u.id=s.remark_updated_by WHERE s.daily_plan_id=? ORDER BY s.slot_order", planId);
 }
 
 export async function addDailyOtData(part: string, date: string, shift: string, requestedPosition?: OtPosition, userId?: number) {

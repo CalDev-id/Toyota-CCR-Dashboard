@@ -10,6 +10,7 @@ const migrations = [
   "../database/migrations/20260721_user_app_db.sql",
   "../database/migrations/20260717_daily_planning_app_db.sql",
   "../database/migrations/20260730_daily_planning_slot_remark.sql",
+  "../database/migrations/20260731_daily_slot_parameters.sql",
   "../database/migrations/20260721_production_realtime_status.sql",
   "../database/migrations/20260724_line_stop_decisions.sql",
   "../database/migrations/20260727_add_no_production_line_stop_decision.sql",
