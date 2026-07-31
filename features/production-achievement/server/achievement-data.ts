@@ -377,6 +377,22 @@ type DailyPlanningPlanOverride = {
   workSchedule: Array<{ start: string; end: string }>;
 };
 
+type DailyPlanningSourceSnapshot = {
+  lineKey: string;
+  sourceTt: unknown;
+  sourceOee: unknown;
+  sourceRatio: unknown;
+  sourceOtMinutes: unknown;
+};
+
+type MonthlyPlanningSourceSnapshot = {
+  hasMonthlyData: boolean;
+  sourceTt: string;
+  sourceOee: number;
+  sourceRatio: string;
+  sourceOtMinutes: number;
+};
+
 function getLocalDate(value: string) {
   const [year, month, day] = value.split("-").map(Number);
 
@@ -491,10 +507,82 @@ async function getDailyPlanningSlotRows(
   return rows;
 }
 
-function hasAllDailyPlanningLines(rows: RawDailyPlanningSlotRow[]) {
-  const linesWithSlots = new Set(rows.map((row) => row.lineKey));
+async function getDailyPlanningSourceSnapshots(date: string, shiftValue: string) {
+  const rows = await prisma.$queryRawUnsafe<DailyPlanningSourceSnapshot[]>(
+    `
+    SELECT
+      line_key AS lineKey,
+      source_tt AS sourceTt,
+      source_oee AS sourceOee,
+      source_ratio AS sourceRatio,
+      source_ot_minutes AS sourceOtMinutes
+    FROM t_daily_production_plan
+    WHERE fdate = ?
+      AND fshift = ?
+      AND fgroup = 'all'
+  `,
+    date,
+    shiftValue,
+  );
 
-  return productionAchievementLineConfigs.every((line) => linesWithSlots.has(line.key));
+  return new Map(rows.map((row) => [row.lineKey, row]));
+}
+
+async function getMonthlyPlanningSourceSnapshot(
+  line: ProductionAchievementLineConfig,
+  date: string,
+  shift: string,
+): Promise<MonthlyPlanningSourceSnapshot> {
+  const shifts = shiftAliases(shift);
+  const rows = await getReportPrisma().$queryRawUnsafe<
+    Array<{ tt: unknown; oee: unknown; ratio: unknown; otPlan: unknown }>
+  >(
+    `SELECT ftt AS tt, foee AS oee, fratio AS ratio, fot AS otPlan
+     FROM ${quoteIdentifier(monthlyPlanningTables[line.key])}
+     WHERE DATE(fdate)=? AND TRIM(fshift) IN (${shifts.map(() => "?").join(",")})
+     ORDER BY TRIM(fgroup) ASC
+     LIMIT 1`,
+    date,
+    ...shifts,
+  );
+
+  if (rows.length === 0) {
+    return {
+      hasMonthlyData: false,
+      sourceTt: "",
+      sourceOee: 0,
+      sourceRatio: "",
+      sourceOtMinutes: 0,
+    };
+  }
+
+  return {
+    hasMonthlyData: true,
+    sourceTt: toPlainString(rows[0]?.tt),
+    sourceOee: toNumber(rows[0]?.oee),
+    sourceRatio: line.key === "camshaft" ? "" : toPlainString(rows[0]?.ratio).trim(),
+    sourceOtMinutes: Math.max(0, Math.round(toNumber(rows[0]?.otPlan) * 60)),
+  };
+}
+
+function hasPlanningSourceMismatch(
+  dailySnapshot: DailyPlanningSourceSnapshot | undefined,
+  monthlySnapshot: MonthlyPlanningSourceSnapshot,
+) {
+  if (!dailySnapshot) {
+    return true;
+  }
+
+  if (!monthlySnapshot.hasMonthlyData) {
+    return false;
+  }
+
+  return (
+    toPlainString(dailySnapshot.sourceTt) !== monthlySnapshot.sourceTt ||
+    toNumber(dailySnapshot.sourceOee) !== monthlySnapshot.sourceOee ||
+    toPlainString(dailySnapshot.sourceRatio).trim() !== monthlySnapshot.sourceRatio ||
+    toNumber(dailySnapshot.sourceOtMinutes) !== monthlySnapshot.sourceOtMinutes
+  );
 }
 
 async function getDailyPlanningPlanOverrides(
@@ -504,24 +592,42 @@ async function getDailyPlanningPlanOverrides(
 ) {
   let rows = await getDailyPlanningSlotRows(date, shift, refreshStaticData);
 
-  if (!refreshStaticData && !hasAllDailyPlanningLines(rows)) {
-    rows = await getDailyPlanningSlotRows(date, shift, true);
-  }
-
   if (refreshStaticData) {
     const dailyShift = getProductionAchievementShiftValue(shift);
     const linesWithSlots = new Set(rows.map((row) => row.lineKey));
-    const missingLines = productionAchievementLineConfigs.filter(
-      (line) => !linesWithSlots.has(line.key),
-    );
+    if (dailyShift) {
+      const dailySnapshots = await getDailyPlanningSourceSnapshots(date, dailyShift);
+      const linesToSync = (
+        await Promise.all(
+          productionAchievementLineConfigs.map(async (line) => {
+            if (!linesWithSlots.has(line.key)) {
+              return line;
+            }
 
-    if (dailyShift && missingLines.length > 0) {
-      await Promise.all(
-        missingLines.map((line) =>
-          loadDailyPlanningData(line.key, date, dailyShift).catch(() => null),
-        ),
-      );
-      rows = await getDailyPlanningSlotRows(date, shift, true);
+            const monthlySnapshot = await getMonthlyPlanningSourceSnapshot(
+              line,
+              date,
+              shift,
+            );
+
+            return hasPlanningSourceMismatch(
+              dailySnapshots.get(line.key),
+              monthlySnapshot,
+            )
+              ? line
+              : null;
+          }),
+        )
+      ).filter((line): line is ProductionAchievementLineConfig => line !== null);
+
+      if (linesToSync.length > 0) {
+        await Promise.all(
+          linesToSync.map((line) =>
+            loadDailyPlanningData(line.key, date, dailyShift).catch(() => null),
+          ),
+        );
+        rows = await getDailyPlanningSlotRows(date, shift, true);
+      }
     }
   }
 
