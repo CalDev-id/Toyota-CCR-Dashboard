@@ -253,8 +253,7 @@ async function getProductionAchievementProblemRows(
         Defect_M_min AS defectMMin
       FROM ${quoteIdentifier(line.detailProblemView)}
       ${where}
-      ORDER BY \`DATE\` ASC, SHIFT ASC, JAM ASC, SHOP ASC
-      LIMIT 300`,
+      ORDER BY \`DATE\` ASC, SHIFT ASC, JAM ASC, SHOP ASC`,
       ...values,
     );
 
@@ -710,27 +709,12 @@ function buildProblems(rows: RawProductionAchievementProblemRow[]) {
     ])
     .filter((item) => item.label.trim() && item.value > 0);
 
-  const groupedProblems = new Map<
-    string,
-    { label: string; value: number; unit: "min"; type: "AV" | "PE" | "RQ" }
-  >();
-
-  for (const problem of problems) {
-    const label = problem.label.trim().replace(/\s+/g, " ");
-    const key = `${problem.type}:${label.toLocaleLowerCase()}`;
-    const current = groupedProblems.get(key);
-
-    groupedProblems.set(key, {
-      label: current?.label ?? label,
-      value: (current?.value ?? 0) + problem.value,
-      unit: "min",
-      type: problem.type,
-    });
-  }
-
-  return Array.from(groupedProblems.values())
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 3);
+  return problems
+    .map((problem) => ({
+      ...problem,
+      label: problem.label.trim().replace(/\s+/g, " "),
+    }))
+    .sort((a, b) => b.value - a.value);
 }
 
 function buildStopTime(rows: RawProductionAchievementProblemRow[]) {

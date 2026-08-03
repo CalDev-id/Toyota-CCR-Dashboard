@@ -111,6 +111,9 @@ export default function ProductionAchievementRealtimeDashboard({
   ));
   const [isSoundBlocked, setIsSoundBlocked] = useState(false);
   const [isSavingDecision, setIsSavingDecision] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const canDecide = viewerRole === "ADMIN" || viewerRole === "CCR_GROUP_LEADER";
 
   function applyDashboard(nextDashboard: ProductionAchievementDashboard) {
@@ -249,6 +252,47 @@ export default function ProductionAchievementRealtimeDashboard({
     void audio.play().then(() => setIsSoundBlocked(false)).catch(() => setIsSoundBlocked(true));
   }
 
+  async function downloadExcel(format: "report" | "data") {
+    setIsExporting(true);
+    setIsDownloadMenuOpen(false);
+    setExportError(null);
+    try {
+      const params = new URLSearchParams({
+        date: dashboard.date,
+        shift: dashboard.shift,
+        format,
+      });
+      const response = await fetch(
+        `/api/production-achievement/export?${params.toString()}`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error ?? "Unable to download Excel report");
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const filename =
+        disposition.match(/filename="([^"]+)"/)?.[1] ??
+        `production-achievement${format === "data" ? "-data" : ""}_${dashboard.date}_${dashboard.shift}.xlsx`;
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setExportError(
+        error instanceof Error ? error.message : "Unable to download Excel report",
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   async function saveDecision(alarm: Alarm, decision: DecisionResponse["decision"]) {
     setIsSavingDecision(true);
     try {
@@ -296,17 +340,57 @@ export default function ProductionAchievementRealtimeDashboard({
             </div>
           </div>
 
-          <ProductionAchievementFilters
-            date={dashboard.date}
-            shift={dashboard.shift}
-            onFilterChange={(next) => {
-              void handleFilterChange(next);
-            }}
-          />
+          <div className="flex flex-wrap items-end gap-2">
+            <ProductionAchievementFilters
+              date={dashboard.date}
+              shift={dashboard.shift}
+              onFilterChange={(next) => {
+                void handleFilterChange(next);
+              }}
+            />
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsDownloadMenuOpen((current) => !current)}
+                disabled={isExporting || isFilterLoading}
+                className="flex h-10 items-center justify-center gap-2 rounded-lg border border-[#d0d5dd] bg-white px-3 text-sm font-semibold text-[#344054] shadow-sm transition hover:border-[#98a2b3] hover:bg-[#f9fafb] focus:outline-none focus:ring-2 focus:ring-[#ecf3ff] disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#384860] dark:bg-[#111827] dark:text-[#d4dae5] dark:hover:bg-[#162033] dark:focus:ring-[#14245a]"
+                aria-expanded={isDownloadMenuOpen}
+                aria-haspopup="menu"
+              >
+                {isExporting ? (
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5 animate-spin" fill="none">
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.3" strokeWidth="3" />
+                    <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" strokeLinecap="round" strokeWidth="3" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4 text-[#039855]" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">
+                    <path d="M12 3v12" />
+                    <path d="m7 10 5 5 5-5" />
+                    <path d="M5 21h14" />
+                  </svg>
+                )}
+                <span>{isExporting ? "Preparing..." : "Download"}</span>
+                <svg viewBox="0 0 20 20" aria-hidden="true" className="size-3.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">
+                  <path d="m5 7.5 5 5 5-5" />
+                </svg>
+              </button>
+              {isDownloadMenuOpen ? (
+                <div className="absolute right-0 z-20 mt-2 w-44 overflow-hidden rounded-lg border border-[#d0d5dd] bg-white py-1 shadow-lg dark:border-[#384860] dark:bg-[#111827]" role="menu">
+                  <button type="button" role="menuitem" onClick={() => void downloadExcel("report")} className="w-full px-3 py-2 text-left text-sm font-semibold text-[#344054] hover:bg-[#f9fafb] dark:text-[#d4dae5] dark:hover:bg-[#162033]">Laporan Excel</button>
+                  <button type="button" role="menuitem" onClick={() => void downloadExcel("data")} className="w-full px-3 py-2 text-left text-sm font-semibold text-[#344054] hover:bg-[#f9fafb] dark:text-[#d4dae5] dark:hover:bg-[#162033]">Data Excel</button>
+                </div>
+              ) : null}
+            </div>
+          </div>
 
           <ProductionAchievementClock />
 
         </div>
+        {exportError ? (
+          <p className="mt-3 text-right text-xs font-semibold text-[#b42318] dark:text-[#fda29b]" role="alert">
+            {exportError}
+          </p>
+        ) : null}
       </div>
 
       <div className="relative">
