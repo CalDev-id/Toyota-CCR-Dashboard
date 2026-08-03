@@ -17,6 +17,8 @@ export async function GET(request: Request) {
     const dashboard = await getProductionAchievementDashboard({
       date: url.searchParams.get("date"),
       shift: url.searchParams.get("shift"),
+    }, {
+      includeAllProblems: true,
     });
     const format = url.searchParams.get("format") === "data" ? "data" : "report";
     const workbook = format === "data"

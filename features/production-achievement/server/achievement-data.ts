@@ -685,7 +685,10 @@ async function getDailyPlanningPlanOverrides(
   return overrides;
 }
 
-function buildProblems(rows: RawProductionAchievementProblemRow[]) {
+function buildProblems(
+  rows: RawProductionAchievementProblemRow[],
+  includeAllProblems = false,
+) {
   const problems = rows
     .flatMap((item) => [
       {
@@ -709,12 +712,14 @@ function buildProblems(rows: RawProductionAchievementProblemRow[]) {
     ])
     .filter((item) => item.label.trim() && item.value > 0);
 
-  return problems
+  const normalizedProblems = problems
     .map((problem) => ({
       ...problem,
       label: problem.label.trim().replace(/\s+/g, " "),
     }))
     .sort((a, b) => b.value - a.value);
+
+  return includeAllProblems ? normalizedProblems : normalizedProblems.slice(0, 3);
 }
 
 function buildStopTime(rows: RawProductionAchievementProblemRow[]) {
@@ -807,6 +812,7 @@ function buildLineCard(
   planOverride?: DailyPlanningPlanOverride,
   lastUpdatedAt: string | null = null,
   isAutoNoProduction = false,
+  includeAllProblems = false,
 ): ProductionAchievementCard {
   const pairDivisor = line.key === "camshaft" ? 2 : 1;
   const prodPlan = planOverride?.prodPlan ?? 0;
@@ -849,7 +855,7 @@ function buildLineCard(
     lastUpdatedAt,
     workSchedule: planOverride?.workSchedule ?? [],
     stopTime: buildStopTime(problemRows),
-    problems: buildProblems(problemRows),
+    problems: buildProblems(problemRows, includeAllProblems),
     variants: buildVariants(line, summaryRows, planOverride),
   };
 }
@@ -860,6 +866,7 @@ export async function getProductionAchievementDashboard(filters?: {
 }, options?: {
   initializeAutoNoProduction?: boolean;
   refreshStaticData?: boolean;
+  includeAllProblems?: boolean;
 }): Promise<ProductionAchievementDashboard> {
   const date = normalizeDate(filters?.date);
   const shift = normalizeShift(filters?.shift);
@@ -925,6 +932,7 @@ export async function getProductionAchievementDashboard(filters?: {
         planOverrides.get(line.key),
         realtimeStatuses[line.key] ?? null,
         automaticDecisions.has(line.key),
+        options?.includeAllProblems,
       ),
   );
 

@@ -80,11 +80,17 @@ function formatShiftLabel(value: string) {
   return value.toUpperCase() === "NIGHT" ? "Night" : "Day";
 }
 
-async function fetchDashboard(date: string, shift: string, initializeAutoNoProduction = false) {
+async function fetchDashboard(
+  date: string,
+  shift: string,
+  initializeAutoNoProduction = false,
+  signal?: AbortSignal,
+) {
   const params = new URLSearchParams({ date, shift });
   if (initializeAutoNoProduction) params.set("initializeAutoNoProduction", "1");
   const response = await fetch(`/api/production-achievement?${params.toString()}`, {
     cache: "no-store",
+    signal,
   });
   const body = await response.json().catch(() => ({}));
 
@@ -101,8 +107,15 @@ export default function ProductionAchievementRealtimeDashboard({
 }: ProductionAchievementRealtimeDashboardProps) {
   const [dashboard, setDashboard] =
     useState<ProductionAchievementDashboard>(initialDashboard);
+  const [selectedFilter, setSelectedFilter] = useState(() => ({
+    date: initialDashboard.date,
+    shift: initialDashboard.shift,
+  }));
   const [isFilterLoading, setIsFilterLoading] = useState(false);
-  const filterRequestRef = useRef(0);
+  const selectedFilterRef = useRef(selectedFilter);
+  const dashboardRequestRef = useRef(0);
+  const dashboardAbortRef = useRef<AbortController | null>(null);
+  const downloadMenuRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [decisions, setDecisions] = useState<Record<string, DecisionResponse>>(initialDashboard.initialDecisions);
@@ -115,6 +128,13 @@ export default function ProductionAchievementRealtimeDashboard({
   const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const canDecide = viewerRole === "ADMIN" || viewerRole === "CCR_GROUP_LEADER";
+
+  function beginDashboardRequest() {
+    dashboardAbortRef.current?.abort();
+    const controller = new AbortController();
+    dashboardAbortRef.current = controller;
+    return { controller, requestId: ++dashboardRequestRef.current };
+  }
 
   function applyDashboard(nextDashboard: ProductionAchievementDashboard) {
     setDashboard(nextDashboard);
@@ -153,9 +173,13 @@ export default function ProductionAchievementRealtimeDashboard({
   ), [dashboard.cards, decisions]);
 
   async function handleFilterChange(next: { date?: string; shift?: string }) {
-    const requestId = ++filterRequestRef.current;
-    const nextDate = next.date ?? dashboard.date;
-    const nextShift = next.shift ?? dashboard.shift;
+    const currentFilter = selectedFilterRef.current;
+    const nextDate = next.date ?? currentFilter.date;
+    const nextShift = next.shift ?? currentFilter.shift;
+    if (nextDate === currentFilter.date && nextShift === currentFilter.shift) return;
+    const nextFilter = { date: nextDate, shift: nextShift };
+    selectedFilterRef.current = nextFilter;
+    setSelectedFilter(nextFilter);
     const params = new URLSearchParams({ date: nextDate, shift: nextShift });
 
     window.history.replaceState(
@@ -164,30 +188,49 @@ export default function ProductionAchievementRealtimeDashboard({
       `/production-achievement?${params.toString()}`,
     );
     setIsFilterLoading(true);
+    const { controller, requestId } = beginDashboardRequest();
 
     try {
-      const nextDashboard = await fetchDashboard(nextDate, nextShift, true);
+      const nextDashboard = await fetchDashboard(nextDate, nextShift, true, controller.signal);
 
-      if (requestId === filterRequestRef.current) {
+      if (
+        requestId === dashboardRequestRef.current &&
+        selectedFilterRef.current.date === nextDate &&
+        selectedFilterRef.current.shift === nextShift
+      ) {
         applyDashboard(nextDashboard);
       }
     } catch {
       // Keep the last successful snapshot visible if a filter refresh fails.
     } finally {
-      if (requestId === filterRequestRef.current) {
+      if (requestId === dashboardRequestRef.current) {
         setIsFilterLoading(false);
       }
     }
   }
 
   useEffect(() => {
-    let isActive = true;
+    const isSelectedActiveShift =
+      dashboard.date === selectedFilter.date &&
+      dashboard.shift === selectedFilter.shift &&
+      dashboard.isActiveProductionShift;
+    if (!isSelectedActiveShift) return;
 
     const refreshDashboard = async () => {
+      const { controller, requestId } = beginDashboardRequest();
       try {
-        const nextDashboard = await fetchDashboard(dashboard.date, dashboard.shift);
+        const nextDashboard = await fetchDashboard(
+          selectedFilter.date,
+          selectedFilter.shift,
+          false,
+          controller.signal,
+        );
 
-        if (isActive) {
+        if (
+          requestId === dashboardRequestRef.current &&
+          selectedFilterRef.current.date === selectedFilter.date &&
+          selectedFilterRef.current.shift === selectedFilter.shift
+        ) {
           applyDashboard(nextDashboard);
         }
       } catch {
@@ -201,10 +244,17 @@ export default function ProductionAchievementRealtimeDashboard({
     }, 30000);
 
     return () => {
-      isActive = false;
       window.clearInterval(interval);
     };
-  }, [dashboard.date, dashboard.shift]);
+  }, [
+    dashboard.date,
+    dashboard.isActiveProductionShift,
+    dashboard.shift,
+    selectedFilter.date,
+    selectedFilter.shift,
+  ]);
+
+  useEffect(() => () => dashboardAbortRef.current?.abort(), []);
 
   useEffect(() => {
     if (!dashboard.isActiveProductionShift) return;
@@ -245,6 +295,27 @@ export default function ProductionAchievementRealtimeDashboard({
       audio.currentTime = 0;
     }
   }, [alarms.length, canDecide]);
+
+  useEffect(() => {
+    if (!isDownloadMenuOpen) return;
+
+    function closeDownloadMenu(event: MouseEvent) {
+      if (!downloadMenuRef.current?.contains(event.target as Node)) {
+        setIsDownloadMenuOpen(false);
+      }
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsDownloadMenuOpen(false);
+    }
+
+    document.addEventListener("mousedown", closeDownloadMenu);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeDownloadMenu);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isDownloadMenuOpen]);
 
   function enableAlarmSound() {
     const audio = audioRef.current;
@@ -316,7 +387,7 @@ export default function ProductionAchievementRealtimeDashboard({
         <div className="grid gap-4 lg:grid-cols-[minmax(280px,1fr)_auto_auto] lg:items-center">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight text-[#101828] dark:text-[#f8fafc] md:text-3xl">
-              Production Achievement ({formatShiftLabel(dashboard.shift)})
+              Production Achievement ({formatShiftLabel(selectedFilter.shift)})
             </h1>
             <div className="mt-3 flex flex-wrap items-center gap-2.5 text-sm font-semibold text-[#667085] dark:text-[#a7b0c0]">
               <svg
@@ -334,21 +405,21 @@ export default function ProductionAchievementRealtimeDashboard({
                 <path d="M3 10h18" />
                 <rect width="18" height="18" x="3" y="4" rx="2" />
               </svg>
-              <span>{formatDisplayDate(dashboard.date)}</span>
+              <span>{formatDisplayDate(selectedFilter.date)}</span>
               <span className="text-[#d0d5dd] dark:text-[#384860]">•</span>
-              <span>{formatWeekday(dashboard.date)}</span>
+              <span>{formatWeekday(selectedFilter.date)}</span>
             </div>
           </div>
 
           <div className="flex flex-wrap items-end gap-2">
             <ProductionAchievementFilters
-              date={dashboard.date}
-              shift={dashboard.shift}
+              date={selectedFilter.date}
+              shift={selectedFilter.shift}
               onFilterChange={(next) => {
                 void handleFilterChange(next);
               }}
             />
-            <div className="relative">
+            <div ref={downloadMenuRef} className="relative">
               <button
                 type="button"
                 onClick={() => setIsDownloadMenuOpen((current) => !current)}
