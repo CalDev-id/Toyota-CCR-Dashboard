@@ -323,13 +323,13 @@ export default function ProductionAchievementRealtimeDashboard({
     void audio.play().then(() => setIsSoundBlocked(false)).catch(() => setIsSoundBlocked(true));
   }
 
-  async function downloadExcel(format: "report" | "data") {
+  async function downloadExcel(format: "report" | "data" | "monthly") {
     setIsExporting(true);
     setIsDownloadMenuOpen(false);
     setExportError(null);
     try {
       const params = new URLSearchParams({
-        date: dashboard.date,
+        date: format === "monthly" ? selectedFilter.date : dashboard.date,
         shift: dashboard.shift,
         format,
       });
@@ -346,7 +346,9 @@ export default function ProductionAchievementRealtimeDashboard({
       const disposition = response.headers.get("Content-Disposition") ?? "";
       const filename =
         disposition.match(/filename="([^"]+)"/)?.[1] ??
-        `production-achievement${format === "data" ? "-data" : ""}_${dashboard.date}_${dashboard.shift}.xlsx`;
+        format === "monthly"
+          ? "production-achievement-monthly.xlsx"
+          : `production-achievement${format === "data" ? "-data" : ""}_${dashboard.date}_${dashboard.shift}.xlsx`;
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -449,6 +451,7 @@ export default function ProductionAchievementRealtimeDashboard({
                 <div className="absolute right-0 z-20 mt-2 w-44 overflow-hidden rounded-lg border border-[#d0d5dd] bg-white py-1 shadow-lg dark:border-[#384860] dark:bg-[#111827]" role="menu">
                   <button type="button" role="menuitem" onClick={() => void downloadExcel("report")} className="w-full px-3 py-2 text-left text-sm font-semibold text-[#344054] hover:bg-[#f9fafb] dark:text-[#d4dae5] dark:hover:bg-[#162033]">Laporan Excel</button>
                   <button type="button" role="menuitem" onClick={() => void downloadExcel("data")} className="w-full px-3 py-2 text-left text-sm font-semibold text-[#344054] hover:bg-[#f9fafb] dark:text-[#d4dae5] dark:hover:bg-[#162033]">Data Excel</button>
+                  <button type="button" role="menuitem" onClick={() => void downloadExcel("monthly")} className="w-full px-3 py-2 text-left text-sm font-semibold text-[#344054] hover:bg-[#f9fafb] dark:text-[#d4dae5] dark:hover:bg-[#162033]">Monthly Excel</button>
                 </div>
               ) : null}
             </div>

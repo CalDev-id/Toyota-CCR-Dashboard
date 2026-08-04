@@ -443,3 +443,307 @@ export function createProductionAchievementDataWorkbook(
     compression: true,
   });
 }
+
+type MonthlySummary = {
+  line: string;
+  oneTrPlan: number;
+  oneTrActual: number;
+  twoTrPlan: number;
+  twoTrActual: number;
+  totalPlan: number;
+  totalActual: number;
+  oeeActualWeight: number;
+  oeeTargetWeight: number;
+  oeeWeight: number;
+  ttActualWeight: number;
+  ttPlanWeight: number;
+  ttWeight: number;
+  otPlan: number;
+  otActual: number;
+  stopTime: number;
+};
+
+function emptyMonthlySummary(line: string): MonthlySummary {
+  return {
+    line,
+    oneTrPlan: 0,
+    oneTrActual: 0,
+    twoTrPlan: 0,
+    twoTrActual: 0,
+    totalPlan: 0,
+    totalActual: 0,
+    oeeActualWeight: 0,
+    oeeTargetWeight: 0,
+    oeeWeight: 0,
+    ttActualWeight: 0,
+    ttPlanWeight: 0,
+    ttWeight: 0,
+    otPlan: 0,
+    otActual: 0,
+    stopTime: 0,
+  };
+}
+
+function monthlySummaryRow(summary: MonthlySummary) {
+  const weight = summary.oeeWeight;
+  const ttWeight = summary.ttWeight;
+  const oeeActual = weight ? (summary.oeeActualWeight / weight) * 100 : null;
+  const oeeTarget = weight ? (summary.oeeTargetWeight / weight) * 100 : null;
+  return [
+    summary.line,
+    summary.oneTrPlan,
+    summary.oneTrActual,
+    summary.oneTrActual - summary.oneTrPlan,
+    summary.twoTrPlan,
+    summary.twoTrActual,
+    summary.twoTrActual - summary.twoTrPlan,
+    summary.totalPlan,
+    summary.totalActual,
+    summary.totalActual - summary.totalPlan,
+    oeeTarget,
+    oeeActual,
+    ttWeight ? summary.ttPlanWeight / ttWeight : null,
+    ttWeight ? summary.ttActualWeight / ttWeight : null,
+    summary.otPlan,
+    summary.otActual,
+    summary.stopTime,
+    oeeActual !== null && oeeTarget !== null && oeeActual >= oeeTarget ? "O" : "X",
+  ];
+}
+
+const monthlyStylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="8">
+    <font><sz val="11"/><color rgb="FF101828"/><name val="Aptos"/><family val="2"/></font>
+    <font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Aptos"/><family val="2"/></font>
+    <font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Aptos"/><family val="2"/></font>
+    <font><b/><sz val="10"/><color rgb="FF101828"/><name val="Arial"/><family val="2"/></font>
+    <font><b/><sz val="11"/><color rgb="FF027A48"/><name val="Aptos"/><family val="2"/></font>
+    <font><b/><sz val="11"/><color rgb="FFB42318"/><name val="Aptos"/><family val="2"/></font>
+    <font><b/><sz val="20"/><color rgb="FF101828"/><name val="Aptos Display"/><family val="2"/></font>
+    <font><b/><sz val="10"/><color rgb="FF101828"/><name val="Arial"/><family val="2"/></font>
+  </fonts>
+  <fills count="9">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF344054"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFEB0A1E"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFECFDF3"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFFEF3F2"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFF2F4F7"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFEAECF0"/><bgColor indexed="64"/></patternFill></fill>
+  </fills>
+  <borders count="5">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+    <border><left style="thin"><color rgb="FFD0D5DD"/></left><right style="thin"><color rgb="FFD0D5DD"/></right><top style="thin"><color rgb="FFD0D5DD"/></top><bottom style="thin"><color rgb="FFD0D5DD"/></bottom><diagonal/></border>
+    <border><left style="thin"><color rgb="FFD0D5DD"/></left><right style="thin"><color rgb="FFD0D5DD"/></right><top style="medium"><color rgb="FFEB0A1E"/></top><bottom style="thin"><color rgb="FFD0D5DD"/></bottom><diagonal/></border>
+    <border><left/><right/><top/><bottom style="medium"><color rgb="FFEB0A1E"/></bottom><diagonal/></border>
+    <border><left style="thin"><color rgb="FFD0D5DD"/></left><right style="thin"><color rgb="FFD0D5DD"/></right><top style="medium"><color rgb="FF101828"/></top><bottom style="thin"><color rgb="FFD0D5DD"/></bottom><diagonal/></border>
+  </borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="9">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="6" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center"/></xf>
+    <xf numFmtId="0" fontId="7" fillId="8" borderId="3" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+    <xf numFmtId="0" fontId="4" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="5" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="6" borderId="1" xfId="0" applyFill="1" applyBorder="1"/>
+    <xf numFmtId="0" fontId="0" fillId="7" borderId="1" xfId="0" applyFill="1" applyBorder="1"/>
+    <xf numFmtId="0" fontId="3" fillId="8" borderId="4" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+  </cellXfs>
+  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+  <dxfs count="0"/>
+  <tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleMedium9"/>
+</styleSheet>`;
+
+function applyCellStyle(xml: string, address: string, style: number) {
+  const pattern = new RegExp(`<c r="${address}"([^>]*)>`);
+  if (pattern.test(xml)) {
+    return xml.replace(pattern, (_, attributes: string) =>
+      `<c r="${address}"${attributes.replace(/\s+s="\d+"/, "")} s="${style}">`,
+    );
+  }
+
+  const row = address.match(/\d+$/)?.[0];
+  if (!row) return xml;
+  const cell = `<c r="${address}" s="${style}"/>`;
+  const rowPattern = new RegExp(`(<row r="${row}"[^>]*>)([\\s\\S]*?)(<\\/row>)`);
+  if (rowPattern.test(xml)) return xml.replace(rowPattern, `$1$2${cell}$3`);
+  return xml.replace(new RegExp(`<row r="${row}"([^>]*)\\/>`), `<row r="${row}"$1>${cell}</row>`);
+}
+
+function applyRowStyle(xml: string, row: number, lastColumn: string, style: number) {
+  const columns = XLSX.utils.decode_range(`A1:${lastColumn}1`).e.c;
+  return Array.from({ length: columns + 1 }, (_, column) =>
+    XLSX.utils.encode_cell({ r: row - 1, c: column }),
+  ).reduce((next, address) => applyCellStyle(next, address, style), xml);
+}
+
+function setRowHeight(xml: string, row: number, height: number) {
+  const pattern = new RegExp(`<row r="${row}"([^>]*)>`);
+  return xml.replace(pattern, (_, attributes: string) =>
+    `<row r="${row}"${attributes.replace(/\s+(?:ht|customHeight)="[^"]*"/g, "")} ht="${height}" customHeight="1">`,
+  );
+}
+
+function applyMonthlyStyles(
+  workbook: Buffer,
+  detailShifts: string[],
+  detailStatuses: string[],
+  summaryStatuses: string[],
+) {
+  const container = XLSX.CFB.read(workbook, { type: "buffer" });
+  let sheetXml = getXml(container, "/xl/worksheets/sheet1.xml");
+  const summaryTitleRow = 4;
+  const summaryHeaderRow = 5;
+  const summaryDataStartRow = 6;
+  const breakdownTitleRow = summaryDataStartRow + summaryStatuses.length + 1;
+  const breakdownHeaderRow = breakdownTitleRow + 1;
+  const breakdownDataStartRow = breakdownHeaderRow + 1;
+  sheetXml = applyCellStyle(sheetXml, "A1", 2);
+  sheetXml = applyRowStyle(sheetXml, summaryTitleRow, "R", 3);
+  sheetXml = setRowHeight(sheetXml, summaryTitleRow, 24);
+  sheetXml = applyRowStyle(sheetXml, summaryHeaderRow, "R", 1);
+  detailShifts.forEach((shift, index) => {
+    sheetXml = applyRowStyle(sheetXml, breakdownDataStartRow + index, "T", shift === "DAY" ? 6 : 7);
+  });
+  detailStatuses.forEach((value, index) => {
+    sheetXml = applyCellStyle(sheetXml, `T${breakdownDataStartRow + index}`, value === "O" ? 4 : 5);
+  });
+  summaryStatuses.forEach((_, index) => {
+    const row = summaryDataStartRow + index;
+    sheetXml = applyRowStyle(sheetXml, row, "R", index === summaryStatuses.length - 1 ? 8 : index % 2 === 0 ? 6 : 7);
+  });
+  summaryStatuses.forEach((value, index) => {
+    sheetXml = applyCellStyle(
+      sheetXml,
+      `R${summaryDataStartRow + index}`,
+      value === "O" ? 4 : 5,
+    );
+  });
+  sheetXml = setRowHeight(sheetXml, summaryDataStartRow + summaryStatuses.length - 1, 24);
+  sheetXml = applyRowStyle(sheetXml, breakdownTitleRow, "T", 3);
+  sheetXml = setRowHeight(sheetXml, breakdownTitleRow, 24);
+  sheetXml = applyRowStyle(sheetXml, breakdownHeaderRow, "T", 1);
+  sheetXml = sheetXml.replace(
+    "</sheetData>",
+    `</sheetData><mergeCells count="4"><mergeCell ref="A1:T1"/><mergeCell ref="A2:T2"/><mergeCell ref="A${summaryTitleRow}:R${summaryTitleRow}"/><mergeCell ref="A${breakdownTitleRow}:T${breakdownTitleRow}"/></mergeCells>`,
+  );
+  setXml(container, "/xl/worksheets/sheet1.xml", sheetXml);
+  setXml(container, "/xl/styles.xml", monthlyStylesXml);
+  return XLSX.CFB.write(container, {
+    type: "buffer",
+    fileType: "zip",
+    compression: true,
+  });
+}
+
+export function createProductionAchievementMonthlyWorkbook(
+  dashboards: ProductionAchievementDashboard[],
+) {
+  const detailHeaders = [
+    "Date", "Shift", "Line",
+    "1TR Plan", "1TR Actual", "1TR Balance",
+    "2TR Plan", "2TR Actual", "2TR Balance",
+    "Total Plan", "Total Actual", "Total Balance",
+    "OEE Target (%)", "OEE Actual (%)",
+    "TT Plan", "TT Actual", "OT Plan (min)", "OT Actual (min)",
+    "Stop Time (min)", "Status",
+  ];
+  const summaries = new Map<string, MonthlySummary>();
+  const detailStatuses: string[] = [];
+  const detailShifts: string[] = [];
+  const detailRows = dashboards.flatMap((dashboard) => dashboard.cards.map((card) => {
+    const oneTr = variantFor(card, "1TR");
+    const twoTr = variantFor(card, "2TR");
+    const oeeActual = normalizePercent(card.oee);
+    const oeeTarget = normalizePercent(card.oeeTarget);
+    const ttActual = numberValue(card.ttAct);
+    const ttPlan = numberValue(card.ttPlan);
+    const weight = card.prodPlan > 0 ? card.prodPlan : 0;
+    const summary = summaries.get(card.label) ?? emptyMonthlySummary(card.label);
+    summary.oneTrPlan += oneTr?.prodPlan ?? 0;
+    summary.oneTrActual += oneTr?.prodAct ?? 0;
+    summary.twoTrPlan += twoTr?.prodPlan ?? 0;
+    summary.twoTrActual += twoTr?.prodAct ?? 0;
+    summary.totalPlan += card.prodPlan;
+    summary.totalActual += card.prodAct;
+    if (oeeActual !== null && oeeTarget !== null && weight > 0) {
+      summary.oeeActualWeight += oeeActual * weight;
+      summary.oeeTargetWeight += oeeTarget * weight;
+      summary.oeeWeight += weight;
+    }
+    if (ttActual !== null && ttPlan !== null && weight > 0) {
+      summary.ttActualWeight += ttActual * weight;
+      summary.ttPlanWeight += ttPlan * weight;
+      summary.ttWeight += weight;
+    }
+    summary.otPlan += card.otPlan;
+    summary.otActual += card.otAct;
+    summary.stopTime += card.stopTime;
+    summaries.set(card.label, summary);
+
+    const cardStatus = status(card) === "ON TARGET" ? "O" : "X";
+    detailStatuses.push(cardStatus);
+    detailShifts.push(dashboard.shift);
+    return [
+      dashboard.date,
+      dashboard.shift === "NIGHT" ? "Night" : "Day",
+      card.label,
+      oneTr?.prodPlan ?? null,
+      oneTr?.prodAct ?? null,
+      oneTr?.balance ?? null,
+      twoTr?.prodPlan ?? null,
+      twoTr?.prodAct ?? null,
+      twoTr?.balance ?? null,
+      card.prodPlan,
+      card.prodAct,
+      card.balance,
+      oeeTarget === null ? null : oeeTarget * 100,
+      oeeActual === null ? null : oeeActual * 100,
+      ttPlan,
+      ttActual,
+      card.otPlan,
+      card.otAct,
+      card.stopTime,
+      cardStatus,
+    ];
+  }));
+
+  const summaryHeaders = detailHeaders.slice(2);
+  const summaryRows = Array.from(summaries.values()).map(monthlySummaryRow);
+  const grandTotal = emptyMonthlySummary("Total/Average");
+  for (const summary of summaries.values()) {
+    for (const key of Object.keys(grandTotal) as Array<keyof MonthlySummary>) {
+      if (key !== "line") grandTotal[key] += summary[key] as number;
+    }
+  }
+  summaryRows.push(monthlySummaryRow(grandTotal));
+
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ["PRODUCTION ACHIEVEMENT"],
+    [`Period: ${formatReportDate(dashboards[0]?.date ?? "")} - ${formatReportDate(dashboards.at(-1)?.date ?? "")}`],
+    [],
+    ["PRODUCTION SUMMARY"],
+    summaryHeaders,
+    ...summaryRows,
+    [],
+    ["PRODUCTION BREAKDOWN"],
+    detailHeaders,
+    ...detailRows,
+  ]);
+  const breakdownHeaderRow = summaryRows.length + 8;
+  sheet["!autofilter"] = { ref: `A${breakdownHeaderRow}:T${breakdownHeaderRow + detailRows.length}` };
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, "Monthly Summary");
+  const summaryStatuses = summaryRows.map((row) => String(row.at(-1) ?? ""));
+  const output = XLSX.write(workbook, {
+    type: "buffer",
+    bookType: "xlsx",
+    compression: true,
+  });
+  return applyMonthlyStyles(output, detailShifts, detailStatuses, summaryStatuses);
+}
