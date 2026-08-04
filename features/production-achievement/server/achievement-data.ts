@@ -93,7 +93,6 @@ const problemRowsCache = new Map<
   string,
   TimedCacheEntry<RawProductionAchievementProblemRow[]>
 >();
-const dailyPlanningSlotsCache = new Map<string, RawDailyPlanningSlotRow[]>();
 const monthlyPlanningParametersCache = new Map<string, MonthlyPlanningParameters>();
 const PROBLEM_ROWS_CACHE_MS = 5 * 60 * 1000;
 const STATIC_DATA_CACHE_MAX_ENTRIES = 30;
@@ -454,15 +453,7 @@ function getPlanningWorkHoursMinutes(
 async function getDailyPlanningSlotRows(
   date: string,
   shift: string,
-  refreshStaticData: boolean,
 ) {
-  const cacheKey = `${date}:${shift}`;
-  const cached = dailyPlanningSlotsCache.get(cacheKey);
-
-  if (cached && !refreshStaticData) {
-    return cached;
-  }
-
   const requestedShift = getProductionAchievementShiftValue(shift);
   const shiftValues = requestedShift
     ? [requestedShift]
@@ -502,7 +493,6 @@ async function getDailyPlanningSlotRows(
     date,
     ...shiftValues,
   );
-  setLimitedCacheValue(dailyPlanningSlotsCache, cacheKey, rows);
   return rows;
 }
 
@@ -589,7 +579,7 @@ async function getDailyPlanningPlanOverrides(
   shift: string,
   refreshStaticData = false,
 ) {
-  let rows = await getDailyPlanningSlotRows(date, shift, refreshStaticData);
+  let rows = await getDailyPlanningSlotRows(date, shift);
 
   if (refreshStaticData) {
     const dailyShift = getProductionAchievementShiftValue(shift);
@@ -625,7 +615,7 @@ async function getDailyPlanningPlanOverrides(
             loadDailyPlanningData(line.key, date, dailyShift).catch(() => null),
           ),
         );
-        rows = await getDailyPlanningSlotRows(date, shift, true);
+        rows = await getDailyPlanningSlotRows(date, shift);
       }
     }
   }
