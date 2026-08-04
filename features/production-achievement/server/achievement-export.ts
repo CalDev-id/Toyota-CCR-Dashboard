@@ -627,10 +627,10 @@ function applyMonthlyStyles(
   sheetXml = applyRowStyle(sheetXml, breakdownTitleRow, "T", 3);
   sheetXml = setRowHeight(sheetXml, breakdownTitleRow, 24);
   sheetXml = applyRowStyle(sheetXml, breakdownHeaderRow, "T", 1);
-  sheetXml = sheetXml.replace(
-    "</sheetData>",
-    `</sheetData><mergeCells count="4"><mergeCell ref="A1:T1"/><mergeCell ref="A2:T2"/><mergeCell ref="A${summaryTitleRow}:R${summaryTitleRow}"/><mergeCell ref="A${breakdownTitleRow}:T${breakdownTitleRow}"/></mergeCells>`,
-  );
+  const merges = `<mergeCells count="4"><mergeCell ref="A1:T1"/><mergeCell ref="A2:T2"/><mergeCell ref="A${summaryTitleRow}:R${summaryTitleRow}"/><mergeCell ref="A${breakdownTitleRow}:T${breakdownTitleRow}"/></mergeCells>`;
+  sheetXml = /<autoFilter\b[^>]*\/>/.test(sheetXml)
+    ? sheetXml.replace(/(<autoFilter\b[^>]*\/>)/, `$1${merges}`)
+    : sheetXml.replace("</sheetData>", `</sheetData>${merges}`);
   setXml(container, "/xl/worksheets/sheet1.xml", sheetXml);
   setXml(container, "/xl/styles.xml", monthlyStylesXml);
   return XLSX.CFB.write(container, {
