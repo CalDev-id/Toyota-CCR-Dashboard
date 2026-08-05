@@ -198,19 +198,21 @@ export async function updateDailySlotScheduleData(part: string,id: number,startT
   const minutes = calculateDurationMinutes(startTime,endTime);
   const segments = isDayOt ? dayOtSlots(Number(slot[0].slot_order), startTime, minutes) : [{ order: Number(slot[0].slot_order), start: startTime, end: endTime, minutes, type: slot[0].slot_type as "normal" | "ot" }];
 
-  if (isDayOt && segments.length > 1) {
-    await prisma.$executeRawUnsafe("DELETE FROM t_daily_production_plan_slot WHERE daily_plan_id=? AND slot_type='ot' AND id<>?", slot[0].daily_plan_id, id);
-  }
-
-  for (const [index, segment] of segments.entries()) {
-    const target = targetFor(segment.minutes,tt,oee*100);
-    const [oneTr,twoTr] = splitTarget(part,target,ratioOne,ratioTwo);
-    if (index === 0) {
-      await prisma.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET slot_order=?,start_time=?,end_time=?,prod_minutes=?,total_target=?,one_tr=?,two_tr=?,is_schedule_override=1,remark_updated_by=?,remark_updated_at=CURRENT_TIMESTAMP WHERE id=?",segment.order,segment.start,segment.end,segment.minutes,target,oneTr,twoTr,userId,id);
-      continue;
+  await prisma.$transaction(async (tx) => {
+    if (isDayOt && segments.length > 1) {
+      await tx.$executeRawUnsafe("DELETE FROM t_daily_production_plan_slot WHERE daily_plan_id=? AND slot_type='ot' AND id<>?", slot[0].daily_plan_id, id);
     }
-    await prisma.$executeRawUnsafe("INSERT INTO t_daily_production_plan_slot (daily_plan_id,slot_order,start_time,end_time,prod_minutes,slot_type,tt_override,ratio_override,total_target,one_tr,two_tr,is_schedule_override,remark_updated_by,remark_updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,1,?,CURRENT_TIMESTAMP)",slot[0].daily_plan_id,segment.order,segment.start,segment.end,"ot",slot[0].tt_override,slot[0].ratio_override,target,oneTr,twoTr,userId);
-  }
+
+    for (const [index, segment] of segments.entries()) {
+      const target = targetFor(segment.minutes,tt,oee*100);
+      const [oneTr,twoTr] = splitTarget(part,target,ratioOne,ratioTwo);
+      if (index === 0) {
+        await tx.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET slot_order=?,start_time=?,end_time=?,prod_minutes=?,total_target=?,one_tr=?,two_tr=?,is_schedule_override=1,remark_updated_by=?,remark_updated_at=CURRENT_TIMESTAMP WHERE id=?",segment.order,segment.start,segment.end,segment.minutes,target,oneTr,twoTr,userId,id);
+        continue;
+      }
+      await tx.$executeRawUnsafe("INSERT INTO t_daily_production_plan_slot (daily_plan_id,slot_order,start_time,end_time,prod_minutes,slot_type,tt_override,ratio_override,total_target,one_tr,two_tr,is_schedule_override,remark_updated_by,remark_updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,1,?,CURRENT_TIMESTAMP)",slot[0].daily_plan_id,segment.order,segment.start,segment.end,segment.minutes,"ot",slot[0].tt_override,slot[0].ratio_override,target,oneTr,twoTr,userId);
+    }
+  });
 }
 
 export async function updateDailySlotRemarkData(id: number, remark: string, userId: number) {
