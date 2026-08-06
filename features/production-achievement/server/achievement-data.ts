@@ -93,7 +93,6 @@ const problemRowsCache = new Map<
   string,
   TimedCacheEntry<RawProductionAchievementProblemRow[]>
 >();
-const monthlyPlanningParametersCache = new Map<string, MonthlyPlanningParameters>();
 const PROBLEM_ROWS_CACHE_MS = 5 * 60 * 1000;
 const STATIC_DATA_CACHE_MAX_ENTRIES = 30;
 
@@ -163,15 +162,7 @@ async function getMonthlyPlanningParameters(
   line: ProductionAchievementLineConfig,
   date: string,
   shift: string,
-  refreshStaticData = false,
 ): Promise<MonthlyPlanningParameters> {
-  const cacheKey = `${line.key}:${date}:${shift}`;
-  const cached = monthlyPlanningParametersCache.get(cacheKey);
-
-  if (cached && !refreshStaticData) {
-    return cached;
-  }
-
   const shifts = shiftAliases(shift);
   const rows = await getReportPrisma().$queryRawUnsafe<
     Array<{ tt: unknown; oeeTarget: unknown; otPlan: unknown; oneTr: unknown; twoTr: unknown }>
@@ -193,7 +184,6 @@ async function getMonthlyPlanningParameters(
     totalPlan: toNumber(rows[0]?.oneTr) + toNumber(rows[0]?.twoTr),
   };
 
-  setLimitedCacheValue(monthlyPlanningParametersCache, cacheKey, parameters);
   return parameters;
 }
 
@@ -238,9 +228,8 @@ async function getProductionAchievementProblemRows(
   }
 
   const { where, values } = buildDateShiftWhere(date, shift);
-  try {
-    const rows = await getReportPrisma().$queryRawUnsafe<RawProductionAchievementProblemRow[]>(
-      `SELECT
+  const rows = await getReportPrisma().$queryRawUnsafe<RawProductionAchievementProblemRow[]>(
+    `SELECT
         Problem_AV AS problemAv,
         LS_AV_min AS lsAvMin,
         Problem_PE AS problemPe,
@@ -253,17 +242,14 @@ async function getProductionAchievementProblemRows(
       FROM ${quoteIdentifier(line.detailProblemView)}
       ${where}
       ORDER BY \`DATE\` ASC, SHIFT ASC, JAM ASC, SHOP ASC`,
-      ...values,
-    );
+    ...values,
+  );
 
-    setLimitedCacheValue(problemRowsCache, cacheKey, {
-      value: rows,
-      expiresAt: Date.now() + PROBLEM_ROWS_CACHE_MS,
-    });
-    return rows;
-  } catch {
-    return [];
-  }
+  setLimitedCacheValue(problemRowsCache, cacheKey, {
+    value: rows,
+    expiresAt: Date.now() + PROBLEM_ROWS_CACHE_MS,
+  });
+  return rows;
 }
 
 function toNumber(value: unknown) {
@@ -867,7 +853,7 @@ export async function getProductionAchievementDashboard(filters?: {
       const [summaryRows, problemRows, monthlyParameters] = await Promise.all([
         getProductionAchievementSummaryRows(line, date, shift),
         getProductionAchievementProblemRows(line, date, shift, refreshStaticData),
-        getMonthlyPlanningParameters(line, date, shift, refreshStaticData).catch(() => null),
+        getMonthlyPlanningParameters(line, date, shift),
       ]);
 
       return { line, summaryRows, problemRows, monthlyParameters };
@@ -918,7 +904,7 @@ export async function getProductionAchievementDashboard(filters?: {
         line,
         summaryRows,
         problemRows,
-        monthlyParameters ?? { tt: "", oeeTarget: 0, otPlan: 0 },
+        monthlyParameters,
         planOverrides.get(line.key),
         realtimeStatuses[line.key] ?? null,
         automaticDecisions.has(line.key),
