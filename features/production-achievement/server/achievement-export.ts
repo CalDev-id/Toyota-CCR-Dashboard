@@ -16,6 +16,7 @@ type CfbContainer = ReturnType<typeof XLSX.CFB.read>;
 
 function xmlEscape(value: string) {
   return value
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -90,6 +91,13 @@ function setCell(
   const nextCell = cellXml(rowXml, address, value, formula);
   const pattern = new RegExp(`<c\\b[^>]*?\\br="${address}"[^>]*?(?:\\/>|>[\\s\\S]*?<\\/c>)`);
   if (pattern.test(rowXml)) return rowXml.replace(pattern, nextCell);
+
+  const targetColumn = XLSX.utils.decode_cell(address).c;
+  const cells = [...rowXml.matchAll(/<c\b[^>]*?\br="([A-Z]+\d+)"[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g)];
+  const nextExistingCell = cells.find((match) => XLSX.utils.decode_cell(match[1]).c > targetColumn);
+  if (nextExistingCell?.index !== undefined) {
+    return `${rowXml.slice(0, nextExistingCell.index)}${nextCell}${rowXml.slice(nextExistingCell.index)}`;
+  }
   return rowXml.replace(/<\/row>$/, `${nextCell}</row>`);
 }
 
@@ -559,10 +567,10 @@ const monthlyStylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?
 </styleSheet>`;
 
 function applyCellStyle(xml: string, address: string, style: number) {
-  const pattern = new RegExp(`<c r="${address}"([^>]*)>`);
+  const pattern = new RegExp(`<c r="${address}"([^>]*?)(/?)>`);
   if (pattern.test(xml)) {
-    return xml.replace(pattern, (_, attributes: string) =>
-      `<c r="${address}"${attributes.replace(/\s+s="\d+"/, "")} s="${style}">`,
+    return xml.replace(pattern, (_, attributes: string, selfClosing: string) =>
+      `<c r="${address}"${attributes.replace(/\s+s="\d+"/, "")} s="${style}"${selfClosing}>`,
     );
   }
 
@@ -570,7 +578,15 @@ function applyCellStyle(xml: string, address: string, style: number) {
   if (!row) return xml;
   const cell = `<c r="${address}" s="${style}"/>`;
   const rowPattern = new RegExp(`(<row r="${row}"[^>]*>)([\\s\\S]*?)(<\\/row>)`);
-  if (rowPattern.test(xml)) return xml.replace(rowPattern, `$1$2${cell}$3`);
+  if (rowPattern.test(xml)) {
+    const targetColumn = XLSX.utils.decode_cell(address).c;
+    return xml.replace(rowPattern, (_, start: string, content: string, end: string) => {
+      const cells = [...content.matchAll(/<c\b[^>]*?\br="([A-Z]+\d+)"[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g)];
+      const nextCell = cells.find((match) => XLSX.utils.decode_cell(match[1]).c > targetColumn);
+      const insertionPoint = nextCell?.index ?? content.length;
+      return `${start}${content.slice(0, insertionPoint)}${cell}${content.slice(insertionPoint)}${end}`;
+    });
+  }
   return xml.replace(new RegExp(`<row r="${row}"([^>]*)\\/>`), `<row r="${row}"$1>${cell}</row>`);
 }
 
