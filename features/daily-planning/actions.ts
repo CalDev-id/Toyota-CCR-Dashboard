@@ -1,9 +1,12 @@
 "use server";
 
 import {
-  addDailyOtData,
   deleteDailyManualOtData,
   loadDailyPlanningData,
+  getManualDailyPlanningTemplate,
+  type ManualPlanningSlotInput,
+  saveManualDailyPlanningData,
+  saveDailyOtData,
   updateDailyOeeData,
   updateDailySharedParametersData,
   updateDailySlotParametersData,
@@ -28,6 +31,22 @@ async function getCurrentUserId() {
 export async function loadDailyPlanning(part: string, date: string, shift: string) {
   await requireUser();
   return loadDailyPlanningData(part, date, shift);
+}
+
+export async function getManualDailyPlanningDraft(part: string, date: string, shift: string) {
+  await requireUser();
+  return getManualDailyPlanningTemplate(part, date, shift);
+}
+
+export async function saveManualDailyPlanning(
+  part: string,
+  date: string,
+  shift: string,
+  slots: ManualPlanningSlotInput[],
+) {
+  await requireUser();
+  await saveManualDailyPlanningData(part, date, shift, slots);
+  revalidatePath("/daily-planning");
 }
 
 export async function updateDailyTarget(
@@ -104,14 +123,14 @@ export async function updateDailySlotSchedule(
   revalidatePath("/daily-planning");
 }
 
-export async function addDailyOt(
+export async function saveDailyOt(
   part: string,
   date: string,
   shift: string,
-  position?: "start" | "end",
+  slot: ManualPlanningSlotInput,
 ) {
   await requireUser();
-  await addDailyOtData(part, date, shift, position, await getCurrentUserId());
+  await saveDailyOtData(part, date, shift, slot, await getCurrentUserId());
   revalidatePath("/daily-planning");
 }
 

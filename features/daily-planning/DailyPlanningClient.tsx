@@ -1,9 +1,11 @@
 "use client";
 
 import {
-  addDailyOt,
   deleteDailyManualOt,
+  getManualDailyPlanningDraft,
   loadDailyPlanning,
+  saveManualDailyPlanning,
+  saveDailyOt,
   updateDailySlotSchedule,
   updateDailySlotParameters,
   updateDailyOee,
@@ -26,6 +28,8 @@ type EditingRow = Pick<DailyRow, "start_time" | "end_time" | "fratio" | "remark"
 };
 type DailyTotals = { minutes: number; target: number; oneTr: number; twoTr: number };
 type BreakSchedule = { label: string; start: string; end: string };
+type DraftTemplate = Awaited<ReturnType<typeof getManualDailyPlanningDraft>>[number];
+type Toast = { message: string; type: "error" | "success" };
 const maghribBreak: BreakSchedule = { label: "Istirahat Salat Maghrib", start: "18:00", end: "18:15" };
 
 function formatPart(value: string) {
@@ -123,6 +127,39 @@ function calculateDurationMinutes(startTime: string, endTime: string) {
   return Math.max(0, duration);
 }
 
+function addMinutes(time: string, minutes: number) {
+  const [hour, minute] = time.split(":").map(Number);
+  const total = ((hour * 60 + minute + minutes) % (24 * 60) + 24 * 60) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function makeDraftRow(id: number, slot: DraftTemplate): DailyRow {
+  return {
+    id,
+    slot_order: slot.order,
+    start_time: slot.start,
+    end_time: slot.end,
+    prod_minutes: slot.minutes,
+    slot_type: slot.type,
+    oee: 0,
+    is_oee_override: 1,
+    total_target: 0,
+    one_tr: 0,
+    two_tr: 0,
+    is_schedule_override: slot.type === "ot" ? 1 : 0,
+    is_hidden: 0,
+    remark: null,
+    remark_updated_at: null,
+    remark_updated_by_name: null,
+    ftt: "",
+    foee: "",
+    fratio: "",
+    ftotal_target: 0,
+    f1tr: 0,
+    f2tr: 0,
+  };
+}
+
 function makeEditingRows(rows: DailyRow[]) {
   return Object.fromEntries(
     rows.map((row) => [
@@ -163,15 +200,31 @@ export default function DailyPlanningClient() {
   const [part, setPart] = useState("cylblock");
   const [shift, setShift] = useState("1");
   const [data, setData] = useState<DailyData | null>(null);
+  const [draftRows, setDraftRows] = useState<DailyRow[] | null>(null);
+  const [pendingOtRows, setPendingOtRows] = useState<DailyRow[]>([]);
   const [editing, setEditing] = useState<Record<number, EditingRow>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isCreatingPlanning, setIsCreatingPlanning] = useState(false);
   const [isOtActionPending, setIsOtActionPending] = useState(false);
   const [isChoosingNightOtPosition, setIsChoosingNightOtPosition] = useState(false);
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  function showToast(message: string, type: Toast["type"]) {
+    setToast({ message, type });
+  }
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
 
   async function refresh() {
     const nextData = await loadDailyPlanning(part, date, shift);
     startTransition(() => {
       setData(nextData);
+      setDraftRows(null);
+      setPendingOtRows([]);
       setEditing(makeEditingRows(nextData.rows));
     });
   }
@@ -181,19 +234,23 @@ export default function DailyPlanningClient() {
       const nextData = await loadDailyPlanning(part, date, shift);
       startTransition(() => {
         setData(nextData);
+        setDraftRows(null);
+        setPendingOtRows([]);
         setEditing(makeEditingRows(nextData.rows));
       });
     })();
   }, [date, part, shift]);
 
-  const visibleRows = data?.rows ?? [];
+  const isDrafting = draftRows !== null;
+  const persistedRows = data?.rows ?? [];
+  const visibleRows = draftRows ?? [...persistedRows, ...pendingOtRows].sort((left, right) => left.slot_order - right.slot_order);
   const isCamshaft = part === "camshaft";
   const breakSchedule = getBreakSchedule(date, part, shift);
   const emptyMessage = data && !data.hasMonthlyData ? data.message : "Tidak ada data daily planning.";
-  const changedRows = visibleRows.filter((row: DailyRow) => hasRowChanges(row, editing[row.id], isCamshaft));
-  const hasPendingUpdates = changedRows.length > 0;
+  const changedRows = persistedRows.filter((row: DailyRow) => hasRowChanges(row, editing[row.id], isCamshaft));
+  const hasPendingUpdates = changedRows.length > 0 || pendingOtRows.length > 0;
   const otRows = visibleRows.filter((row) => row.slot_type === "ot");
-  const canAddOt = Boolean(data?.hasMonthlyData) && (shift === "1" ? otRows.length === 0 : otRows.length < 2);
+  const canAddOt = (Boolean(data?.hasMonthlyData) || isDrafting) && (shift === "1" ? otRows.length === 0 : otRows.length < 2);
   const totals = visibleRows.reduce((result: DailyTotals, row: DailyRow) => {
     const current = editing[row.id] ?? row;
     const calculated = calculateRowPlan(row, current, isCamshaft);
@@ -208,11 +265,20 @@ export default function DailyPlanningClient() {
 
   function setEditingValue<T extends keyof EditingRow>(id: number, field: T, value: EditingRow[T]) {
     setEditing((current) => ({
-      ...current,
-      [id]: {
-        ...current[id],
-        [field]: value,
-      },
+      ...(isDrafting && (field === "ftt" || field === "foee" || field === "fratio")
+        ? Object.fromEntries(
+            visibleRows.map((row) => [
+              row.id,
+              { ...current[row.id], [field]: value },
+            ]),
+          )
+        : {
+            ...current,
+            [id]: {
+              ...current[id],
+              [field]: value,
+            },
+          }),
     }));
   }
 
@@ -241,7 +307,7 @@ export default function DailyPlanningClient() {
   }
 
   async function updateChangedRows() {
-    if (changedRows.length === 0) {
+    if (changedRows.length === 0 && pendingOtRows.length === 0) {
       return;
     }
 
@@ -296,7 +362,22 @@ export default function DailyPlanningClient() {
         }
       }
 
+      for (const row of pendingOtRows) {
+        const next = editing[row.id] ?? row;
+        await saveDailyOt(part, date, shift, {
+          order: row.slot_order,
+          startTime: next.start_time,
+          endTime: next.end_time,
+          slotType: "ot",
+          tt: parseDecimal(next.ftt),
+          oee: parseDecimal(next.foee),
+          ratio: next.fratio,
+        });
+      }
+
       await refresh();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Daily planning gagal diupdate.", "error");
     } finally {
       setIsSaving(false);
     }
@@ -306,11 +387,101 @@ export default function DailyPlanningClient() {
     setIsOtActionPending(true);
 
     try {
-      await addDailyOt(part, date, shift, position);
-      await refresh();
-      setIsChoosingNightOtPosition(false);
+      if (isDrafting || data?.hasMonthlyData) {
+        const normalRows = visibleRows.filter((row) => row.slot_type === "normal");
+        const firstNormal = normalRows[0];
+        const lastNormal = normalRows[normalRows.length - 1];
+        if (!firstNormal || !lastNormal) throw new Error("Jadwal shift belum lengkap.");
+
+        const isNightStart = shift === "2" && position === "start";
+        const minutes = shift === "2" && !isNightStart ? 30 : 60;
+        const order = shift === "1" ? 8 : isNightStart ? 1 : 10;
+        const start = isNightStart
+          ? addMinutes(firstNormal.start_time, -minutes)
+          : addMinutes(lastNormal.end_time, shift === "1" ? 30 : 0);
+        const slot: DraftTemplate = {
+          order,
+          start,
+          end: addMinutes(start, minutes),
+          minutes,
+          type: "ot",
+        };
+        const row = makeDraftRow(-100 - order, slot);
+        if (isDrafting) {
+          setDraftRows((current) => [...(current ?? []), row].sort((left, right) => left.slot_order - right.slot_order));
+        } else {
+          setPendingOtRows((current) => [...current, row].sort((left, right) => left.slot_order - right.slot_order));
+        }
+        setEditing((current) => {
+          const firstNormal = visibleRows.find((item) => item.slot_type === "normal");
+          const sharedValues = firstNormal ? current[firstNormal.id] : undefined;
+
+          return {
+            ...current,
+            [row.id]: {
+              ...makeEditingRows([row])[row.id],
+              ftt: sharedValues?.ftt ?? "",
+              foee: sharedValues?.foee ?? "",
+              fratio: sharedValues?.fratio ?? "",
+            },
+          };
+        });
+        setIsChoosingNightOtPosition(false);
+        return;
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "OT gagal ditambahkan.", "error");
     } finally {
       setIsOtActionPending(false);
+    }
+  }
+
+  async function handleCreatePlanning() {
+    setIsCreatingPlanning(true);
+
+    try {
+      const template = await getManualDailyPlanningDraft(part, date, shift);
+      const rows = template.map((slot) => makeDraftRow(-slot.order, slot));
+      setDraftRows(rows);
+      setEditing(makeEditingRows(rows));
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Draft daily planning gagal dibuat.", "error");
+    } finally {
+      setIsCreatingPlanning(false);
+    }
+  }
+
+  async function saveDraftPlanning() {
+    setIsSaving(true);
+
+    try {
+      await saveManualDailyPlanning(
+        part,
+        date,
+        shift,
+        visibleRows.map((row) => {
+          const current = editing[row.id] ?? row;
+          return {
+            order: row.slot_order,
+            startTime: current.start_time,
+            endTime: current.end_time,
+            slotType: row.slot_type,
+            tt: parseDecimal(current.ftt),
+            oee: parseDecimal(current.foee),
+            ratio: current.fratio,
+          };
+        }),
+      );
+      setDraftRows(null);
+      await refresh();
+      showToast("Daily planning berhasil disimpan.", "success");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Daily planning gagal disimpan.",
+        "error",
+      );
+    } finally {
+      setIsSaving(false);
     }
   }
 
@@ -318,8 +489,67 @@ export default function DailyPlanningClient() {
     setIsOtActionPending(true);
 
     try {
+      const isPendingOt = pendingOtRows.some((row) => row.id === id);
+      if (isDrafting || isPendingOt) {
+        if (isDrafting) {
+          setDraftRows((current) => current?.filter((row) => row.id !== id) ?? null);
+        } else {
+          setPendingOtRows((current) => current.filter((row) => row.id !== id));
+        }
+        setEditing((current) => {
+          const remaining = { ...current };
+          delete remaining[id];
+          return remaining;
+        });
+        return;
+      }
+
       await deleteDailyManualOt(id);
       await refresh();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "OT gagal dihapus.", "error");
+    } finally {
+      setIsOtActionPending(false);
+    }
+  }
+
+  async function handleDeleteZeroMinuteSlot(row: DailyRow) {
+    const current = editing[row.id] ?? row;
+    if (parseDecimal(current.prod_minutes) !== 0) return;
+
+    setIsOtActionPending(true);
+
+    try {
+      const isPendingOt = pendingOtRows.some((item) => item.id === row.id);
+      if (isDrafting || isPendingOt) {
+        if (isDrafting) {
+          setDraftRows((items) => items?.filter((item) => item.id !== row.id) ?? null);
+        } else {
+          setPendingOtRows((items) => items.filter((item) => item.id !== row.id));
+        }
+        setEditing((items) => {
+          const next = { ...items };
+          delete next[row.id];
+          return next;
+        });
+        return;
+      }
+
+      const [ratioOne, ratioTwo] = parseRatio(current.fratio);
+      await updateDailySlotSchedule(
+        part,
+        row.id,
+        current.start_time,
+        current.end_time,
+        0,
+        ratioOne,
+        ratioTwo,
+        parseDecimal(current.ftt),
+        parseDecimal(current.foee) / 100,
+      );
+      await refresh();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Slot 0 menit gagal dihapus.", "error");
     } finally {
       setIsOtActionPending(false);
     }
@@ -349,8 +579,34 @@ export default function DailyPlanningClient() {
             <label className="block"><span className="sr-only">Date</span><input className="h-10 w-full rounded-lg border border-[#e4e7ec] px-3 text-sm font-medium text-[#344054]" type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
             <label className="relative block"><span className="sr-only">Line</span><select className="h-10 w-full appearance-none rounded-lg border border-[#e4e7ec] bg-white px-3 pr-10 text-sm font-medium text-[#344054]" value={part} onChange={(event) => setPart(event.target.value)}>{parts.map((item) => <option key={item} value={item}>{formatPart(item)}</option>)}</select><svg viewBox="0 0 24 24" aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#667085]"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg></label>
             <label className="relative block"><span className="sr-only">Shift</span><select className="h-10 w-full appearance-none rounded-lg border border-[#e4e7ec] bg-white px-3 pr-10 text-sm font-medium text-[#344054]" value={shift} onChange={(event) => setShift(event.target.value)}><option value="1">Day</option><option value="2">Night</option></select><svg viewBox="0 0 24 24" aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#667085]"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg></label>
-            <button
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-transparent bg-[#12b76a] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#039855] disabled:cursor-not-allowed disabled:opacity-60"
+            {isDrafting ? <button
+              className="order-2 inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-transparent bg-[#12b76a] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#039855] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isSaving}
+              type="button"
+              onClick={() => void saveDraftPlanning()}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                className="size-4 shrink-0"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.8"
+              >
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+              Save
+            </button> : data?.canCreatePlanning ? <button
+              className="order-2 inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-transparent bg-[#2f80ff] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#175cd3] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isCreatingPlanning}
+              type="button"
+              onClick={() => void handleCreatePlanning()}
+            >
+              {isCreatingPlanning ? "Membuat..." : "Create Planning"}
+            </button> : <button
+              className="order-2 inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-transparent bg-[#12b76a] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#039855] disabled:cursor-not-allowed disabled:opacity-60"
               disabled={!hasPendingUpdates || isSaving}
               type="button"
               onClick={() => void updateChangedRows()}
@@ -368,9 +624,9 @@ export default function DailyPlanningClient() {
                 <path d="M20 6 9 17l-5-5" />
               </svg>
               Update
-            </button>
-            <button
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-transparent bg-[#2f80ff] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#175cd3] disabled:cursor-not-allowed disabled:opacity-60"
+            </button>}
+            {!data?.canCreatePlanning || isDrafting ? <button
+              className="order-1 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#2563eb] px-4 text-sm font-semibold text-white shadow-none transition hover:bg-[#2563eb] disabled:cursor-not-allowed disabled:opacity-60 dark:bg-[#3b82f6] dark:hover:bg-[#3b82f6]"
               disabled={!canAddOt || isOtActionPending}
               type="button"
               onClick={handleAddOtClick}
@@ -388,7 +644,7 @@ export default function DailyPlanningClient() {
                 <path d="M12 5v14M5 12h14" />
               </svg>
               Tambah OT
-            </button>
+            </button> : null}
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -398,7 +654,9 @@ export default function DailyPlanningClient() {
               {visibleRows.length === 0 ? (
                 <tr>
                   <td className="px-5 py-10 text-center text-sm font-medium text-[#667085]" colSpan={isCamshaft ? 8 : 9}>
-                    {emptyMessage}
+                    <div className="flex flex-col items-center gap-3">
+                      <span>{emptyMessage}</span>
+                    </div>
                   </td>
                 </tr>
               ) : visibleRows.map((row: DailyRow, index) => {
@@ -407,6 +665,7 @@ export default function DailyPlanningClient() {
                 const displayedTarget = calculated.target;
                 const displayedOneTr = calculated.oneTr;
                 const displayedTwoTr = calculated.twoTr;
+                const isZeroMinuteSlot = parseDecimal(current.prod_minutes) === 0;
                 const scheduledBreaks = breakSchedule.filter((breakItem) => breakItem.end === current.start_time);
                 const previousRow = visibleRows[index - 1];
                 const followsMaghrib = row.slot_type === "ot" && shift === "1" && current.start_time === maghribBreak.end && previousRow?.slot_type === "ot" && previousRow.end_time === maghribBreak.start;
@@ -426,7 +685,7 @@ export default function DailyPlanningClient() {
                       </tr>
                     ))}
                   <tr className={row.slot_type === "ot" ? "bg-[#f3f7ff] dark:bg-[#0b367c] dark:text-white" : ""} style={row.slot_type === "ot" ? { boxShadow: "inset 4px 0 #2f80ff" } : undefined}>
-                    <td className="px-5 py-3"><div className="flex items-center gap-1"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.start_time} onChange={(event) => setEditingTimeValue(row.id, "start_time", event.target.value)} /><span>-</span><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.end_time} onChange={(event) => setEditingTimeValue(row.id, "end_time", event.target.value)} />{row.slot_type === "ot" && row.is_schedule_override ? <button aria-label="Hapus OT manual" className="ml-1 grid size-8 place-items-center rounded-md text-[#b42318] transition hover:bg-[#fef3f2] disabled:opacity-60" disabled={isOtActionPending} title="Hapus OT manual" type="button" onClick={() => void handleDeleteManualOt(row.id)}><svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5M14 11v5" /></svg></button> : null}</div></td><td className="pl-0 pr-8"><span className="inline-flex h-9 min-w-16 items-center font-semibold text-[#101828]">{current.prod_minutes}</span></td><td className="pl-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.ftt} onChange={(event) => setEditingValue(row.id, "ftt", event.target.value)} /></td><td className="px-2"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.foee} onChange={(event) => setEditingValue(row.id, "foee", event.target.value)} /></td>{!isCamshaft ? <td className="pl-2 pr-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" value={current.fratio} onChange={(event) => setEditingValue(row.id, "fratio", event.target.value)} /></td> : null}
+                    <td className="px-5 py-3"><div className="flex items-center gap-1"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.start_time} onChange={(event) => setEditingTimeValue(row.id, "start_time", event.target.value)} /><span>-</span><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.end_time} onChange={(event) => setEditingTimeValue(row.id, "end_time", event.target.value)} />{isZeroMinuteSlot ? <button aria-label="Hapus slot 0 menit" className="ml-1 grid size-8 place-items-center rounded-md text-[#b42318] transition hover:bg-[#fef3f2] disabled:opacity-60" disabled={isOtActionPending} title="Hapus slot 0 menit" type="button" onClick={() => void handleDeleteZeroMinuteSlot(row)}><svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5M14 11v5" /></svg></button> : row.slot_type === "ot" && row.is_schedule_override ? <button aria-label="Hapus OT manual" className="ml-1 grid size-8 place-items-center rounded-md text-[#b42318] transition hover:bg-[#fef3f2] disabled:opacity-60" disabled={isOtActionPending} title="Hapus OT manual" type="button" onClick={() => void handleDeleteManualOt(row.id)}><svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5M14 11v5" /></svg></button> : null}</div></td><td className="pl-0 pr-8"><span className="inline-flex h-9 min-w-16 items-center font-semibold text-[#101828]">{current.prod_minutes}</span></td><td className="pl-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.ftt} onChange={(event) => setEditingValue(row.id, "ftt", event.target.value)} /></td><td className="px-2"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.foee} onChange={(event) => setEditingValue(row.id, "foee", event.target.value)} /></td>{!isCamshaft ? <td className="pl-2 pr-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" value={current.fratio} onChange={(event) => setEditingValue(row.id, "fratio", event.target.value)} /></td> : null}
                     <td className="pl-8"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" inputMode="numeric" value={displayedTarget} onChange={(event) => setEditingValue(row.id, "ftotal_target", event.target.value)} /></td><td className="px-2 font-semibold">{displayedOneTr}</td><td className="pl-2 pr-5 font-semibold">{displayedTwoTr}</td><td className="px-3 py-3"><div className="flex min-w-56 items-center gap-1"><input aria-label={`Remark ${current.start_time} sampai ${current.end_time}`} className="h-9 min-w-0 flex-1 rounded-lg border border-[#e4e7ec] px-2" maxLength={500} placeholder="Tambah remark" value={current.remark ?? ""} onChange={(event) => setEditingValue(row.id, "remark", event.target.value)} /><span aria-label={formatRemarkAudit(row.remark_updated_at, row.remark_updated_by_name)} className="group relative grid size-7 shrink-0 cursor-help place-items-center rounded-full text-[#667085] outline-none hover:bg-[#f2f4f7] focus:bg-[#f2f4f7]" tabIndex={0}><svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M14 11v5" /></svg><span role="tooltip" className="invisible absolute bottom-full right-0 z-20 mb-2 w-56 rounded-lg bg-[#101828] px-3 py-2 text-xs font-medium normal-case leading-5 text-white opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus:visible group-focus:opacity-100">{formatRemarkAudit(row.remark_updated_at, row.remark_updated_by_name)}</span></span></div></td>
                   </tr>
                   </Fragment>
@@ -479,6 +738,20 @@ export default function DailyPlanningClient() {
               </button>
             </div>
             <button className="mt-5 h-10 w-full rounded-lg border border-[#d0d5dd] text-sm font-semibold text-[#344054] transition hover:bg-[#f9fafb] dark:border-[#384860] dark:text-[#d4dae5] dark:hover:bg-[#1f2937]" disabled={isOtActionPending} type="button" onClick={() => setIsChoosingNightOtPosition(false)}>Batal</button>
+          </div>
+        </div>
+      ) : null}
+      {toast ? (
+        <div className="fixed bottom-5 right-5 z-[60] w-[min(360px,calc(100vw-40px))]">
+          <div
+            className={`rounded-xl border px-4 py-3 text-sm shadow-lg ${
+              toast.type === "success"
+                ? "border-[#abefc6] bg-[#ecfdf3] text-[#027a48]"
+                : "border-[#fecdca] bg-[#fef3f2] text-[#b42318]"
+            }`}
+            role="alert"
+          >
+            <p className="min-w-0 break-words font-medium">{toast.message}</p>
           </div>
         </div>
       ) : null}

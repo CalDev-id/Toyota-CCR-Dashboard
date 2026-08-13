@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { getReportPrisma } from "@/lib/report-prisma";
+import { createHash } from "node:crypto";
 
 type SlotTemplate = { order: number; start: string; end: string; minutes: number; type: "normal" | "ot" };
-type Plan = { id: number; override_tt: number | null; override_ratio: string | null; source_tt: number | null; source_oee: number | null; source_ratio: string | null; source_ot_minutes: number | null };
-type Slot = { id: number; slot_order: number; start_time: string; end_time: string; prod_minutes: number; slot_type: "normal" | "ot"; oee: number | null; is_oee_override: number; tt_override: number | null; ratio_override: string | null; total_target: number; one_tr: number; two_tr: number; is_schedule_override: number; remark: string | null; remark_updated_at: Date | null; remark_updated_by_name: string | null };
+export type ManualPlanningSlotInput = { order: number; startTime: string; endTime: string; slotType: "normal" | "ot"; tt: number; oee: number; ratio: string };
+type Plan = { id: number; override_tt: number | null; override_ratio: string | null; source_tt: number | null; source_oee: number | null; source_ratio: string | null; source_ot_minutes: number | null; source_signature: string | null; is_manual_plan: number };
+type Slot = { id: number; slot_order: number; start_time: string; end_time: string; prod_minutes: number; slot_type: "normal" | "ot"; oee: number | null; is_oee_override: number; tt_override: number | null; ratio_override: string | null; total_target: number; one_tr: number; two_tr: number; is_schedule_override: number; is_hidden: number; remark: string | null; remark_updated_at: Date | null; remark_updated_by_name: string | null };
 
 const parts = new Set(["assy", "cylblock", "cylhead", "camshaft", "crankshaft"]);
 const maghribBreak = { start: "18:00", end: "18:15" };
@@ -61,8 +63,6 @@ function targetFor(minutes: number, tt: number, oee: number) { return tt > 0 ? M
 function targetsForSlots(part: string, shift: string, slots: Array<{ key: number; minutes: number; oee: number }>, tt: number) { if (part !== "assy" || shift !== "1" || tt <= 0) return new Map(slots.map((slot) => [slot.key, targetFor(slot.minutes, tt, slot.oee)])); let accumulatedTarget = 0; let roundedTarget = 0; return new Map(slots.map((slot) => { accumulatedTarget += slot.minutes / tt * slot.oee / 100; const nextRoundedTarget = Math.round(accumulatedTarget); const target = nextRoundedTarget - roundedTarget; roundedTarget = nextRoundedTarget; return [slot.key, target] as const; })); }
 function tableFor(part: string) { if (!parts.has(part)) throw new Error("Invalid planning line"); return `t_plan_daily_production_${part}`; }
 function toNullableNumber(value: unknown) { if (value === null || value === undefined || value === "") return null; const numeric = Number(value); return Number.isFinite(numeric) ? numeric : null; }
-function sameNullableNumber(left: unknown, right: unknown) { const leftNumber = toNullableNumber(left); const rightNumber = toNullableNumber(right); return leftNumber === rightNumber; }
-function sameNullableText(left: unknown, right: unknown) { const leftText = left === null || left === undefined ? "" : String(left); const rightText = right === null || right === undefined ? "" : String(right); return leftText === rightText; }
 function shiftAliases(value: string) {
   return value === "1" ? ["1", "Day", "DAY", "day"] : value === "2" ? ["2", "Night", "NIGHT", "night"] : [value];
 }
@@ -71,14 +71,32 @@ async function getPlanContext(part: string, date: string, shift: string) {
   const reportDb = getReportPrisma(); const db = prisma; const table = tableFor(part);
   const planGroup = "all";
   const shifts = shiftAliases(shift);
+  const plans = await db.$queryRawUnsafe<Plan[]>("SELECT id,override_tt,override_ratio,source_tt,source_oee,source_ratio,source_ot_minutes,source_signature,is_manual_plan FROM t_daily_production_plan WHERE line_key=? AND fdate=? AND fshift=? AND fgroup=? LIMIT 1", part,date,shift,planGroup);
+  const existingPlan = plans[0];
   const source = await reportDb.$queryRawUnsafe<Record<string, unknown>[]>(
-    `SELECT ftt, foee, fratio, fot FROM \`${table}\` WHERE DATE(fdate)=? AND TRIM(fshift) IN (${shifts.map(() => "?").join(",")}) ORDER BY TRIM(fgroup) ASC LIMIT 1`,
+    `SELECT fgroup,ftt,foee,fratio,fot,f1tr,f2tr FROM \`${table}\` WHERE DATE(fdate)=? AND TRIM(fshift) IN (${shifts.map(() => "?").join(",")}) ORDER BY TRIM(fgroup) ASC`,
     date,
     ...shifts,
   );
 
   if (source.length === 0) {
-    return { hasMonthlyData: false as const, db, plan: null, tt: 0, ratio: "", monthlyOee: 0, otMinutes: 0 };
+    if (existingPlan?.is_manual_plan) {
+      return { hasMonthlyData: true as const, canCreatePlanning: false, isManualPlan: true, db, plan: existingPlan, tt: 0, ratio: "", monthlyOee: 0, otMinutes: 0 };
+    }
+
+    return { hasMonthlyData: false as const, canCreatePlanning: true, isManualPlan: false, db, plan: null, tt: 0, ratio: "", monthlyOee: 0, otMinutes: 0 };
+  }
+
+  const monthlyTotal = source.reduce(
+    (total, row) => total + Number(row.f1tr ?? 0) + Number(row.f2tr ?? 0),
+    0,
+  );
+  if (monthlyTotal === 0) {
+    if (existingPlan?.is_manual_plan) {
+      return { hasMonthlyData: true as const, canCreatePlanning: false, isManualPlan: true, db, plan: existingPlan, tt: 0, ratio: "", monthlyOee: 0, otMinutes: 0 };
+    }
+
+    return { hasMonthlyData: false as const, canCreatePlanning: true, isManualPlan: false, db, plan: null, tt: 0, ratio: "", monthlyOee: 0, otMinutes: 0 };
   }
 
   const sourceRatio = String(source[0]?.fratio ?? "").trim();
@@ -86,27 +104,118 @@ async function getPlanContext(part: string, date: string, shift: string) {
   const monthlyRatio = part === "camshaft" ? "" : sourceRatio;
   const monthlyOee = toNullableNumber(source[0]?.foee);
   const otMinutes = Math.max(0, Math.round(Number(source[0]?.fot ?? 0) * 60));
+  const monthlySignature = createHash("sha256")
+    .update(JSON.stringify(source.map((row) => Object.values(row).map((value) => String(value ?? "")))))
+    .digest("hex");
 
   await db.$executeRawUnsafe("INSERT IGNORE INTO t_daily_production_plan (line_key,fdate,fshift,fgroup) VALUES (?,?,?,?)", part,date,shift,planGroup);
-  const plans = await db.$queryRawUnsafe<Plan[]>("SELECT id,override_tt,override_ratio,source_tt,source_oee,source_ratio,source_ot_minutes FROM t_daily_production_plan WHERE line_key=? AND fdate=? AND fshift=? AND fgroup=? LIMIT 1", part,date,shift,planGroup);
-  const plan = plans[0]; if (!plan) throw new Error("Unable to create daily plan");
-  const monthlyChanged = !sameNullableNumber(plan.source_tt, monthlyTt) || !sameNullableNumber(plan.source_oee, monthlyOee) || !sameNullableText(plan.source_ratio, monthlyRatio) || Number(plan.source_ot_minutes ?? 0) !== otMinutes;
+  const syncedPlans = await db.$queryRawUnsafe<Plan[]>("SELECT id,override_tt,override_ratio,source_tt,source_oee,source_ratio,source_ot_minutes,source_signature,is_manual_plan FROM t_daily_production_plan WHERE line_key=? AND fdate=? AND fshift=? AND fgroup=? LIMIT 1", part,date,shift,planGroup);
+  const plan = syncedPlans[0]; if (!plan) throw new Error("Unable to create daily plan");
+  const monthlyChanged = Boolean(plan.is_manual_plan) || plan.source_signature !== monthlySignature;
 
   if (monthlyChanged) {
-    await db.$executeRawUnsafe("UPDATE t_daily_production_plan SET override_tt=NULL,override_ratio=NULL,source_tt=?,source_oee=?,source_ratio=?,source_ot_minutes=? WHERE id=?", monthlyTt, monthlyOee, monthlyRatio, otMinutes, plan.id);
-    await db.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET is_oee_override=0,oee=NULL,is_schedule_override=CASE WHEN slot_type='ot' AND is_schedule_override=1 THEN 1 ELSE 0 END WHERE daily_plan_id=?", plan.id);
+    await db.$executeRawUnsafe("UPDATE t_daily_production_plan SET is_manual_plan=0,override_tt=NULL,override_ratio=NULL,source_tt=?,source_oee=?,source_ratio=?,source_ot_minutes=?,source_signature=? WHERE id=?", monthlyTt, monthlyOee,monthlyRatio,otMinutes,monthlySignature,plan.id);
+    await db.$executeRawUnsafe("DELETE FROM t_daily_production_plan_slot WHERE daily_plan_id=?", plan.id);
     plan.override_tt = null; plan.override_ratio = null;
   }
 
   const tt = toNullableNumber(plan.override_tt) ?? monthlyTt;
   const ratio = plan.override_ratio ?? monthlyRatio;
-  return { hasMonthlyData: true as const, db, plan, tt, ratio, monthlyOee, otMinutes };
+  return { hasMonthlyData: true as const, canCreatePlanning: false, isManualPlan: false, db, plan, tt, ratio, monthlyOee, otMinutes };
 }
 
 function getTemplate(part: string, date: string, shift: string, otMinutes: number) {
   const isFriday = new Date(`${date}T00:00:00`).getDay() === 5;
   const base = shift === "1" ? (part === "assy" ? (isFriday ? assyFridaySlots : assyDaySlots) : (isFriday ? fridaySlots : daySlots)) : nightSlots;
   return base.flatMap((slot) => { if (slot.type === "normal") return [slot]; if (shift === "1") { const minutes = otMinutes; return minutes ? dayOtSlots(slot.order, slot.start, minutes) : []; } const minutes = slot.order === 1 ? Math.min(otMinutes, 60) : Math.min(Math.max(otMinutes - 60, 0), 30); return minutes ? [{ ...slot, minutes, end: addMinutes(slot.start, minutes) }] : []; });
+}
+
+export function getManualDailyPlanningTemplate(part: string, date: string, shift: string) {
+  if (shift !== "1" && shift !== "2") throw new Error("Shift tidak valid");
+  tableFor(part);
+  return getTemplate(part, date, shift, 0).filter((slot) => slot.type === "normal");
+}
+
+export async function saveManualDailyPlanningData(
+  part: string,
+  date: string,
+  shift: string,
+  slots: ManualPlanningSlotInput[],
+) {
+  if (shift !== "1" && shift !== "2") throw new Error("Shift tidak valid");
+
+  const context = await getPlanContext(part, date, shift);
+  if (context.isManualPlan) throw new Error("Daily planning sudah disimpan.");
+  if (!context.canCreatePlanning) throw new Error("Daily planning manual hanya dapat dibuat saat monthly belum ada atau total monthly plan adalah 0.");
+  if (slots.length === 0) throw new Error("Slot daily planning belum tersedia.");
+
+  const db = context.db;
+  const planGroup = "all";
+  const activeSlots = slots.filter((slot) =>
+    !(slot.slotType === "ot" && calculateDurationMinutes(slot.startTime, slot.endTime) === 0),
+  );
+  const normalSlots = activeSlots.filter((slot) => slot.slotType === "normal");
+  const slotOrders = new Set<number>();
+
+  for (const slot of activeSlots) {
+    const minutes = calculateDurationMinutes(slot.startTime, slot.endTime);
+    const [ratioOne, ratioTwo] = parseRatio(slot.ratio);
+    if (!Number.isInteger(slot.order) || slot.order <= 0 || slotOrders.has(slot.order)) throw new Error("Urutan slot tidak valid.");
+    if (!Number.isFinite(slot.tt) || slot.tt <= 0) throw new Error("TT wajib diisi dan harus lebih dari 0.");
+    if (!Number.isFinite(slot.oee) || slot.oee <= 0) throw new Error("OEE wajib diisi dan harus lebih dari 0.");
+    if (minutes <= 0) throw new Error("Jam slot tidak valid.");
+    if (part !== "camshaft" && ratioOne + ratioTwo <= 0) throw new Error("Ratio wajib diisi dan harus valid.");
+    slotOrders.add(slot.order);
+  }
+
+  if (normalSlots.length === 0) throw new Error("Minimal satu slot normal wajib tersedia.");
+
+  await db.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(
+      "INSERT IGNORE INTO t_daily_production_plan (line_key,fdate,fshift,fgroup) VALUES (?,?,?,?)",
+      part,
+      date,
+      shift,
+      planGroup,
+    );
+    const plans = await tx.$queryRawUnsafe<Array<{ id: number; is_manual_plan: number }>>(
+      "SELECT id,is_manual_plan FROM t_daily_production_plan WHERE line_key=? AND fdate=? AND fshift=? AND fgroup=? LIMIT 1",
+      part,
+      date,
+      shift,
+      planGroup,
+    );
+    const plan = plans[0];
+    if (!plan) throw new Error("Unable to create daily plan");
+    if (plan.is_manual_plan) throw new Error("Daily planning sudah disimpan.");
+
+    await tx.$executeRawUnsafe("UPDATE t_daily_production_plan SET is_manual_plan=1,override_tt=NULL,override_ratio=NULL,source_tt=NULL,source_oee=NULL,source_ratio=NULL,source_ot_minutes=0,source_signature=NULL WHERE id=?", plan.id);
+    await tx.$executeRawUnsafe("DELETE FROM t_daily_production_plan_slot WHERE daily_plan_id=?", plan.id);
+
+    for (const slot of activeSlots) {
+      const minutes = calculateDurationMinutes(slot.startTime, slot.endTime);
+      const [ratioOne, ratioTwo] = parseRatio(slot.ratio);
+      const target = targetFor(minutes, slot.tt, slot.oee);
+      const [oneTr, twoTr] = splitTarget(part, target, ratioOne, ratioTwo);
+      await tx.$executeRawUnsafe(
+        "INSERT INTO t_daily_production_plan_slot (daily_plan_id,slot_order,start_time,end_time,prod_minutes,slot_type,oee,is_oee_override,tt_override,ratio_override,total_target,one_tr,two_tr,is_schedule_override) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        plan.id,
+        slot.order,
+        slot.startTime,
+        slot.endTime,
+        minutes,
+        slot.slotType,
+        slot.oee,
+        1,
+        slot.tt,
+        part === "camshaft" ? null : slot.ratio,
+        target,
+        oneTr,
+        twoTr,
+        slot.slotType === "ot" ? 1 : 0,
+      );
+    }
+  });
 }
 
 export async function loadDailyPlanningData(part: string, date: string, shift: string) {
@@ -120,12 +229,36 @@ export async function loadDailyPlanningData(part: string, date: string, shift: s
       ratioOne: 1,
       ratioTwo: 1,
       hasMonthlyData: false,
-      message: "Data monthly untuk tanggal ini belum diisi.",
+      canCreatePlanning: context.canCreatePlanning,
+      message: context.canCreatePlanning
+        ? "Total monthly plan untuk tanggal ini adalah 0. Buat daily planning untuk menampilkan jam normal."
+        : "Data monthly untuk tanggal ini belum diisi.",
       rows: [],
     };
   }
 
   const existing = await getDailyPlanSlots(plan.id);
+  if (context.isManualPlan) {
+    const rows = existing.filter((slot) => !slot.is_hidden).map((slot: Slot) => {
+      const { tt_override, ratio_override, ...serializableSlot } = slot;
+      const hasOeeOverride = Boolean(slot.is_oee_override);
+      const slotTt = toNullableNumber(tt_override);
+      const slotRatio = part === "camshaft" ? "" : (ratio_override ?? "");
+
+      return {
+        ...serializableSlot,
+        oee: hasOeeOverride ? Number(slot.oee ?? 0) : 0,
+        ftt: slotTt ?? "",
+        foee: hasOeeOverride ? Number(slot.oee ?? 0) : "",
+        fratio: slotRatio,
+        ftotal_target: Number(slot.total_target),
+        f1tr: Number(slot.one_tr),
+        f2tr: Number(slot.two_tr),
+      };
+    });
+
+    return { group: "all", tt: 0, oee: 0, ratio: "", ratioOne: 1, ratioTwo: 1, hasMonthlyData: true, canCreatePlanning: false, message: "", rows };
+  }
   const template = getTemplate(part,date,shift,otMinutes);
   const [ratioOne, ratioTwo] = parseRatio(ratio);
   const templateTargets = targetsForSlots(part, shift, template.map((slot) => {
@@ -144,6 +277,9 @@ export async function loadDailyPlanningData(part: string, date: string, shift: s
 
   for (const slot of template) {
     const existingSlot = existing.find((row: Slot) => Number(row.slot_order) === slot.order);
+    if (existingSlot?.is_hidden) {
+      continue;
+    }
     const oeeForTarget = existingSlot?.is_oee_override ? Number(existingSlot.oee) : (monthlyOee ?? 0);
     const slotTtOverride = toNullableNumber(existingSlot?.tt_override);
     const slotRatioOverride = existingSlot?.ratio_override;
@@ -182,9 +318,9 @@ export async function loadDailyPlanningData(part: string, date: string, shift: s
     );
   }
 
-  const slots = await getDailyPlanSlots(plan.id);
+  const slots = (await getDailyPlanSlots(plan.id)).filter((slot) => !slot.is_hidden);
   const rows = slots.map((slot: Slot) => { const { tt_override, ratio_override, ...serializableSlot } = slot; const oee = slot.is_oee_override ? Number(slot.oee) : monthlyOee; const slotTt = toNullableNumber(tt_override) ?? tt ?? 0; const slotRatio = part === "camshaft" ? "" : (ratio_override ?? ratio); const [slotRatioOne,slotRatioTwo] = parseRatio(slotRatio); const calculatedTarget = targetFor(Number(slot.prod_minutes),slotTt,oee ?? 0); const target = slot.is_schedule_override ? Number(slot.total_target) : calculatedTarget; const [oneTr,twoTr] = splitTarget(part,target,slotRatioOne,slotRatioTwo); return { ...serializableSlot, oee: Number(slot.oee ?? 0), ftt: slotTt || "", foee: oee ?? "", fratio: slotRatio, ftotal_target:target, f1tr:oneTr, f2tr:twoTr }; });
-  return { group: "all", tt, oee: monthlyOee, ratio, ratioOne, ratioTwo, hasMonthlyData: true, message: "", rows };
+  return { group: "all", tt, oee: monthlyOee, ratio, ratioOne, ratioTwo, hasMonthlyData: true, canCreatePlanning: false, message: "", rows };
 }
 
 export async function updateDailyTargetData(part: string, id: number, target: number, ratioOne: number, ratioTwo: number, userId: number) { const [oneTr,twoTr] = splitTarget(part,Math.max(0,target),ratioOne,ratioTwo); await prisma.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET total_target=?,one_tr=?,two_tr=?,is_schedule_override=1,remark_updated_by=?,remark_updated_at=CURRENT_TIMESTAMP WHERE id=?",target,oneTr,twoTr,userId,id); }
@@ -196,6 +332,14 @@ export async function updateDailySlotScheduleData(part: string,id: number,startT
   if (!slot[0]) throw new Error("Slot tidak ditemukan");
   const isDayOt = String(slot[0].fshift) === "1" && slot[0].slot_type === "ot";
   const minutes = calculateDurationMinutes(startTime,endTime);
+  if (minutes === 0) {
+    await prisma.$executeRawUnsafe(
+      "UPDATE t_daily_production_plan_slot SET is_hidden=1,remark_updated_by=?,remark_updated_at=CURRENT_TIMESTAMP WHERE id=?",
+      userId,
+      id,
+    );
+    return;
+  }
   const segments = isDayOt ? dayOtSlots(Number(slot[0].slot_order), startTime, minutes) : [{ order: Number(slot[0].slot_order), start: startTime, end: endTime, minutes, type: slot[0].slot_type as "normal" | "ot" }];
 
   await prisma.$transaction(async (tx) => {
@@ -207,7 +351,7 @@ export async function updateDailySlotScheduleData(part: string,id: number,startT
       const target = targetFor(segment.minutes,tt,oee*100);
       const [oneTr,twoTr] = splitTarget(part,target,ratioOne,ratioTwo);
       if (index === 0) {
-        await tx.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET slot_order=?,start_time=?,end_time=?,prod_minutes=?,total_target=?,one_tr=?,two_tr=?,is_schedule_override=1,remark_updated_by=?,remark_updated_at=CURRENT_TIMESTAMP WHERE id=?",segment.order,segment.start,segment.end,segment.minutes,target,oneTr,twoTr,userId,id);
+        await tx.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET is_hidden=0,slot_order=?,start_time=?,end_time=?,prod_minutes=?,total_target=?,one_tr=?,two_tr=?,is_schedule_override=1,remark_updated_by=?,remark_updated_at=CURRENT_TIMESTAMP WHERE id=?",segment.order,segment.start,segment.end,segment.minutes,target,oneTr,twoTr,userId,id);
         continue;
       }
       await tx.$executeRawUnsafe("INSERT INTO t_daily_production_plan_slot (daily_plan_id,slot_order,start_time,end_time,prod_minutes,slot_type,tt_override,ratio_override,total_target,one_tr,two_tr,is_schedule_override,remark_updated_by,remark_updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,1,?,CURRENT_TIMESTAMP)",slot[0].daily_plan_id,segment.order,segment.start,segment.end,segment.minutes,"ot",slot[0].tt_override,slot[0].ratio_override,target,oneTr,twoTr,userId);
@@ -232,7 +376,7 @@ export async function updateDailySlotRemarkData(id: number, remark: string, user
 type OtPosition = "start" | "end";
 
 async function getDailyPlanSlots(planId: number) {
-  return prisma.$queryRawUnsafe<Slot[]>("SELECT s.id,s.slot_order,TIME_FORMAT(s.start_time,'%H:%i') AS start_time,TIME_FORMAT(s.end_time,'%H:%i') AS end_time,s.prod_minutes,s.slot_type,s.oee,s.is_oee_override,s.tt_override,s.ratio_override,s.total_target,s.one_tr,s.two_tr,s.is_schedule_override,s.remark,s.remark_updated_at,u.name AS remark_updated_by_name FROM t_daily_production_plan_slot s LEFT JOIN `User` u ON u.id=s.remark_updated_by WHERE s.daily_plan_id=? ORDER BY s.slot_order", planId);
+  return prisma.$queryRawUnsafe<Slot[]>("SELECT s.id,s.slot_order,TIME_FORMAT(s.start_time,'%H:%i') AS start_time,TIME_FORMAT(s.end_time,'%H:%i') AS end_time,s.prod_minutes,s.slot_type,s.oee,s.is_oee_override,s.tt_override,s.ratio_override,s.total_target,s.one_tr,s.two_tr,s.is_schedule_override,s.is_hidden,s.remark,s.remark_updated_at,u.name AS remark_updated_by_name FROM t_daily_production_plan_slot s LEFT JOIN `User` u ON u.id=s.remark_updated_by WHERE s.daily_plan_id=? ORDER BY s.slot_order", planId);
 }
 
 export async function addDailyOtData(part: string, date: string, shift: string, requestedPosition?: OtPosition, userId?: number) {
@@ -243,7 +387,7 @@ export async function addDailyOtData(part: string, date: string, shift: string, 
 
   if (!context.hasMonthlyData || !plan) throw new Error("Data monthly untuk tanggal ini belum diisi.");
 
-  const slots = await getDailyPlanSlots(plan.id);
+  const slots = (await getDailyPlanSlots(plan.id)).filter((slot) => !slot.is_hidden);
   const otSlots = slots.filter((slot) => slot.slot_type === "ot");
   const normalSlots = slots.filter((slot) => slot.slot_type === "normal");
   const firstNormal = normalSlots[0];
@@ -297,6 +441,72 @@ export async function addDailyOtData(part: string, date: string, shift: string, 
     oneTr,
     twoTr,
     userId ?? null,
+  );
+}
+
+export async function saveDailyOtData(
+  part: string,
+  date: string,
+  shift: string,
+  slot: ManualPlanningSlotInput,
+  userId: number,
+) {
+  if (slot.slotType !== "ot") throw new Error("Slot OT tidak valid.");
+  const context = await getPlanContext(part, date, shift);
+  if (!context.hasMonthlyData || !context.plan) throw new Error("Daily planning belum tersedia.");
+
+  const minutes = calculateDurationMinutes(slot.startTime, slot.endTime);
+  const [ratioOne, ratioTwo] = parseRatio(slot.ratio);
+  if (!Number.isInteger(slot.order) || slot.order <= 0) throw new Error("Urutan slot OT tidak valid.");
+  if (minutes <= 0) throw new Error("Jam OT harus valid.");
+  if (!Number.isFinite(slot.tt) || slot.tt <= 0) throw new Error("TT OT wajib diisi dan harus lebih dari 0.");
+  if (!Number.isFinite(slot.oee) || slot.oee <= 0) throw new Error("OEE OT wajib diisi dan harus lebih dari 0.");
+  if (part !== "camshaft" && ratioOne + ratioTwo <= 0) throw new Error("Ratio OT wajib diisi dan harus valid.");
+
+  const existing = await getDailyPlanSlots(context.plan.id);
+  if (existing.some((item) => item.slot_order === slot.order && !item.is_hidden)) {
+    throw new Error("Posisi OT tersebut sudah terisi.");
+  }
+
+  const target = targetFor(minutes, slot.tt, slot.oee);
+  const [oneTr, twoTr] = splitTarget(part, target, ratioOne, ratioTwo);
+  const hiddenSlot = existing.find((item) => item.slot_order === slot.order && item.is_hidden);
+
+  if (hiddenSlot) {
+    await context.db.$executeRawUnsafe(
+      "UPDATE t_daily_production_plan_slot SET is_hidden=0,start_time=?,end_time=?,prod_minutes=?,slot_type='ot',oee=?,is_oee_override=1,tt_override=?,ratio_override=?,total_target=?,one_tr=?,two_tr=?,is_schedule_override=1,remark_updated_by=?,remark_updated_at=CURRENT_TIMESTAMP WHERE id=?",
+      slot.startTime,
+      slot.endTime,
+      minutes,
+      slot.oee,
+      slot.tt,
+      part === "camshaft" ? null : slot.ratio,
+      target,
+      oneTr,
+      twoTr,
+      userId,
+      hiddenSlot.id,
+    );
+    return;
+  }
+
+  await context.db.$executeRawUnsafe(
+    "INSERT INTO t_daily_production_plan_slot (daily_plan_id,slot_order,start_time,end_time,prod_minutes,slot_type,oee,is_oee_override,tt_override,ratio_override,total_target,one_tr,two_tr,is_schedule_override,remark_updated_by,remark_updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)",
+    context.plan.id,
+    slot.order,
+    slot.startTime,
+    slot.endTime,
+    minutes,
+    "ot",
+    slot.oee,
+    1,
+    slot.tt,
+    part === "camshaft" ? null : slot.ratio,
+    target,
+    oneTr,
+    twoTr,
+    1,
+    userId,
   );
 }
 

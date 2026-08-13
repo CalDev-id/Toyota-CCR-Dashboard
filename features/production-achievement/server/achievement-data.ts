@@ -463,6 +463,8 @@ async function getDailyPlanningSlotRows(
     INNER JOIN t_daily_production_plan plan ON plan.id = slot.daily_plan_id
     WHERE plan.fdate = ?
       AND plan.fshift IN (${shiftValues.map(() => "?").join(",")})
+      AND slot.is_hidden = 0
+      AND slot.prod_minutes > 0
       AND (
         plan.fgroup = 'all'
         OR NOT EXISTS (
@@ -651,10 +653,12 @@ async function getDailyPlanningPlanOverrides(
     const current = overrides.get(firstRow.lineKey);
     if (current) {
       current.workHoursMinutes += getPlanningWorkHoursMinutes(date, sortedRows, now);
-      current.workSchedule = sortedRows.map((row) => ({
+      current.workSchedule = sortedRows
+        .filter((row) => toNumber(row.prodMinutes) > 0 && row.startTime !== row.endTime)
+        .map((row) => ({
         start: row.startTime,
         end: row.endTime,
-      }));
+        }));
     }
   }
 

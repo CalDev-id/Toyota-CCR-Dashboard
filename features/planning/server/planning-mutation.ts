@@ -20,13 +20,26 @@ async function requireSession() {
 }
 
 function normalizeValue(value: unknown, column: PlanningColumn) {
-  if (value === undefined || value === "") {
-    return column.nullable || column.defaultValue !== null ? null : "";
+  if (value === undefined || value === null || String(value).trim() === "") {
+    if (column.inputType === "number" && !column.nullable) {
+      return 0;
+    }
+
+    if (column.nullable) {
+      return null;
+    }
+
+    return "";
   }
 
   if (column.inputType === "number") {
     const numberValue = Number(String(value).trim().replace(",", "."));
-    return Number.isFinite(numberValue) ? numberValue : null;
+
+    if (!Number.isFinite(numberValue)) {
+      throw new Error(`${column.field} harus berupa angka yang valid`);
+    }
+
+    return numberValue;
   }
 
   return value;
@@ -86,7 +99,16 @@ function buildPayload(
 
   for (const column of editableColumns) {
     if (Object.prototype.hasOwnProperty.call(body, column.field)) {
-      payload[column.field] = normalizeValue(body[column.field], column);
+      const value = body[column.field];
+
+      if (
+        (value === undefined || value === null || String(value).trim() === "") &&
+        column.defaultValue !== null
+      ) {
+        continue;
+      }
+
+      payload[column.field] = normalizeValue(value, column);
     }
   }
 
@@ -96,6 +118,23 @@ function buildPayload(
   }
 
   return payload;
+}
+
+function assertRequiredInsertValues(columns: PlanningColumn[], rows: Record<string, unknown>[]) {
+  const requiredColumns = getEditableColumns(columns, "create").filter(
+    (column) =>
+      !column.nullable && column.defaultValue === null && column.inputType !== "number",
+  );
+
+  for (const row of rows) {
+    for (const column of requiredColumns) {
+      const value = row[column.field];
+
+      if (value === undefined || value === null || String(value).trim() === "") {
+        throw new Error(`${column.field} wajib diisi`);
+      }
+    }
+  }
 }
 
 function dateKey(value: unknown) {
@@ -161,8 +200,10 @@ export async function insertPlanningRows(
     const ratioColumn = findColumn(columns, ["fratio", "ratio"]);
     return { ...row, [ratioColumn!.field]: ratio };
   });
+  assertRequiredInsertValues(columns, rowsWithRatio);
   const writableColumns = getEditableColumns(columns, "create").filter((column) =>
-    rowsWithRatio.some((row) => Object.prototype.hasOwnProperty.call(row, column.field)),
+    rowsWithRatio.some((row) => Object.prototype.hasOwnProperty.call(row, column.field)) ||
+    (!column.nullable && column.defaultValue === null && column.inputType === "number"),
   );
 
   if (writableColumns.length === 0 || rowsWithRatio.length === 0) {

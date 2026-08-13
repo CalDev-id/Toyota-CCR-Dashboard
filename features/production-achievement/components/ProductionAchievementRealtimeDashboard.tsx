@@ -37,6 +37,7 @@ function workMinutesSince(card: ProductionAchievementCard, reportDate: string, s
   let minutes = 0;
   let isWorkingNow = false;
   for (const slot of card.workSchedule) {
+    if (slot.start === slot.end) continue;
     const start = slotDate(reportDate, slot.start, shift);
     const end = slotDate(reportDate, slot.end, shift);
     if (end <= start) end.setDate(end.getDate() + 1);
