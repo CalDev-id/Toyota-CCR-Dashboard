@@ -1,6 +1,6 @@
 import type { ProductionAchievementCard, ProductionLineStopDecision } from "@/features/production-achievement/types";
 import Image from "next/image";
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -32,6 +32,10 @@ function formatStopTime(value: number) {
   return `${formatNumberAuto(value)} min`;
 }
 
+function formatProblemMinutes(value: number) {
+  return `${formatNumberAuto(value)} min`;
+}
+
 function formatLastUpdated(value: string | null) {
   if (!value) {
     return "-";
@@ -53,7 +57,7 @@ function meetsOeeTarget(value: number | null, target: number | null) {
   const normalizedValue = Math.abs(value) <= 1 ? value * 100 : value;
   const normalizedTarget = Math.abs(target) <= 1 ? target * 100 : target;
 
-  return normalizedValue >= normalizedTarget;
+  return Math.round(normalizedValue) >= normalizedTarget;
 }
 
 function getOeeTargetClass(value: number | null, target: number | null) {
@@ -64,7 +68,7 @@ function getOeeTargetClass(value: number | null, target: number | null) {
   const normalizedValue = Math.abs(value) <= 1 ? value * 100 : value;
   const normalizedTarget = Math.abs(target) <= 1 ? target * 100 : target;
 
-  return normalizedValue >= normalizedTarget ? "text-[#027a48]" : "text-[#b42318]";
+  return Math.round(normalizedValue) >= normalizedTarget ? "text-[#027a48]" : "text-[#b42318]";
 }
 
 function getBalanceClass(value: number) {
@@ -121,16 +125,18 @@ function getDecisionStyle(decision?: ProductionLineStopDecision["decision"]) {
 function MetricTile({
   label,
   value,
+  tooltip,
   valueClassName = "text-[#101828]",
   valueSizeClassName = "text-lg",
 }: {
   label: string;
   value: ReactNode;
+  tooltip?: ReactNode;
   valueClassName?: string;
   valueSizeClassName?: string;
 }) {
   return (
-    <div className="flex min-h-[64px] flex-col justify-between rounded-lg bg-[#f9fafb] px-3 py-2.5 dark:bg-[#162033]">
+    <div className="group relative flex min-h-[64px] flex-col justify-between rounded-lg bg-[#f9fafb] px-3 py-2.5 dark:bg-[#162033]">
       <p className="whitespace-pre-line text-xs font-semibold text-[#667085] dark:text-[#a7b0c0]">
         {label}
       </p>
@@ -139,6 +145,11 @@ function MetricTile({
       >
         {value}
       </p>
+      {tooltip ? (
+        <div className="pointer-events-none invisible absolute bottom-full left-1/2 z-30 mb-2 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-lg bg-[#101828] px-3 py-2 text-left text-xs font-medium leading-5 text-white opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
+          {tooltip}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -231,6 +242,24 @@ export default function ProductionAchievementCardView({
   const targetLabel = formatPercent(card.oeeTarget);
   const hasProblems = card.problems.length > 0;
   const decisionStyle = getDecisionStyle(lineStopDecision?.decision);
+  const { AV: avStopTime, PE: peStopTime, RQ: rqStopTime } =
+    card.stopTimeByType ?? { AV: 0, PE: 0, RQ: 0 };
+  const [isProblemTooltipOpen, setIsProblemTooltipOpen] = useState(false);
+  const problemPanelRef = useRef<HTMLDivElement>(null);
+  const problemTooltipId = `problem-tooltip-${card.key}`;
+
+  useEffect(() => {
+    if (!isProblemTooltipOpen) return;
+
+    function closeOnOutsideClick(event: MouseEvent) {
+      if (!problemPanelRef.current?.contains(event.target as Node)) {
+        setIsProblemTooltipOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, [isProblemTooltipOpen]);
 
   return (
     <div className="w-[320px] shrink-0 xl:w-full xl:min-w-0 xl:shrink">
@@ -305,11 +334,13 @@ export default function ProductionAchievementCardView({
           <MetricTile
             label="Prod."
             value={<ProductionMetricValue actual={card.prodAct} plan={card.prodPlan} />}
+            tooltip={<><span className="block font-semibold">Total Plan</span><span>{formatNumber(card.totalDailyProdPlan)} units</span></>}
             valueSizeClassName="text-2xl"
           />
           <MetricTile
             label="OEE"
             value={<OeeMetricValue value={card.oee} target={card.oeeTarget} />}
+            tooltip={<div className="flex items-center gap-1.5 font-semibold"><span>OEE =</span><span className="text-center"><span className="block border-b border-white pb-0.5">Actual Prod × Actual TT</span><span className="block pt-0.5">Working Hours</span></span></div>}
             valueClassName={getOeeTargetClass(card.oee, card.oeeTarget)}
             valueSizeClassName="text-xl"
           />
@@ -337,6 +368,7 @@ export default function ProductionAchievementCardView({
           <MetricTile
             label="Stop Time"
             value={formatStopTime(card.stopTime)}
+            tooltip={<div className="space-y-1"><span className="flex items-center justify-between gap-4"><ProblemTypeBadge type="AV" /> {formatProblemMinutes(avStopTime)}</span><span className="flex items-center justify-between gap-4"><ProblemTypeBadge type="PE" /> {formatProblemMinutes(peStopTime)}</span><span className="flex items-center justify-between gap-4"><ProblemTypeBadge type="RQ" /> {formatProblemMinutes(rqStopTime)}</span></div>}
             valueSizeClassName="text-lg"
           />
         </div>
@@ -394,21 +426,37 @@ export default function ProductionAchievementCardView({
       </div>
 
       <div
-        className={`mt-5 min-h-[122px] rounded-xl border px-3 py-3 ${
+        ref={problemPanelRef}
+        aria-controls={hasProblems ? problemTooltipId : undefined}
+        aria-expanded={hasProblems ? isProblemTooltipOpen : undefined}
+        className={`relative mt-5 min-h-[122px] rounded-xl border px-3 py-3 ${
           hasProblems
             ? "border-[#fecdca] bg-[#fffbfa] dark:border-[#7a271a] dark:bg-[#3b1111]"
             : "border-[#e4e7ec] bg-[#f9fafb] dark:border-[#273449] dark:bg-[#162033]"
-        }`}
+        } ${hasProblems ? "cursor-pointer transition hover:border-[#f97066] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f04438]" : ""}`}
+        onClick={hasProblems ? () => setIsProblemTooltipOpen((current) => !current) : undefined}
+        onKeyDown={hasProblems ? (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          setIsProblemTooltipOpen((current) => !current);
+        } : undefined}
+        role={hasProblems ? "button" : undefined}
+        tabIndex={hasProblems ? 0 : undefined}
       >
-        <p
-          className={`text-xs font-semibold uppercase tracking-wide ${
+        <div className="flex items-center justify-between gap-2">
+          <p
+            className={`text-xs font-semibold uppercase tracking-wide ${
             hasProblems
               ? "text-[#b42318] dark:text-[#fda29b]"
               : "text-[#667085] dark:text-[#a7b0c0]"
-          }`}
-        >
-          Problem
-        </p>
+            }`}
+          >
+            Problem
+          </p>
+          {hasProblems ? (
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4 text-[#b42318] dark:text-[#fda29b]" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><path d="M12 16v-4M12 8h.01" /><circle cx="12" cy="12" r="9" /></svg>
+          ) : null}
+        </div>
         {hasProblems ? (
           <ol className="mt-2 space-y-1.5">
             {card.problems.slice(0, 3).map((problem, index) => {
@@ -436,6 +484,19 @@ export default function ProductionAchievementCardView({
             No problem data
           </p>
         )}
+        {hasProblems ? (
+          <div id={problemTooltipId} className={`pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-lg bg-[#101828] px-3 py-2 text-xs font-medium text-white shadow-lg transition ${isProblemTooltipOpen ? "visible opacity-100" : "invisible opacity-0"}`}>
+            <ol className="space-y-1.5">
+              {card.problems.map((problem, index) => (
+                <li key={`${problem.label}-${problem.value}-${index}`} className="flex min-w-52 items-center gap-2">
+                  <ProblemTypeBadge type={problem.type} />
+                  <span className="min-w-0 flex-1">{problem.label}</span>
+                  <span className="shrink-0 font-semibold">{formatNumberAuto(problem.value)}{problem.unit ? ` ${problem.unit}` : ""}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : null}
       </div>
       {!card.hasData ? (
         <div className="absolute inset-0 z-10 grid place-items-center rounded-xl bg-white/55 text-lg font-semibold text-[#344054] backdrop-blur-sm dark:bg-[#111827]/55 dark:text-[#d4dae5]">

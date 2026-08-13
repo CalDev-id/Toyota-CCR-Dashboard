@@ -355,6 +355,7 @@ type RawDailyPlanningSlotRow = {
 
 type DailyPlanningPlanOverride = {
   prodPlan: number;
+  totalDailyProdPlan: number;
   variants: Map<string, number>;
   tt: number;
   workHoursMinutes: number;
@@ -619,6 +620,7 @@ async function getDailyPlanningPlanOverrides(
   function addPlanningRow(row: RawDailyPlanningSlotRow, progress: number) {
     const current = overrides.get(row.lineKey) ?? {
       prodPlan: 0,
+      totalDailyProdPlan: 0,
       variants: new Map<string, number>(),
       tt: toNumber(row.tt),
       workHoursMinutes: 0,
@@ -628,6 +630,7 @@ async function getDailyPlanningPlanOverrides(
     const twoTr = toNumber(row.twoTr);
 
     current.prodPlan += toNumber(row.totalTarget) * progress;
+    current.totalDailyProdPlan += toNumber(row.totalTarget);
     current.variants.set("1TR", (current.variants.get("1TR") ?? 0) + oneTr * progress);
     current.variants.set("2TR", (current.variants.get("2TR") ?? 0) + twoTr * progress);
     overrides.set(row.lineKey, current);
@@ -667,7 +670,7 @@ async function getDailyPlanningPlanOverrides(
 
 function buildProblems(
   rows: RawProductionAchievementProblemRow[],
-  includeAllProblems = false,
+  includeAllProblems = true,
 ) {
   const problems = rows
     .flatMap((item) => [
@@ -712,6 +715,14 @@ function buildStopTime(rows: RawProductionAchievementProblemRow[]) {
       toNumber(row.defectMMin),
     0,
   );
+}
+
+function buildStopTimeByType(rows: RawProductionAchievementProblemRow[]) {
+  return {
+    AV: rows.reduce((total, row) => total + toNumber(row.lsAvMin), 0),
+    PE: rows.reduce((total, row) => total + toNumber(row.lsPeMin), 0),
+    RQ: rows.reduce((total, row) => total + toNumber(row.defectCMin) + toNumber(row.defectMMin), 0),
+  };
 }
 
 function buildVariantName(line: ProductionAchievementLineConfig, value: string | null) {
@@ -792,10 +803,11 @@ function buildLineCard(
   planOverride?: DailyPlanningPlanOverride,
   lastUpdatedAt: string | null = null,
   isAutoNoProduction = false,
-  includeAllProblems = false,
+  includeAllProblems = true,
 ): ProductionAchievementCard {
   const pairDivisor = line.key === "camshaft" ? 2 : 1;
   const prodPlan = planOverride?.prodPlan ?? 0;
+  const totalDailyProdPlan = planOverride?.totalDailyProdPlan ?? 0;
   const prodAct =
     summaryRows.reduce((total, row) => total + toNumber(row.prodAct), 0) /
     pairDivisor;
@@ -822,6 +834,7 @@ function buildLineCard(
     label: line.label,
     imageSrc: line.imageSrc,
     prodPlan,
+    totalDailyProdPlan,
     prodAct,
     oee,
     ttAct: actualTt,
@@ -835,6 +848,7 @@ function buildLineCard(
     lastUpdatedAt,
     workSchedule: planOverride?.workSchedule ?? [],
     stopTime: buildStopTime(problemRows),
+    stopTimeByType: buildStopTimeByType(problemRows),
     problems: buildProblems(problemRows, includeAllProblems),
     variants: buildVariants(line, summaryRows, planOverride),
   };

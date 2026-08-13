@@ -55,6 +55,7 @@ export type ProductionAchievementCard = {
   label: string;
   imageSrc: string;
   prodPlan: number;
+  totalDailyProdPlan: number;
   prodAct: number;
   oee: number | null;
   ttAct: string;
@@ -68,6 +69,7 @@ export type ProductionAchievementCard = {
   lastUpdatedAt: string | null;
   workSchedule: Array<{ start: string; end: string }>;
   stopTime: number;
+  stopTimeByType: { AV: number; PE: number; RQ: number };
   problems: ProductionAchievementProblem[];
   variants: ProductionAchievementVariant[];
 };
