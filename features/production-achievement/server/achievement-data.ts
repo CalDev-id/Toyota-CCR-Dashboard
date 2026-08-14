@@ -464,6 +464,7 @@ async function getDailyPlanningSlotRows(
     INNER JOIN t_daily_production_plan plan ON plan.id = slot.daily_plan_id
     WHERE plan.fdate = ?
       AND plan.fshift IN (${shiftValues.map(() => "?").join(",")})
+      AND plan.is_deleted = 0
       AND slot.is_hidden = 0
       AND slot.prod_minutes > 0
       AND (
@@ -498,6 +499,7 @@ async function getDailyPlanningSourceSnapshots(date: string, shiftValue: string)
     WHERE fdate = ?
       AND fshift = ?
       AND fgroup = 'all'
+      AND is_deleted = 0
   `,
     date,
     shiftValue,

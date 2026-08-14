@@ -1,9 +1,11 @@
 "use client";
 
 import {
-  deleteDailyManualOt,
+  deleteDailyOt,
+  deleteDailyPlanning,
   getManualDailyPlanningDraft,
   loadDailyPlanning,
+  loadDailyPlanningHistory,
   saveManualDailyPlanning,
   saveDailyOt,
   updateDailySlotSchedule,
@@ -13,6 +15,7 @@ import {
   updateDailyTarget,
 } from "@/features/daily-planning/actions";
 import { Fragment, startTransition, useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 
 const today = new Date().toISOString().slice(0, 10);
 const parts = ["assy", "cylblock", "cylhead", "camshaft", "crankshaft"];
@@ -29,6 +32,7 @@ type EditingRow = Pick<DailyRow, "start_time" | "end_time" | "fratio" | "remark"
 type DailyTotals = { minutes: number; target: number; oneTr: number; twoTr: number };
 type BreakSchedule = { label: string; start: string; end: string };
 type DraftTemplate = Awaited<ReturnType<typeof getManualDailyPlanningDraft>>[number];
+type HistoryItem = Awaited<ReturnType<typeof loadDailyPlanningHistory>>[number];
 type Toast = { message: string; type: "error" | "success" };
 const maghribBreak: BreakSchedule = { label: "Istirahat Salat Maghrib", start: "18:00", end: "18:15" };
 
@@ -44,6 +48,18 @@ function parseRatio(value: string) {
 function parseDecimal(value: unknown) {
   const numeric = Number(String(value ?? "").trim().replace(",", "."));
   return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function sanitizeDecimalInput(value: string) {
+  return value.replace(/[^0-9.,]/g, "");
+}
+
+function sanitizeRatioInput(value: string) {
+  return value.replace(/[^0-9:.]/g, "");
+}
+
+function sanitizeWholeNumberInput(value: string) {
+  return value.replace(/[^0-9]/g, "");
 }
 
 function calculateRowPlan(
@@ -81,10 +97,35 @@ function formatMinutesAsHours(minutes: number) {
   return `${hours.toFixed(hours % 1 === 0 ? 0 : 1)} jam`;
 }
 
-function formatRemarkAudit(value: Date | string | null, userName: string | null) {
-  if (!value) return "Audit remark belum tersedia";
-  const timestamp = new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-  return userName ? `Terakhir diubah oleh ${userName} pada ${timestamp}` : `Terakhir diubah pada ${timestamp}`;
+function formatHistoryAction(action: string) {
+  const labels: Record<string, string> = { PLAN_CREATED: "Planning dibuat", TARGET_UPDATED: "Total plan diubah", OEE_UPDATED: "OEE diubah", PARAMETERS_UPDATED: "TT / ratio diubah", TT_UPDATED: "TT diubah", RATIO_UPDATED: "Ratio diubah", SHARED_PARAMETERS_UPDATED: "Parameter bersama diubah", SCHEDULE_UPDATED: "Jam slot diubah", SLOT_HIDDEN: "Slot dihapus", REMARK_UPDATED: "Remark diubah", OT_ADDED: "OT ditambahkan", OT_DELETED: "OT dihapus", DAILY_PLANNING_DELETED: "Daily planning dihapus" };
+  return labels[action] ?? action;
+}
+
+function formatHistoryDetails(details: string | null) {
+  if (!details) return "";
+  try {
+    const parsed = JSON.parse(details) as Record<string, unknown>;
+    const formatValue = (value: unknown) => typeof value === "object" && value !== null ? Object.entries(value as Record<string, unknown>).map(([key, item]) => `${key}: ${item ?? "-"}`).join(", ") : String(value ?? "-");
+    if ("before" in parsed || "after" in parsed) {
+      return [`Before: ${formatValue(parsed.before)}`, `After: ${formatValue(parsed.after)}`].join(" · ");
+    }
+    return Object.entries(parsed).filter(([key, value]) => key !== "slot" && value !== null && value !== "").map(([key, value]) => `${key}: ${value}`).join(" · ");
+  } catch { return ""; }
+}
+
+function formatHistorySlot(details: string | null) {
+  if (!details) return "";
+  try {
+    const slot = (JSON.parse(details) as { slot?: { startTime?: string; endTime?: string; type?: string } }).slot;
+    return slot?.startTime && slot?.endTime ? `Slot ${slot.startTime} - ${slot.endTime}${slot.type === "ot" ? " · OT" : ""}` : "";
+  } catch { return ""; }
+}
+
+function formatHistoryTimestamp(value: string) {
+  return new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(
+    new Date(value.replace(" ", "T")),
+  );
 }
 
 function getBreakSchedule(date: string, part: string, shift: string): BreakSchedule[] {
@@ -196,6 +237,8 @@ function hasRowChanges(row: DailyRow, editing: EditingRow | undefined, isCamshaf
 }
 
 export default function DailyPlanningClient() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
   const [date, setDate] = useState(today);
   const [part, setPart] = useState("cylblock");
   const [shift, setShift] = useState("1");
@@ -207,10 +250,24 @@ export default function DailyPlanningClient() {
   const [isCreatingPlanning, setIsCreatingPlanning] = useState(false);
   const [isOtActionPending, setIsOtActionPending] = useState(false);
   const [isChoosingNightOtPosition, setIsChoosingNightOtPosition] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<DailyRow | null>(null);
+  const [isPlanningDeleteOpen, setIsPlanningDeleteOpen] = useState(false);
+  const [isDeletingPlanning, setIsDeletingPlanning] = useState(false);
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
 
   function showToast(message: string, type: Toast["type"]) {
     setToast({ message, type });
+  }
+
+  async function openHistory() {
+    setIsHistoryOpen(true);
+    setIsHistoryLoading(true);
+    try { setHistoryItems(await loadDailyPlanningHistory(part, date, shift)); }
+    catch (error) { showToast(error instanceof Error ? error.message : "History gagal dimuat.", "error"); setIsHistoryOpen(false); }
+    finally { setIsHistoryLoading(false); }
   }
 
   useEffect(() => {
@@ -485,7 +542,7 @@ export default function DailyPlanningClient() {
     }
   }
 
-  async function handleDeleteManualOt(id: number) {
+  async function handleDeleteOt(id: number) {
     setIsOtActionPending(true);
 
     try {
@@ -504,7 +561,7 @@ export default function DailyPlanningClient() {
         return;
       }
 
-      await deleteDailyManualOt(id);
+      await deleteDailyOt(id);
       await refresh();
     } catch (error) {
       showToast(error instanceof Error ? error.message : "OT gagal dihapus.", "error");
@@ -555,6 +612,32 @@ export default function DailyPlanningClient() {
     }
   }
 
+  async function confirmDelete() {
+    const row = deleteConfirmation;
+    if (!row) return;
+    setDeleteConfirmation(null);
+    const current = editing[row.id] ?? row;
+    if (parseDecimal(current.prod_minutes) === 0) {
+      await handleDeleteZeroMinuteSlot(row);
+    } else {
+      await handleDeleteOt(row.id);
+    }
+  }
+
+  async function confirmPlanningDelete() {
+    setIsDeletingPlanning(true);
+    try {
+      await deleteDailyPlanning(part, date, shift);
+      setIsPlanningDeleteOpen(false);
+      await refresh();
+      showToast("Daily planning berhasil dihapus.", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Daily planning gagal dihapus.", "error");
+    } finally {
+      setIsDeletingPlanning(false);
+    }
+  }
+
   function handleAddOtClick() {
     if (shift === "2" && otRows.length === 0) {
       setIsChoosingNightOtPosition(true);
@@ -575,7 +658,7 @@ export default function DailyPlanningClient() {
             <h2 className="text-base font-semibold text-[#101828]">{formatPart(part)} Detail</h2>
             <p className="mt-1 text-sm text-[#667085]">Daily planning filtered by date and shift</p>
           </div>
-          <div className="grid gap-2 sm:grid-cols-[160px_170px_112px_auto_auto] sm:items-end">
+          <div className="flex min-w-max flex-nowrap items-end gap-2 overflow-x-auto pb-1">
             <label className="block"><span className="sr-only">Date</span><input className="h-10 w-full rounded-lg border border-[#e4e7ec] px-3 text-sm font-medium text-[#344054]" type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
             <label className="relative block"><span className="sr-only">Line</span><select className="h-10 w-full appearance-none rounded-lg border border-[#e4e7ec] bg-white px-3 pr-10 text-sm font-medium text-[#344054]" value={part} onChange={(event) => setPart(event.target.value)}>{parts.map((item) => <option key={item} value={item}>{formatPart(item)}</option>)}</select><svg viewBox="0 0 24 24" aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#667085]"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg></label>
             <label className="relative block"><span className="sr-only">Shift</span><select className="h-10 w-full appearance-none rounded-lg border border-[#e4e7ec] bg-white px-3 pr-10 text-sm font-medium text-[#344054]" value={shift} onChange={(event) => setShift(event.target.value)}><option value="1">Day</option><option value="2">Night</option></select><svg viewBox="0 0 24 24" aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#667085]"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg></label>
@@ -625,6 +708,15 @@ export default function DailyPlanningClient() {
               </svg>
               Update
             </button>}
+            <button
+              className="order-1 inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#d0d5dd] bg-white px-4 text-sm font-semibold text-[#344054] transition hover:bg-[#f9fafb] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isDrafting}
+              type="button"
+              onClick={() => void openHistory()}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5M12 7v5l3 2" /></svg>
+              History
+            </button>
             {!data?.canCreatePlanning || isDrafting ? <button
               className="order-1 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#2563eb] px-4 text-sm font-semibold text-white shadow-none transition hover:bg-[#2563eb] disabled:cursor-not-allowed disabled:opacity-60 dark:bg-[#3b82f6] dark:hover:bg-[#3b82f6]"
               disabled={!canAddOt || isOtActionPending}
@@ -685,8 +777,8 @@ export default function DailyPlanningClient() {
                       </tr>
                     ))}
                   <tr className={row.slot_type === "ot" ? "bg-[#f3f7ff] dark:bg-[#0b367c] dark:text-white" : ""} style={row.slot_type === "ot" ? { boxShadow: "inset 4px 0 #2f80ff" } : undefined}>
-                    <td className="px-5 py-3"><div className="flex items-center gap-1"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.start_time} onChange={(event) => setEditingTimeValue(row.id, "start_time", event.target.value)} /><span>-</span><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.end_time} onChange={(event) => setEditingTimeValue(row.id, "end_time", event.target.value)} />{isZeroMinuteSlot ? <button aria-label="Hapus slot 0 menit" className="ml-1 grid size-8 place-items-center rounded-md text-[#b42318] transition hover:bg-[#fef3f2] disabled:opacity-60" disabled={isOtActionPending} title="Hapus slot 0 menit" type="button" onClick={() => void handleDeleteZeroMinuteSlot(row)}><svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5M14 11v5" /></svg></button> : row.slot_type === "ot" && row.is_schedule_override ? <button aria-label="Hapus OT manual" className="ml-1 grid size-8 place-items-center rounded-md text-[#b42318] transition hover:bg-[#fef3f2] disabled:opacity-60" disabled={isOtActionPending} title="Hapus OT manual" type="button" onClick={() => void handleDeleteManualOt(row.id)}><svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5M14 11v5" /></svg></button> : null}</div></td><td className="pl-0 pr-8"><span className="inline-flex h-9 min-w-16 items-center font-semibold text-[#101828]">{current.prod_minutes}</span></td><td className="pl-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.ftt} onChange={(event) => setEditingValue(row.id, "ftt", event.target.value)} /></td><td className="px-2"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.foee} onChange={(event) => setEditingValue(row.id, "foee", event.target.value)} /></td>{!isCamshaft ? <td className="pl-2 pr-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" value={current.fratio} onChange={(event) => setEditingValue(row.id, "fratio", event.target.value)} /></td> : null}
-                    <td className="pl-8"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" inputMode="numeric" value={displayedTarget} onChange={(event) => setEditingValue(row.id, "ftotal_target", event.target.value)} /></td><td className="px-2 font-semibold">{displayedOneTr}</td><td className="pl-2 pr-5 font-semibold">{displayedTwoTr}</td><td className="px-3 py-3"><div className="flex min-w-56 items-center gap-1"><input aria-label={`Remark ${current.start_time} sampai ${current.end_time}`} className="h-9 min-w-0 flex-1 rounded-lg border border-[#e4e7ec] px-2" maxLength={500} placeholder="Tambah remark" value={current.remark ?? ""} onChange={(event) => setEditingValue(row.id, "remark", event.target.value)} /><span aria-label={formatRemarkAudit(row.remark_updated_at, row.remark_updated_by_name)} className="group relative grid size-7 shrink-0 cursor-help place-items-center rounded-full text-[#667085] outline-none hover:bg-[#f2f4f7] focus:bg-[#f2f4f7]" tabIndex={0}><svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M14 11v5" /></svg><span role="tooltip" className="invisible absolute bottom-full right-0 z-20 mb-2 w-56 rounded-lg bg-[#101828] px-3 py-2 text-xs font-medium normal-case leading-5 text-white opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus:visible group-focus:opacity-100">{formatRemarkAudit(row.remark_updated_at, row.remark_updated_by_name)}</span></span></div></td>
+                    <td className="px-5 py-3"><div className="flex items-center gap-1"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.start_time} onChange={(event) => setEditingTimeValue(row.id, "start_time", event.target.value)} /><span>-</span><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" type="time" value={current.end_time} onChange={(event) => setEditingTimeValue(row.id, "end_time", event.target.value)} />{isZeroMinuteSlot ? <button aria-label="Hapus slot 0 menit" className="ml-1 grid size-8 place-items-center rounded-md text-[#b42318] transition hover:bg-[#fef3f2] disabled:opacity-60" disabled={isOtActionPending} title="Hapus slot 0 menit" type="button" onClick={() => setDeleteConfirmation(row)}><svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5M14 11v5" /></svg></button> : row.slot_type === "ot" ? <button aria-label="Hapus OT" className="ml-1 grid size-8 place-items-center rounded-md text-[#b42318] transition hover:bg-[#fef3f2] disabled:opacity-60" disabled={isOtActionPending} title="Hapus OT" type="button" onClick={() => setDeleteConfirmation(row)}><svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5M14 11v5" /></svg></button> : null}</div></td><td className="pl-0 pr-8"><span className="inline-flex h-9 min-w-16 items-center font-semibold text-[#101828]">{current.prod_minutes}</span></td><td className="pl-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.ftt} onChange={(event) => setEditingValue(row.id, "ftt", sanitizeDecimalInput(event.target.value))} /></td><td className="px-2"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" inputMode="decimal" value={current.foee} onChange={(event) => setEditingValue(row.id, "foee", sanitizeDecimalInput(event.target.value))} /></td>{!isCamshaft ? <td className="pl-2 pr-8"><input className="h-9 w-20 rounded-lg border border-[#e4e7ec] px-2" value={current.fratio} onChange={(event) => setEditingValue(row.id, "fratio", sanitizeRatioInput(event.target.value))} /></td> : null}
+                    <td className="pl-8"><input className="h-9 w-24 rounded-lg border border-[#e4e7ec] px-2" inputMode="numeric" value={displayedTarget} onChange={(event) => setEditingValue(row.id, "ftotal_target", sanitizeWholeNumberInput(event.target.value))} /></td><td className="px-2 font-semibold">{displayedOneTr}</td><td className="pl-2 pr-5 font-semibold">{displayedTwoTr}</td><td className="px-3 py-3"><input aria-label={`Remark ${current.start_time} sampai ${current.end_time}`} className="h-9 min-w-56 rounded-lg border border-[#e4e7ec] px-2" maxLength={500} placeholder="Tambah remark" value={current.remark ?? ""} onChange={(event) => setEditingValue(row.id, "remark", event.target.value)} /></td>
                   </tr>
                   </Fragment>
                 );
@@ -714,7 +806,45 @@ export default function DailyPlanningClient() {
             </tfoot> : null}
           </table>
         </div>
+        {isAdmin && data?.hasMonthlyData && !data.canCreatePlanning && !isDrafting ? <div className="border-t border-[#fecdca] bg-[#fffafa] px-5 py-5 text-right dark:border-[#7a271a] dark:bg-[#2d1215]">
+          <button className="h-10 rounded-lg border border-[#fda29b] px-4 text-sm font-semibold text-[#b42318] transition hover:bg-[#fef3f2] dark:border-[#f04438] dark:text-[#fda29b] dark:hover:bg-[#3b1111]" type="button" onClick={() => setIsPlanningDeleteOpen(true)}>Hapus Daily Planning</button>
+        </div> : null}
       </section>
+      {deleteConfirmation ? (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-[#101828]/45 p-4" role="dialog" aria-modal="true" aria-labelledby="delete-slot-title">
+          <div className="w-full max-w-md rounded-2xl border border-[#fecdca] bg-white p-5 shadow-xl dark:border-[#7a271a] dark:bg-[#1d1113]">
+            <h3 id="delete-slot-title" className="text-lg font-semibold text-[#101828] dark:text-[#f8fafc]">Hapus slot ini?</h3>
+            <p className="mt-2 text-sm text-[#667085] dark:text-[#a7b0c0]">Slot {deleteConfirmation.start_time} - {deleteConfirmation.end_time} ({deleteConfirmation.slot_type === "ot" ? "OT" : "0 menit"}) akan dihapus.</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button className="h-10 rounded-lg border border-[#d0d5dd] px-4 text-sm font-semibold text-[#344054] hover:bg-[#f9fafb] dark:border-[#384860] dark:text-[#d4dae5] dark:hover:bg-[#1f2937]" type="button" onClick={() => setDeleteConfirmation(null)}>Batal</button>
+              <button className="h-10 rounded-lg bg-[#d92d20] px-4 text-sm font-semibold text-white hover:bg-[#b42318] disabled:opacity-60" disabled={isOtActionPending} type="button" onClick={() => void confirmDelete()}>Hapus</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {isPlanningDeleteOpen ? (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-[#101828]/45 p-4" role="dialog" aria-modal="true" aria-labelledby="delete-planning-title">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-[#111827]">
+            <h3 id="delete-planning-title" className="text-lg font-semibold text-[#101828] dark:text-[#f8fafc]">Hapus Daily Planning?</h3>
+            <p className="mt-2 text-sm text-[#667085] dark:text-[#a7b0c0]">{formatPart(part)} · {date} · {shift === "1" ? "Day" : "Night"}</p>
+            <p className="mt-3 text-sm text-[#667085] dark:text-[#a7b0c0]">Seluruh slot planning aktif akan dihapus dari tampilan. Riwayat perubahan tetap tersimpan.</p>
+            <div className="mt-5 flex justify-end gap-2"><button className="h-10 rounded-lg border border-[#d0d5dd] px-4 text-sm font-semibold text-[#344054] hover:bg-[#f9fafb] dark:border-[#384860] dark:text-[#d4dae5] dark:hover:bg-[#1f2937]" disabled={isDeletingPlanning} type="button" onClick={() => setIsPlanningDeleteOpen(false)}>Batal</button><button className="h-10 rounded-lg bg-[#d92d20] px-4 text-sm font-semibold text-white hover:bg-[#b42318] disabled:opacity-60 dark:bg-[#f04438] dark:hover:bg-[#d92d20]" disabled={isDeletingPlanning} type="button" onClick={() => void confirmPlanningDelete()}>{isDeletingPlanning ? "Menghapus..." : "Hapus"}</button></div>
+          </div>
+        </div>
+      ) : null}
+      {isHistoryOpen ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#101828]/45 p-4" role="dialog" aria-modal="true" aria-labelledby="daily-history-title" onMouseDown={() => setIsHistoryOpen(false)}>
+          <div className="max-h-[80vh] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-[#111827]" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between border-b border-[#e4e7ec] px-5 py-4 dark:border-[#384860]">
+              <div><h3 id="daily-history-title" className="text-lg font-semibold text-[#101828] dark:text-[#f8fafc]">Daily Planning History</h3><p className="mt-1 text-sm text-[#667085] dark:text-[#a7b0c0]">{formatPart(part)} · {date} · {shift === "1" ? "Day" : "Night"}</p></div>
+              <button aria-label="Tutup history" className="grid size-8 place-items-center rounded-lg text-[#667085] hover:bg-[#f2f4f7] dark:hover:bg-[#1f2937]" type="button" onClick={() => setIsHistoryOpen(false)}><svg viewBox="0 0 24 24" aria-hidden="true" className="size-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2"><path d="m6 6 12 12M18 6 6 18" /></svg></button>
+            </div>
+            <div className="max-h-[calc(80vh-88px)] overflow-y-auto p-5">
+              {isHistoryLoading ? <p className="py-8 text-center text-sm text-[#667085]">Memuat history...</p> : historyItems.length === 0 ? <p className="py-8 text-center text-sm text-[#667085]">Belum ada riwayat perubahan.</p> : <ol className="space-y-4">{historyItems.map((item) => <li key={item.id} className="relative border-l-2 border-[#84adff] pl-4 pr-40"><p className="text-sm font-semibold text-[#101828] dark:text-[#f8fafc]">{formatHistoryAction(item.action)}</p><div className="absolute right-0 top-0 text-right text-xs"><p className="font-medium text-[#667085] dark:text-[#cbd5e1]">{item.created_by_name ?? "User tidak diketahui"}</p><p className="mt-0.5 text-[#98a2b3]">{formatHistoryTimestamp(item.created_at)}</p></div>{formatHistorySlot(item.details) ? <p className="mt-1 text-xs font-medium text-[#475467] dark:text-[#cbd5e1]">{formatHistorySlot(item.details)}</p> : null}{formatHistoryDetails(item.details) ? <p className="mt-1 break-words text-xs text-[#667085] dark:text-[#a7b0c0]">{formatHistoryDetails(item.details)}</p> : null}</li>)}</ol>}
+            </div>
+          </div>
+        </div>
+      ) : null}
       {isChoosingNightOtPosition ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#101828]/45 p-4" role="dialog" aria-modal="true" aria-labelledby="night-ot-title">
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl dark:bg-[#111827]">

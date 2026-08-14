@@ -59,7 +59,7 @@ const menuItems: MenuItem[] = [
     ),
   },
   {
-    label: "Daily Production",
+    label: "Production Instructions",
     href: "/production",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">

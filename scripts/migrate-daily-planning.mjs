@@ -13,6 +13,8 @@ const migrations = [
   "../database/migrations/20260731_daily_slot_parameters.sql",
   "../database/migrations/20260807_daily_manual_plan.sql",
   "../database/migrations/20260807_daily_hidden_ot.sql",
+  "../database/migrations/20260814_daily_planning_history.sql",
+  "../database/migrations/20260814_daily_planning_soft_delete.sql",
   "../database/migrations/20260807_daily_monthly_signature.sql",
   "../database/migrations/20260721_production_realtime_status.sql",
   "../database/migrations/20260724_line_stop_decisions.sql",

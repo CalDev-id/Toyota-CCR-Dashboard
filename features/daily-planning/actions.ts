@@ -1,7 +1,9 @@
 "use server";
 
 import {
-  deleteDailyManualOtData,
+  deleteDailyOtData,
+  deleteDailyPlanningData,
+  getDailyPlanningHistoryData,
   loadDailyPlanningData,
   getManualDailyPlanningTemplate,
   type ManualPlanningSlotInput,
@@ -33,6 +35,11 @@ export async function loadDailyPlanning(part: string, date: string, shift: strin
   return loadDailyPlanningData(part, date, shift);
 }
 
+export async function loadDailyPlanningHistory(part: string, date: string, shift: string) {
+  await requireUser();
+  return getDailyPlanningHistoryData(part, date, shift);
+}
+
 export async function getManualDailyPlanningDraft(part: string, date: string, shift: string) {
   await requireUser();
   return getManualDailyPlanningTemplate(part, date, shift);
@@ -45,7 +52,7 @@ export async function saveManualDailyPlanning(
   slots: ManualPlanningSlotInput[],
 ) {
   await requireUser();
-  await saveManualDailyPlanningData(part, date, shift, slots);
+  await saveManualDailyPlanningData(part, date, shift, slots, await getCurrentUserId());
   revalidatePath("/daily-planning");
 }
 
@@ -134,8 +141,15 @@ export async function saveDailyOt(
   revalidatePath("/daily-planning");
 }
 
-export async function deleteDailyManualOt(id: number) {
+export async function deleteDailyOt(id: number) {
   await requireUser();
-  await deleteDailyManualOtData(id);
+  await deleteDailyOtData(id, await getCurrentUserId());
   revalidatePath("/daily-planning");
+}
+
+export async function deleteDailyPlanning(part: string, date: string, shift: string) {
+  await requireRoles("ADMIN");
+  await deleteDailyPlanningData(part, date, shift, await getCurrentUserId());
+  revalidatePath("/daily-planning");
+  revalidatePath("/production-achievement");
 }

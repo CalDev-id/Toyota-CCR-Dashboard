@@ -24,6 +24,10 @@ function formatPercent(value: number | null) {
   }).format(Math.abs(value) <= 1 ? value * 100 : value)}%`;
 }
 
+function roundDisplayedPercent(value: number) {
+  return Math.round(value * 10) / 10;
+}
+
 function formatTt(value: string) {
   return value.trim() || "-";
 }
@@ -57,7 +61,7 @@ function meetsOeeTarget(value: number | null, target: number | null) {
   const normalizedValue = Math.abs(value) <= 1 ? value * 100 : value;
   const normalizedTarget = Math.abs(target) <= 1 ? target * 100 : target;
 
-  return Math.round(normalizedValue) >= normalizedTarget;
+  return roundDisplayedPercent(normalizedValue) >= roundDisplayedPercent(normalizedTarget);
 }
 
 function getOeeTargetClass(value: number | null, target: number | null) {
@@ -68,7 +72,9 @@ function getOeeTargetClass(value: number | null, target: number | null) {
   const normalizedValue = Math.abs(value) <= 1 ? value * 100 : value;
   const normalizedTarget = Math.abs(target) <= 1 ? target * 100 : target;
 
-  return Math.round(normalizedValue) >= normalizedTarget ? "text-[#027a48]" : "text-[#b42318]";
+  return roundDisplayedPercent(normalizedValue) >= roundDisplayedPercent(normalizedTarget)
+    ? "text-[#027a48]"
+    : "text-[#b42318]";
 }
 
 function getBalanceClass(value: number) {

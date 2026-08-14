@@ -63,11 +63,13 @@ export function metricTone(value: number | null) {
     return "text-[#98a2b3]";
   }
 
-  return Math.round(normalizePercent(value)) >= 90 ? "text-[#027a48]" : "text-[#b42318]";
+  return Math.round(normalizePercent(value) * 10) / 10 >= 90
+    ? "text-[#027a48]"
+    : "text-[#b42318]";
 }
 
 export function meetsOeeTarget(value: number | null) {
-  return value !== null && Math.round(normalizePercent(value)) >= 90;
+  return value !== null && Math.round(normalizePercent(value) * 10) / 10 >= 90;
 }
 
 export function isSingleShiftLine(line: AnalysisChartLine) {
