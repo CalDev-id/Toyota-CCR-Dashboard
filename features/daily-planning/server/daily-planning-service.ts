@@ -6,7 +6,15 @@ type SlotTemplate = { order: number; start: string; end: string; minutes: number
 export type ManualPlanningSlotInput = { order: number; startTime: string; endTime: string; slotType: "normal" | "ot"; tt: number; oee: number; ratio: string };
 type Plan = { id: number; override_tt: number | null; override_ratio: string | null; source_tt: number | null; source_oee: number | null; source_ratio: string | null; source_ot_minutes: number | null; source_signature: string | null; is_manual_plan: number; is_deleted: number };
 type Slot = { id: number; slot_order: number; start_time: string; end_time: string; prod_minutes: number; slot_type: "normal" | "ot"; oee: number | null; is_oee_override: number; tt_override: number | null; ratio_override: string | null; total_target: number; one_tr: number; two_tr: number; is_schedule_override: number; is_hidden: number; remark: string | null; remark_updated_at: Date | null; remark_updated_by_name: string | null };
-type HistoryDb = Pick<typeof prisma, "$executeRawUnsafe">;
+type HistoryDb = Pick<typeof prisma, "$executeRawUnsafe" | "$queryRawUnsafe">;
+export type RamadanScheduleInput = {
+  startDate: string; endDate: string;
+  dayRegularStart: string; dayRegularEnd: string; dayRegularBreakOneStart: string; dayRegularBreakOneEnd: string; dayRegularBreakStart: string; dayRegularBreakEnd: string; dayRegularBreakTwoStart: string; dayRegularBreakTwoEnd: string;
+  dayFridayStart: string; dayFridayEnd: string; dayFridayBreakOneStart: string; dayFridayBreakOneEnd: string; dayFridayBreakStart: string; dayFridayBreakEnd: string; dayFridayBreakTwoStart: string; dayFridayBreakTwoEnd: string;
+  nightStart: string; nightEnd: string; nightBreakOneStart: string; nightBreakOneEnd: string; nightBreakTwoStart: string; nightBreakTwoEnd: string;
+};
+export type RamadanSchedule = RamadanScheduleInput & { isActive: boolean };
+type BreakSchedule = { label: string; start: string; end: string };
 
 const parts = new Set(["assy", "cylblock", "cylhead", "camshaft", "crankshaft"]);
 const maghribBreak = { start: "18:00", end: "18:15" };
@@ -66,6 +74,56 @@ function tableFor(part: string) { if (!parts.has(part)) throw new Error("Invalid
 function toNullableNumber(value: unknown) { if (value === null || value === undefined || value === "") return null; const numeric = Number(value); return Number.isFinite(numeric) ? numeric : null; }
 function shiftAliases(value: string) {
   return value === "1" ? ["1", "Day", "DAY", "day"] : value === "2" ? ["2", "Night", "NIGHT", "night"] : [value];
+}
+
+const ramadanDefaults: RamadanSchedule = {
+  isActive: false, startDate: "", endDate: "",
+  dayRegularStart: "07:20", dayRegularEnd: "15:50", dayRegularBreakOneStart: "09:30", dayRegularBreakOneEnd: "09:40", dayRegularBreakStart: "12:00", dayRegularBreakEnd: "12:35", dayRegularBreakTwoStart: "14:00", dayRegularBreakTwoEnd: "14:10",
+  dayFridayStart: "07:20", dayFridayEnd: "16:15", dayFridayBreakOneStart: "09:30", dayFridayBreakOneEnd: "09:40", dayFridayBreakStart: "12:00", dayFridayBreakEnd: "13:00", dayFridayBreakTwoStart: "14:30", dayFridayBreakTwoEnd: "14:40",
+  nightStart: "20:30", nightEnd: "05:50", nightBreakOneStart: "00:00", nightBreakOneEnd: "00:20", nightBreakTwoStart: "04:00", nightBreakTwoEnd: "05:00",
+};
+const ramadanColumns = "is_active,DATE_FORMAT(start_date,'%Y-%m-%d') AS start_date,DATE_FORMAT(end_date,'%Y-%m-%d') AS end_date,DATE_FORMAT(day_regular_start,'%H:%i') AS day_regular_start,DATE_FORMAT(day_regular_end,'%H:%i') AS day_regular_end,DATE_FORMAT(day_regular_break_one_start,'%H:%i') AS day_regular_break_one_start,DATE_FORMAT(day_regular_break_one_end,'%H:%i') AS day_regular_break_one_end,DATE_FORMAT(day_regular_break_start,'%H:%i') AS day_regular_break_start,DATE_FORMAT(day_regular_break_end,'%H:%i') AS day_regular_break_end,DATE_FORMAT(day_regular_break_two_start,'%H:%i') AS day_regular_break_two_start,DATE_FORMAT(day_regular_break_two_end,'%H:%i') AS day_regular_break_two_end,DATE_FORMAT(day_friday_start,'%H:%i') AS day_friday_start,DATE_FORMAT(day_friday_end,'%H:%i') AS day_friday_end,DATE_FORMAT(day_friday_break_one_start,'%H:%i') AS day_friday_break_one_start,DATE_FORMAT(day_friday_break_one_end,'%H:%i') AS day_friday_break_one_end,DATE_FORMAT(day_friday_break_start,'%H:%i') AS day_friday_break_start,DATE_FORMAT(day_friday_break_end,'%H:%i') AS day_friday_break_end,DATE_FORMAT(day_friday_break_two_start,'%H:%i') AS day_friday_break_two_start,DATE_FORMAT(day_friday_break_two_end,'%H:%i') AS day_friday_break_two_end,DATE_FORMAT(night_start,'%H:%i') AS night_start,DATE_FORMAT(night_end,'%H:%i') AS night_end,DATE_FORMAT(night_break_one_start,'%H:%i') AS night_break_one_start,DATE_FORMAT(night_break_one_end,'%H:%i') AS night_break_one_end,DATE_FORMAT(night_break_two_start,'%H:%i') AS night_break_two_start,DATE_FORMAT(night_break_two_end,'%H:%i') AS night_break_two_end";
+function asRamadanSchedule(row?: Record<string, unknown>): RamadanSchedule {
+  if (!row) return ramadanDefaults;
+  const normalizeLegacyDayStart = (value: unknown) => String(value) === "07:15" ? "07:20" : String(value);
+  return { isActive: Boolean(row.is_active), startDate: String(row.start_date ?? ""), endDate: String(row.end_date ?? ""), dayRegularStart: normalizeLegacyDayStart(row.day_regular_start), dayRegularEnd: String(row.day_regular_end), dayRegularBreakOneStart: String(row.day_regular_break_one_start), dayRegularBreakOneEnd: String(row.day_regular_break_one_end), dayRegularBreakStart: String(row.day_regular_break_start), dayRegularBreakEnd: String(row.day_regular_break_end), dayRegularBreakTwoStart: String(row.day_regular_break_two_start), dayRegularBreakTwoEnd: String(row.day_regular_break_two_end), dayFridayStart: normalizeLegacyDayStart(row.day_friday_start), dayFridayEnd: String(row.day_friday_end), dayFridayBreakOneStart: String(row.day_friday_break_one_start), dayFridayBreakOneEnd: String(row.day_friday_break_one_end), dayFridayBreakStart: String(row.day_friday_break_start), dayFridayBreakEnd: String(row.day_friday_break_end), dayFridayBreakTwoStart: String(row.day_friday_break_two_start), dayFridayBreakTwoEnd: String(row.day_friday_break_two_end), nightStart: String(row.night_start), nightEnd: String(row.night_end), nightBreakOneStart: String(row.night_break_one_start), nightBreakOneEnd: String(row.night_break_one_end), nightBreakTwoStart: String(row.night_break_two_start), nightBreakTwoEnd: String(row.night_break_two_end) };
+}
+function isRamadanDate(schedule: RamadanSchedule, date: string) { return schedule.isActive && Boolean(schedule.startDate) && Boolean(schedule.endDate) && date >= schedule.startDate && date <= schedule.endDate; }
+function slotsFromSessions(sessions: Array<{ start: string; end: string }>) {
+  const slots: SlotTemplate[] = []; let order = 1;
+  for (const session of sessions) {
+    let cursor = session.start;
+    let remaining = calculateDurationMinutes(session.start, session.end);
+    while (remaining > 0) {
+      const minutes = Math.min(60, remaining);
+      if (remaining <= 30 && slots.at(-1)?.end === cursor) {
+        const previous = slots.at(-1)!;
+        previous.end = addMinutes(previous.end, minutes);
+        previous.minutes += minutes;
+      } else {
+        slots.push({ order: order++, start: cursor, end: addMinutes(cursor, minutes), minutes, type: "normal" });
+      }
+      cursor = addMinutes(cursor, minutes);
+      remaining -= minutes;
+    }
+  }
+  return slots;
+}
+function ramadanTemplate(part: string, date: string, shift: string, schedule: RamadanSchedule) {
+  if (shift === "2") return slotsFromSessions([{ start: schedule.nightStart, end: schedule.nightBreakOneStart }, { start: schedule.nightBreakOneEnd, end: schedule.nightBreakTwoStart }, { start: schedule.nightBreakTwoEnd, end: schedule.nightEnd }]);
+  const friday = new Date(`${date}T00:00:00`).getDay() === 5;
+  const end = part === "assy" ? (friday ? "16:10" : "15:45") : friday ? schedule.dayFridayEnd : schedule.dayRegularEnd;
+  return slotsFromSessions([{ start: friday ? schedule.dayFridayStart : schedule.dayRegularStart, end: friday ? schedule.dayFridayBreakOneStart : schedule.dayRegularBreakOneStart }, { start: friday ? schedule.dayFridayBreakOneEnd : schedule.dayRegularBreakOneEnd, end: friday ? schedule.dayFridayBreakStart : schedule.dayRegularBreakStart }, { start: friday ? schedule.dayFridayBreakEnd : schedule.dayRegularBreakEnd, end: friday ? schedule.dayFridayBreakTwoStart : schedule.dayRegularBreakTwoStart }, { start: friday ? schedule.dayFridayBreakTwoEnd : schedule.dayRegularBreakTwoEnd, end }]);
+}
+function ramadanBreaks(date: string, shift: string, schedule: RamadanSchedule): BreakSchedule[] {
+  if (!isRamadanDate(schedule, date)) return [];
+  if (shift === "2") return [{ label: "Istirahat 1", start: schedule.nightBreakOneStart, end: schedule.nightBreakOneEnd }, { label: "Istirahat 2", start: schedule.nightBreakTwoStart, end: schedule.nightBreakTwoEnd }];
+  const friday = new Date(`${date}T00:00:00`).getDay() === 5;
+  return [{ label: "Istirahat 1", start: friday ? schedule.dayFridayBreakOneStart : schedule.dayRegularBreakOneStart, end: friday ? schedule.dayFridayBreakOneEnd : schedule.dayRegularBreakOneEnd }, { label: "Istirahat makan", start: friday ? schedule.dayFridayBreakStart : schedule.dayRegularBreakStart, end: friday ? schedule.dayFridayBreakEnd : schedule.dayRegularBreakEnd }, { label: "Istirahat 2", start: friday ? schedule.dayFridayBreakTwoStart : schedule.dayRegularBreakTwoStart, end: friday ? schedule.dayFridayBreakTwoEnd : schedule.dayRegularBreakTwoEnd }];
+}
+export async function getRamadanScheduleData() {
+  const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT ${ramadanColumns} FROM t_daily_ramadan_schedule WHERE id=1 LIMIT 1`);
+  return asRamadanSchedule(rows[0]);
 }
 
 async function recordDailyPlanningHistory(
@@ -152,10 +210,11 @@ function getTemplate(part: string, date: string, shift: string, otMinutes: numbe
   return base.flatMap((slot) => { if (slot.type === "normal") return [slot]; if (shift === "1") { const minutes = otMinutes; return minutes ? dayOtSlots(slot.order, slot.start, minutes) : []; } const minutes = slot.order === 1 ? Math.min(otMinutes, 60) : Math.min(Math.max(otMinutes - 60, 0), 30); return minutes ? [{ ...slot, minutes, end: addMinutes(slot.start, minutes) }] : []; });
 }
 
-export function getManualDailyPlanningTemplate(part: string, date: string, shift: string) {
+export async function getManualDailyPlanningTemplate(part: string, date: string, shift: string) {
   if (shift !== "1" && shift !== "2") throw new Error("Shift tidak valid");
   tableFor(part);
-  return getTemplate(part, date, shift, 0).filter((slot) => slot.type === "normal");
+  const schedule = await getRamadanScheduleData();
+  return (isRamadanDate(schedule, date) ? ramadanTemplate(part, date, shift, schedule) : getTemplate(part, date, shift, 0)).filter((slot) => slot.type === "normal");
 }
 
 export async function saveManualDailyPlanningData(
@@ -244,6 +303,8 @@ export async function saveManualDailyPlanningData(
 
 export async function loadDailyPlanningData(part: string, date: string, shift: string) {
   const context = await getPlanContext(part,date,shift); const { db, plan, tt, ratio, monthlyOee, otMinutes } = context;
+  const ramadanSchedule = await getRamadanScheduleData();
+  const breaks = ramadanBreaks(date, shift, ramadanSchedule);
   if (!context.hasMonthlyData || !plan) {
     return {
       group: "all",
@@ -259,7 +320,7 @@ export async function loadDailyPlanningData(part: string, date: string, shift: s
         : context.canCreatePlanning
         ? "Total monthly plan untuk tanggal ini adalah 0. Buat daily planning untuk menampilkan jam normal."
         : "Data monthly untuk tanggal ini belum diisi.",
-      rows: [],
+      rows: [], breaks,
     };
   }
 
@@ -283,9 +344,9 @@ export async function loadDailyPlanningData(part: string, date: string, shift: s
       };
     });
 
-    return { group: "all", tt: 0, oee: 0, ratio: "", ratioOne: 1, ratioTwo: 1, hasMonthlyData: true, canCreatePlanning: false, message: "", rows };
+    return { group: "all", tt: 0, oee: 0, ratio: "", ratioOne: 1, ratioTwo: 1, hasMonthlyData: true, canCreatePlanning: false, message: "", rows, breaks };
   }
-  const template = getTemplate(part,date,shift,otMinutes);
+  const template = isRamadanDate(ramadanSchedule, date) ? ramadanTemplate(part, date, shift, ramadanSchedule) : getTemplate(part,date,shift,otMinutes);
   const [ratioOne, ratioTwo] = parseRatio(ratio);
   const templateTargets = targetsForSlots(part, shift, template.map((slot) => {
     const existingSlot = existing.find((row: Slot) => Number(row.slot_order) === slot.order);
@@ -346,7 +407,7 @@ export async function loadDailyPlanningData(part: string, date: string, shift: s
 
   const slots = (await getDailyPlanSlots(plan.id)).filter((slot) => !slot.is_hidden);
   const rows = slots.map((slot: Slot) => { const { tt_override, ratio_override, ...serializableSlot } = slot; const oee = slot.is_oee_override ? Number(slot.oee) : monthlyOee; const slotTt = toNullableNumber(tt_override) ?? tt ?? 0; const slotRatio = part === "camshaft" ? "" : (ratio_override ?? ratio); const [slotRatioOne,slotRatioTwo] = parseRatio(slotRatio); const calculatedTarget = targetFor(Number(slot.prod_minutes),slotTt,oee ?? 0); const target = slot.is_schedule_override ? Number(slot.total_target) : calculatedTarget; const [oneTr,twoTr] = splitTarget(part,target,slotRatioOne,slotRatioTwo); return { ...serializableSlot, oee: Number(slot.oee ?? 0), ftt: slotTt || "", foee: oee ?? "", fratio: slotRatio, ftotal_target:target, f1tr:oneTr, f2tr:twoTr }; });
-  return { group: "all", tt, oee: monthlyOee, ratio, ratioOne, ratioTwo, hasMonthlyData: true, canCreatePlanning: false, message: "", rows };
+  return { group: "all", tt, oee: monthlyOee, ratio, ratioOne, ratioTwo, hasMonthlyData: true, canCreatePlanning: false, message: "", rows, breaks };
 }
 
 export async function updateDailyTargetData(part: string, id: number, target: number, ratioOne: number, ratioTwo: number, userId: number) { const previous = await prisma.$queryRawUnsafe<Array<{ total_target: number; one_tr: number; two_tr: number }>>("SELECT total_target,one_tr,two_tr FROM t_daily_production_plan_slot WHERE id=? LIMIT 1", id); if (!previous[0]) throw new Error("Slot tidak ditemukan"); const [oneTr,twoTr] = splitTarget(part,Math.max(0,target),ratioOne,ratioTwo); await prisma.$executeRawUnsafe("UPDATE t_daily_production_plan_slot SET total_target=?,one_tr=?,two_tr=?,is_schedule_override=1,remark_updated_by=?,remark_updated_at=CURRENT_TIMESTAMP WHERE id=?",target,oneTr,twoTr,userId,id); await recordSlotHistory(id, "TARGET_UPDATED", { before: previous[0], after: { total_target: target, one_tr: oneTr, two_tr: twoTr } }, userId); }
@@ -586,5 +647,64 @@ export async function deleteDailyPlanningData(part: string, date: string, shift:
       plan.id,
     );
     await recordDailyPlanningHistory(tx, plan.id, "DAILY_PLANNING_DELETED", { line: part, date, shift, slotCount: Number(plan.slot_count) }, userId);
+  });
+}
+
+function validateRamadanSchedule(input: RamadanScheduleInput) {
+  if (!input.startDate || !input.endDate || input.startDate > input.endDate) throw new Error("Periode Ramadan tidak valid.");
+  const times = Object.values(input).filter((value) => typeof value === "string" && value.includes(":"));
+  if (times.some((time) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(time)))) throw new Error("Format jam Ramadan tidak valid.");
+}
+
+type RamadanPlan = { id: number; line_key: string; fdate: string; fshift: string; source_tt: number | null; override_tt: number | null; source_oee: number | null; source_ratio: string | null; override_ratio: string | null };
+async function replacePlanWithTemplate(tx: HistoryDb, plan: RamadanPlan, template: SlotTemplate[], userId: number, action: string) {
+  const previousSlots = await tx.$queryRawUnsafe<Slot[]>("SELECT id,slot_order,TIME_FORMAT(start_time,'%H:%i') AS start_time,TIME_FORMAT(end_time,'%H:%i') AS end_time,prod_minutes,slot_type,oee,is_oee_override,tt_override,ratio_override,total_target,one_tr,two_tr,is_schedule_override,is_hidden,remark,remark_updated_at,NULL AS remark_updated_by_name FROM t_daily_production_plan_slot WHERE daily_plan_id=? ORDER BY slot_order", plan.id);
+  const fallbackTt = Number(plan.override_tt ?? plan.source_tt ?? 0);
+  const fallbackOee = Number(plan.source_oee ?? 0);
+  const fallbackRatio = plan.line_key === "camshaft" ? "" : String(plan.override_ratio ?? plan.source_ratio ?? "");
+  await tx.$executeRawUnsafe("DELETE FROM t_daily_production_plan_slot WHERE daily_plan_id=?", plan.id);
+  for (const slot of template) {
+    const previous = previousSlots.find((item) => Number(item.slot_order) === slot.order && item.slot_type === "normal");
+    const tt = Number(previous?.tt_override ?? fallbackTt);
+    const oee = previous?.is_oee_override ? Number(previous.oee ?? 0) : fallbackOee;
+    const ratio = plan.line_key === "camshaft" ? null : (previous?.ratio_override ?? fallbackRatio);
+    const target = previous?.is_schedule_override ? Number(previous.total_target) : targetFor(slot.minutes, tt, oee);
+    const [one, two] = parseRatio(ratio);
+    const [oneTr, twoTr] = splitTarget(plan.line_key, target, one, two);
+    await tx.$executeRawUnsafe(
+      "INSERT INTO t_daily_production_plan_slot (daily_plan_id,slot_order,start_time,end_time,prod_minutes,slot_type,oee,is_oee_override,tt_override,ratio_override,total_target,one_tr,two_tr,is_schedule_override,is_hidden,remark,remark_updated_at,remark_updated_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)",
+      plan.id, slot.order, slot.start, slot.end, slot.minutes, "normal", previous?.oee ?? null, previous?.is_oee_override ?? 0, previous?.tt_override ?? null, ratio, target, oneTr, twoTr, previous?.is_schedule_override ?? 0, 0, previous?.remark ?? null, previous?.remark_updated_at ?? null,
+    );
+  }
+  await recordDailyPlanningHistory(tx, plan.id, action, { date: plan.fdate, shift: plan.fshift, slotCount: template.length }, userId);
+}
+
+async function rewriteRamadanPlans(tx: HistoryDb, schedule: RamadanSchedule, userId: number, action: string, useRamadan: boolean) {
+  const plans = await tx.$queryRawUnsafe<RamadanPlan[]>("SELECT id,line_key,DATE_FORMAT(fdate,'%Y-%m-%d') AS fdate,fshift,source_tt,override_tt,source_oee,source_ratio,override_ratio FROM t_daily_production_plan WHERE is_deleted=0 AND fdate BETWEEN ? AND ?", schedule.startDate, schedule.endDate);
+  for (const plan of plans) {
+    const template = useRamadan ? ramadanTemplate(plan.line_key, plan.fdate, plan.fshift, schedule) : getTemplate(plan.line_key, plan.fdate, plan.fshift, 0).filter((slot) => slot.type === "normal");
+    await replacePlanWithTemplate(tx, plan, template, userId, action);
+  }
+  return plans.length;
+}
+
+export async function applyRamadanScheduleData(input: RamadanScheduleInput, userId: number) {
+  validateRamadanSchedule(input);
+  return prisma.$transaction(async (tx) => {
+    const schedule: RamadanSchedule = { ...input, isActive: true };
+    await tx.$executeRawUnsafe("UPDATE t_daily_ramadan_schedule SET is_active=1,start_date=?,end_date=?,day_regular_start=?,day_regular_end=?,day_regular_break_one_start=?,day_regular_break_one_end=?,day_regular_break_start=?,day_regular_break_end=?,day_regular_break_two_start=?,day_regular_break_two_end=?,day_friday_start=?,day_friday_end=?,day_friday_break_one_start=?,day_friday_break_one_end=?,day_friday_break_start=?,day_friday_break_end=?,day_friday_break_two_start=?,day_friday_break_two_end=?,night_start=?,night_end=?,night_break_one_start=?,night_break_one_end=?,night_break_two_start=?,night_break_two_end=?,updated_by=? WHERE id=1", input.startDate,input.endDate,input.dayRegularStart,input.dayRegularEnd,input.dayRegularBreakOneStart,input.dayRegularBreakOneEnd,input.dayRegularBreakStart,input.dayRegularBreakEnd,input.dayRegularBreakTwoStart,input.dayRegularBreakTwoEnd,input.dayFridayStart,input.dayFridayEnd,input.dayFridayBreakOneStart,input.dayFridayBreakOneEnd,input.dayFridayBreakStart,input.dayFridayBreakEnd,input.dayFridayBreakTwoStart,input.dayFridayBreakTwoEnd,input.nightStart,input.nightEnd,input.nightBreakOneStart,input.nightBreakOneEnd,input.nightBreakTwoStart,input.nightBreakTwoEnd,userId);
+    const count = await rewriteRamadanPlans(tx, schedule, userId, "RAMADAN_SCHEDULE_APPLIED", true);
+    return { count };
+  });
+}
+
+export async function deactivateRamadanScheduleData(userId: number) {
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT ${ramadanColumns} FROM t_daily_ramadan_schedule WHERE id=1 LIMIT 1`);
+    const schedule = asRamadanSchedule(rows[0]);
+    if (!schedule.isActive || !schedule.startDate || !schedule.endDate) return { count: 0 };
+    const count = await rewriteRamadanPlans(tx, schedule, userId, "RAMADAN_SCHEDULE_REMOVED", false);
+    await tx.$executeRawUnsafe("UPDATE t_daily_ramadan_schedule SET is_active=0,updated_by=? WHERE id=1", userId);
+    return { count };
   });
 }

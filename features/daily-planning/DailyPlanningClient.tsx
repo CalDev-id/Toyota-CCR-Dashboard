@@ -1,11 +1,14 @@
 "use client";
 
 import {
+  applyRamadanSchedule,
+  deactivateRamadanSchedule,
   deleteDailyOt,
   deleteDailyPlanning,
   getManualDailyPlanningDraft,
   loadDailyPlanning,
   loadDailyPlanningHistory,
+  loadRamadanSchedule,
   saveManualDailyPlanning,
   saveDailyOt,
   updateDailySlotSchedule,
@@ -33,6 +36,7 @@ type DailyTotals = { minutes: number; target: number; oneTr: number; twoTr: numb
 type BreakSchedule = { label: string; start: string; end: string };
 type DraftTemplate = Awaited<ReturnType<typeof getManualDailyPlanningDraft>>[number];
 type HistoryItem = Awaited<ReturnType<typeof loadDailyPlanningHistory>>[number];
+type RamadanSchedule = Awaited<ReturnType<typeof loadRamadanSchedule>>;
 type Toast = { message: string; type: "error" | "success" };
 const maghribBreak: BreakSchedule = { label: "Istirahat Salat Maghrib", start: "18:00", end: "18:15" };
 
@@ -98,7 +102,7 @@ function formatMinutesAsHours(minutes: number) {
 }
 
 function formatHistoryAction(action: string) {
-  const labels: Record<string, string> = { PLAN_CREATED: "Planning dibuat", TARGET_UPDATED: "Total plan diubah", OEE_UPDATED: "OEE diubah", PARAMETERS_UPDATED: "TT / ratio diubah", TT_UPDATED: "TT diubah", RATIO_UPDATED: "Ratio diubah", SHARED_PARAMETERS_UPDATED: "Parameter bersama diubah", SCHEDULE_UPDATED: "Jam slot diubah", SLOT_HIDDEN: "Slot dihapus", REMARK_UPDATED: "Remark diubah", OT_ADDED: "OT ditambahkan", OT_DELETED: "OT dihapus", DAILY_PLANNING_DELETED: "Daily planning dihapus" };
+  const labels: Record<string, string> = { PLAN_CREATED: "Planning dibuat", TARGET_UPDATED: "Total plan diubah", OEE_UPDATED: "OEE diubah", PARAMETERS_UPDATED: "TT / ratio diubah", TT_UPDATED: "TT diubah", RATIO_UPDATED: "Ratio diubah", SHARED_PARAMETERS_UPDATED: "Parameter bersama diubah", SCHEDULE_UPDATED: "Jam slot diubah", SLOT_HIDDEN: "Slot dihapus", REMARK_UPDATED: "Remark diubah", OT_ADDED: "OT ditambahkan", OT_DELETED: "OT dihapus", DAILY_PLANNING_DELETED: "Daily planning dihapus", RAMADAN_SCHEDULE_APPLIED: "Ramadan schedule diterapkan", RAMADAN_SCHEDULE_REMOVED: "Ramadan schedule dinonaktifkan" };
   return labels[action] ?? action;
 }
 
@@ -254,6 +258,10 @@ export default function DailyPlanningClient() {
   const [deleteConfirmation, setDeleteConfirmation] = useState<DailyRow | null>(null);
   const [isPlanningDeleteOpen, setIsPlanningDeleteOpen] = useState(false);
   const [isDeletingPlanning, setIsDeletingPlanning] = useState(false);
+  const [isAdminZoneOpen, setIsAdminZoneOpen] = useState(false);
+  const [ramadanSchedule, setRamadanSchedule] = useState<RamadanSchedule | null>(null);
+  const [ramadanConfirmation, setRamadanConfirmation] = useState<"apply" | "deactivate" | null>(null);
+  const [isRamadanPending, setIsRamadanPending] = useState(false);
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
@@ -298,11 +306,17 @@ export default function DailyPlanningClient() {
     })();
   }, [date, part, shift]);
 
+  useEffect(() => {
+    if (!isAdmin) return;
+    void loadRamadanSchedule().then(setRamadanSchedule).catch(() => undefined);
+  }, [isAdmin]);
+
   const isDrafting = draftRows !== null;
   const persistedRows = data?.rows ?? [];
   const visibleRows = draftRows ?? [...persistedRows, ...pendingOtRows].sort((left, right) => left.slot_order - right.slot_order);
   const isCamshaft = part === "camshaft";
-  const breakSchedule = getBreakSchedule(date, part, shift);
+  const isRamadanCurrent = Boolean(ramadanSchedule?.isActive && ramadanSchedule.startDate && ramadanSchedule.endDate && date >= ramadanSchedule.startDate && date <= ramadanSchedule.endDate);
+  const breakSchedule = data?.breaks?.length ? data.breaks : getBreakSchedule(date, part, shift);
   const emptyMessage = data && !data.hasMonthlyData ? data.message : "Tidak ada data daily planning.";
   const changedRows = persistedRows.filter((row: DailyRow) => hasRowChanges(row, editing[row.id], isCamshaft));
   const hasPendingUpdates = changedRows.length > 0 || pendingOtRows.length > 0;
@@ -319,6 +333,24 @@ export default function DailyPlanningClient() {
       twoTr: result.twoTr + calculated.twoTr,
     };
   }, { minutes: 0, target: 0, oneTr: 0, twoTr: 0 });
+
+  function updateRamadanField(field: keyof RamadanSchedule, value: string) {
+    setRamadanSchedule((current) => current ? { ...current, [field]: value } : current);
+  }
+
+  async function confirmRamadanSchedule() {
+    if (!ramadanSchedule || !ramadanConfirmation) return;
+    setIsRamadanPending(true);
+    try {
+      const result = ramadanConfirmation === "apply" ? await applyRamadanSchedule(ramadanSchedule) : await deactivateRamadanSchedule();
+      const nextSchedule = await loadRamadanSchedule();
+      setRamadanSchedule(nextSchedule);
+      setRamadanConfirmation(null);
+      await refresh();
+      showToast(ramadanConfirmation === "apply" ? `Ramadan schedule diterapkan ke ${result.count} planning.` : `${result.count} planning dikembalikan ke jadwal normal.`, "success");
+    } catch (error) { showToast(error instanceof Error ? error.message : "Ramadan schedule gagal diproses.", "error"); }
+    finally { setIsRamadanPending(false); }
+  }
 
   function setEditingValue<T extends keyof EditingRow>(id: number, field: T, value: EditingRow[T]) {
     setEditing((current) => ({
@@ -655,7 +687,7 @@ export default function DailyPlanningClient() {
           style={{ borderBottomColor: "#84adff" }}
         >
           <div>
-            <h2 className="text-base font-semibold text-[#101828]">{formatPart(part)} Detail</h2>
+            <div className="flex items-center gap-2"><h2 className="text-base font-semibold text-[#101828] dark:text-[#f8fafc]">{formatPart(part)} Detail</h2>{isRamadanCurrent ? <span className="rounded-full bg-[#e0f2fe] px-2.5 py-1 text-xs font-semibold text-[#175cd3] dark:bg-[#102a43] dark:text-[#84caff]">Ramadan Schedule</span> : null}</div>
             <p className="mt-1 text-sm text-[#667085]">Daily planning filtered by date and shift</p>
           </div>
           <div className="flex min-w-max flex-nowrap items-end gap-2 overflow-x-auto pb-1">
@@ -806,8 +838,17 @@ export default function DailyPlanningClient() {
             </tfoot> : null}
           </table>
         </div>
-        {isAdmin && data?.hasMonthlyData && !data.canCreatePlanning && !isDrafting ? <div className="border-t border-[#fecdca] bg-[#fffafa] px-5 py-5 text-right dark:border-[#7a271a] dark:bg-[#2d1215]">
-          <button className="h-10 rounded-lg border border-[#fda29b] px-4 text-sm font-semibold text-[#b42318] transition hover:bg-[#fef3f2] dark:border-[#f04438] dark:text-[#fda29b] dark:hover:bg-[#3b1111]" type="button" onClick={() => setIsPlanningDeleteOpen(true)}>Hapus Daily Planning</button>
+        {isAdmin ? <div className="border-t border-[#d0d5dd] bg-[#f8fafc] px-5 py-4 dark:border-[#384860] dark:bg-[#111827]">
+          <button className="flex w-full items-center justify-between text-left text-sm font-semibold text-[#344054] dark:text-[#e2e8f0]" type="button" onClick={() => setIsAdminZoneOpen((open) => !open)}><span>Admin Zone</span><span className="text-lg">{isAdminZoneOpen ? "−" : "+"}</span></button>
+          {isAdminZoneOpen && ramadanSchedule ? <div className="mt-4 space-y-4 border-t border-[#d0d5dd] pt-4 dark:border-[#384860]">
+            <div className="rounded-xl border border-[#b2ddff] bg-white p-4 dark:border-[#175cd3] dark:bg-[#102a43]">
+              <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold text-[#175cd3] dark:text-[#84caff]">Ramadan Schedule</p><p className="mt-1 text-xs text-[#667085] dark:text-[#b2ddff]">Berlaku global untuk seluruh line dalam periode yang dipilih.</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${ramadanSchedule.isActive ? "bg-[#dcfae6] text-[#027a48] dark:bg-[#063b29] dark:text-[#75e0a7]" : "bg-[#f2f4f7] text-[#475467] dark:bg-[#1f2937] dark:text-[#cbd5e1]"}`}>{ramadanSchedule.isActive ? "Aktif" : "Nonaktif"}</span></div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="text-xs font-medium text-[#475467] dark:text-[#cbd5e1]">Tanggal mulai<input className="mt-1 block h-10 w-full rounded-lg border border-[#d0d5dd] bg-white px-3 text-sm dark:border-[#384860] dark:bg-[#111827]" type="date" value={ramadanSchedule.startDate} onChange={(event) => updateRamadanField("startDate", event.target.value)} /></label><label className="text-xs font-medium text-[#475467] dark:text-[#cbd5e1]">Tanggal selesai<input className="mt-1 block h-10 w-full rounded-lg border border-[#d0d5dd] bg-white px-3 text-sm dark:border-[#384860] dark:bg-[#111827]" type="date" value={ramadanSchedule.endDate} onChange={(event) => updateRamadanField("endDate", event.target.value)} /></label></div>
+              {ramadanSchedule.isActive && (!ramadanSchedule.startDate || !ramadanSchedule.endDate) ? <p className="mt-3 rounded-lg bg-[#fef3f2] px-3 py-2 text-xs font-medium text-[#b42318] dark:bg-[#3b1111] dark:text-[#fda29b]">Periode Ramadan belum diisi, sehingga jadwal belum digunakan. Isi periode lalu pilih Simpan & Terapkan Perubahan.</p> : null}
+              <div className="mt-4 flex flex-wrap justify-end gap-2"><button className="h-10 rounded-lg border border-[#d0d5dd] px-4 text-sm font-semibold text-[#344054] dark:border-[#384860] dark:text-[#d4dae5]" type="button" onClick={() => setRamadanConfirmation(ramadanSchedule.isActive ? "deactivate" : "apply")}>{ramadanSchedule.isActive ? "Nonaktifkan Ramadan" : "Terapkan Ramadan Schedule"}</button>{ramadanSchedule.isActive ? <button className="h-10 rounded-lg bg-[#1570ef] px-4 text-sm font-semibold text-white" type="button" onClick={() => setRamadanConfirmation("apply")}>Simpan & Terapkan Perubahan</button> : null}</div>
+            </div>
+            {data?.hasMonthlyData && !data.canCreatePlanning && !isDrafting ? <div className="flex justify-end rounded-xl border border-[#fecdca] bg-[#fffafa] p-4 dark:border-[#7a271a] dark:bg-[#2d1215]"><button className="h-10 rounded-lg border border-[#fda29b] px-4 text-sm font-semibold text-[#b42318] transition hover:bg-[#fef3f2] dark:border-[#f04438] dark:text-[#fda29b] dark:hover:bg-[#3b1111]" type="button" onClick={() => setIsPlanningDeleteOpen(true)}>Hapus Daily Planning</button></div> : null}
+          </div> : null}
         </div> : null}
       </section>
       {deleteConfirmation ? (
@@ -830,6 +871,11 @@ export default function DailyPlanningClient() {
             <p className="mt-3 text-sm text-[#667085] dark:text-[#a7b0c0]">Seluruh slot planning aktif akan dihapus dari tampilan. Riwayat perubahan tetap tersimpan.</p>
             <div className="mt-5 flex justify-end gap-2"><button className="h-10 rounded-lg border border-[#d0d5dd] px-4 text-sm font-semibold text-[#344054] hover:bg-[#f9fafb] dark:border-[#384860] dark:text-[#d4dae5] dark:hover:bg-[#1f2937]" disabled={isDeletingPlanning} type="button" onClick={() => setIsPlanningDeleteOpen(false)}>Batal</button><button className="h-10 rounded-lg bg-[#d92d20] px-4 text-sm font-semibold text-white hover:bg-[#b42318] disabled:opacity-60 dark:bg-[#f04438] dark:hover:bg-[#d92d20]" disabled={isDeletingPlanning} type="button" onClick={() => void confirmPlanningDelete()}>{isDeletingPlanning ? "Menghapus..." : "Hapus"}</button></div>
           </div>
+        </div>
+      ) : null}
+      {ramadanConfirmation ? (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-[#101828]/45 p-4" role="dialog" aria-modal="true" aria-labelledby="ramadan-confirmation-title">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-[#111827]"><h3 id="ramadan-confirmation-title" className="text-lg font-semibold text-[#101828] dark:text-[#f8fafc]">{ramadanConfirmation === "apply" ? "Terapkan Ramadan Schedule?" : "Nonaktifkan Ramadan Schedule?"}</h3><p className="mt-2 text-sm text-[#667085] dark:text-[#a7b0c0]">{ramadanConfirmation === "apply" ? `Seluruh planning aktif pada ${ramadanSchedule?.startDate} sampai ${ramadanSchedule?.endDate} akan memakai slot Ramadan. TT, OEE, ratio, target manual, dan remark dipertahankan.` : "Seluruh planning aktif dalam periode Ramadan akan dikembalikan ke jadwal normal. History tetap tersimpan."}</p><div className="mt-5 flex justify-end gap-2"><button className="h-10 rounded-lg border border-[#d0d5dd] px-4 text-sm font-semibold text-[#344054] dark:border-[#384860] dark:text-[#d4dae5]" disabled={isRamadanPending} type="button" onClick={() => setRamadanConfirmation(null)}>Batal</button><button className="h-10 rounded-lg bg-[#1570ef] px-4 text-sm font-semibold text-white disabled:opacity-60" disabled={isRamadanPending} type="button" onClick={() => void confirmRamadanSchedule()}>{isRamadanPending ? "Memproses..." : ramadanConfirmation === "apply" ? "Terapkan" : "Nonaktifkan"}</button></div></div>
         </div>
       ) : null}
       {isHistoryOpen ? (

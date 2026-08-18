@@ -1,11 +1,15 @@
 "use server";
 
 import {
+  applyRamadanScheduleData,
+  deactivateRamadanScheduleData,
   deleteDailyOtData,
   deleteDailyPlanningData,
   getDailyPlanningHistoryData,
   loadDailyPlanningData,
   getManualDailyPlanningTemplate,
+  getRamadanScheduleData,
+  type RamadanScheduleInput,
   type ManualPlanningSlotInput,
   saveManualDailyPlanningData,
   saveDailyOtData,
@@ -152,4 +156,25 @@ export async function deleteDailyPlanning(part: string, date: string, shift: str
   await deleteDailyPlanningData(part, date, shift, await getCurrentUserId());
   revalidatePath("/daily-planning");
   revalidatePath("/production-achievement");
+}
+
+export async function loadRamadanSchedule() {
+  await requireRoles("ADMIN");
+  return getRamadanScheduleData();
+}
+
+export async function applyRamadanSchedule(input: RamadanScheduleInput) {
+  await requireRoles("ADMIN");
+  const result = await applyRamadanScheduleData(input, await getCurrentUserId());
+  revalidatePath("/daily-planning");
+  revalidatePath("/production-achievement");
+  return result;
+}
+
+export async function deactivateRamadanSchedule() {
+  await requireRoles("ADMIN");
+  const result = await deactivateRamadanScheduleData(await getCurrentUserId());
+  revalidatePath("/daily-planning");
+  revalidatePath("/production-achievement");
+  return result;
 }
