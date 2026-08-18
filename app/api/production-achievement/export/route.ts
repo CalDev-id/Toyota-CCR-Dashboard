@@ -2,8 +2,9 @@ import {
   createProductionAchievementDataWorkbook,
   createProductionAchievementMonthlyWorkbook,
   createProductionAchievementWorkbook,
+  createBackflushWorkbook,
 } from "@/features/production-achievement/server/achievement-export";
-import { getProductionAchievementDashboard } from "@/features/production-achievement/server/achievement-data";
+import { getBackflushRows, getProductionAchievementDashboard } from "@/features/production-achievement/server/achievement-data";
 import { getCurrentUserRole } from "@/lib/authorization";
 
 export const dynamic = "force-dynamic";
@@ -66,6 +67,19 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const format = url.searchParams.get("format");
+    if (format === "backflush") {
+      const date = url.searchParams.get("date");
+      const shift = url.searchParams.get("shift");
+      const rows = await getBackflushRows(date ?? "", shift ?? "");
+      const workbook = await createBackflushWorkbook(date ?? "", rows);
+      return new Response(new Uint8Array(workbook), {
+        headers: {
+          "Cache-Control": "no-store",
+          "Content-Disposition": `attachment; filename="backflush_${date}_${shift}.xlsx"`,
+          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+      });
+    }
     if (format === "monthly") {
       const dashboards = await mapWithConcurrency(
         getMonthlyShifts(url.searchParams.get("date")),

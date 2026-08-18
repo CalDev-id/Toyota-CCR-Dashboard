@@ -20,6 +20,12 @@ import { prisma } from "@/lib/prisma";
 import { getReportPrisma } from "@/lib/report-prisma";
 import { summaryViewName } from "@/lib/report-views";
 
+export type BackflushRow = {
+  materialNumber: string;
+  quantity: number;
+  groupCode?: string;
+};
+
 const productionAchievementLineConfigs: ProductionAchievementLineConfig[] = [
   {
     key: "assy",
@@ -212,6 +218,62 @@ async function getProductionAchievementSummaryRows(
     sql,
     ...values,
   );
+}
+
+const backflushSummaryMaterials = [
+  { view: "v_cylblock_summary", variant: "1TR", materialNumber: "114010C090" },
+  { view: "v_cylblock_summary", variant: "2TR", materialNumber: "114010C060" },
+  { view: "v_crankshaft_summary", variant: "1TR", materialNumber: "134010C030" },
+  { view: "v_crankshaft_summary", variant: "2TR", materialNumber: "134010C022" },
+  { view: "v_camshaft_summary", variant: "1TR", materialNumber: "135010C011" },
+  { view: "v_camshaft_summary", variant: "2TR", materialNumber: "135020C030" },
+] as const;
+
+function backflushVariantAliases(line: (typeof backflushSummaryMaterials)[number]) {
+  if (line.view !== "v_camshaft_summary") return [line.variant];
+  return line.variant === "1TR" ? ["1TR", "01", "IN"] : ["2TR", "02", "EX"];
+}
+
+export async function getBackflushRows(date: string, shift: string): Promise<BackflushRow[]> {
+  const normalizedDate = normalizeDate(date);
+  const normalizedShift = normalizeShift(shift);
+  const summaryRows = await Promise.all(
+    backflushSummaryMaterials.map(async (line) => {
+      const aliases = backflushVariantAliases(line);
+      const rows = await getReportPrisma().$queryRawUnsafe<Array<{ quantity: unknown; groupCode: unknown }>>(
+        `SELECT COALESCE(SUM(Prod_realtime), 0) AS quantity, MIN(SHIFT) AS groupCode
+         FROM ${quoteIdentifier(summaryViewName(line.view))}
+         WHERE \`DATE\` = ? AND SHIFT2 = ? AND TRIM(Variant) IN (${aliases.map(() => "?").join(",")})`,
+        normalizedDate,
+        normalizedShift,
+        ...aliases,
+      );
+      return {
+        materialNumber: line.materialNumber,
+        quantity: toNumber(rows[0]?.quantity),
+        groupCode: String(rows[0]?.groupCode ?? "").trim(),
+      };
+    }),
+  );
+  const cylheadRows = await getReportPrisma().$queryRawUnsafe<
+    Array<{ materialNumber: unknown; quantity: unknown; groupCode: unknown }>
+  >(
+    `SELECT material_number AS materialNumber, COALESCE(SUM(qty), 0) AS quantity, MIN(SHIFT) AS groupCode
+     FROM \`v_cylhead_summary_variants\`
+     WHERE \`DATE\` = ? AND SHIFT2 = ?
+     GROUP BY material_number
+     ORDER BY material_number ASC`,
+    normalizedDate,
+    normalizedShift,
+  );
+
+  return [...summaryRows, ...cylheadRows]
+    .map((row) => ({
+      materialNumber: String(row.materialNumber ?? "").trim(),
+      quantity: toNumber(row.quantity),
+      groupCode: String(row.groupCode ?? "").trim(),
+    }))
+    .filter((row) => row.materialNumber && row.quantity > 0);
 }
 
 async function getProductionAchievementProblemRows(

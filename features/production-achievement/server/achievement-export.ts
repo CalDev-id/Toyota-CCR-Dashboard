@@ -3,6 +3,7 @@ import type {
   ProductionAchievementDashboard,
   ProductionAchievementProblem,
 } from "@/features/production-achievement/types";
+import type { BackflushRow } from "@/features/production-achievement/server/achievement-data";
 import fs from "node:fs/promises";
 import path from "node:path";
 import * as XLSX from "xlsx";
@@ -11,6 +12,7 @@ const TEMPLATE_PATH = path.join(
   process.cwd(),
   "public/template_production_achievement.xlsx",
 );
+const BACKFLUSH_TEMPLATE_PATH = path.join(process.cwd(), "public/Template_BackFlush.xlsx");
 
 type CfbContainer = ReturnType<typeof XLSX.CFB.read>;
 
@@ -361,6 +363,66 @@ export async function createProductionAchievementWorkbook(
     fileType: "zip",
     compression: true,
   });
+}
+
+function formatBackflushDate(value: string) {
+  const [year, month, day] = value.split("-");
+  return `${day}.${month}.${year}`;
+}
+
+function backflushDescription(rows: BackflushRow[]) {
+  const groupCode = rows.find((row) => row.groupCode === "R" || row.groupCode === "W")?.groupCode;
+  return groupCode === "R" ? "BF MANUAL CCR RED" : "BF MANUAL CCR WHITE";
+}
+
+function removeBackflushYellowFill(container: CfbContainer) {
+  const stylesPath = "/xl/styles.xml";
+  const styles = getXml(container, stylesPath).replace(
+    /<fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"\/><bgColor indexed="64"\/><\/patternFill><\/fill>/,
+    "<fill><patternFill patternType=\"none\"/></fill>",
+  );
+  setXml(container, stylesPath, styles);
+}
+
+export async function createBackflushWorkbook(date: string, rows: BackflushRow[]) {
+  const template = await fs.readFile(BACKFLUSH_TEMPLATE_PATH);
+  const container = XLSX.CFB.read(template, { type: "buffer" });
+  const worksheetPath = "/xl/worksheets/sheet1.xml";
+  let worksheet = getXml(container, worksheetPath);
+  const description = backflushDescription(rows);
+  const rowsByMaterial = new Map(rows.map((row) => [row.materialNumber, row.quantity]));
+  const templateRows = Array.from({ length: 17 }, (_, index) => getRow(worksheet, index + 4));
+  const templateSheet = XLSX.read(template, { type: "buffer" }).Sheets.Sheet1;
+  const templateMaterials = XLSX.utils.sheet_to_json<string[]>(templateSheet, {
+    header: 1,
+    range: 3,
+    blankrows: false,
+  }).map((row) => String(row[6] ?? ""));
+  const outputRows = templateRows
+    .map((row, index) => ({ row, materialNumber: templateMaterials[index] ?? "" }))
+    .flatMap(({ row, materialNumber }) => {
+      const quantity = rowsByMaterial.get(materialNumber);
+      return quantity && quantity > 0 ? [{ row, materialNumber, quantity }] : [];
+    });
+
+  const formattedDate = formatBackflushDate(date);
+  outputRows.forEach(({ row: templateRow, materialNumber, quantity }, index) => {
+    const rowNumber = index + 4;
+    let row = moveRow(templateRow, Number(templateRow.match(/\br="(\d+)"/)?.[1]), rowNumber);
+    row = setCell(row, `B${rowNumber}`, formattedDate);
+    row = setCell(row, `C${rowNumber}`, formattedDate);
+    row = setCell(row, `G${rowNumber}`, materialNumber);
+    row = setCell(row, `K${rowNumber}`, quantity);
+    row = setCell(row, `L${rowNumber}`, description);
+    worksheet = replaceRow(worksheet, rowNumber, row);
+  });
+  for (let rowNumber = outputRows.length + 4; rowNumber <= 20; rowNumber += 1) {
+    worksheet = replaceRow(worksheet, rowNumber, clearRow(getRow(worksheet, rowNumber)));
+  }
+
+  setXml(container, worksheetPath, worksheet);
+  removeBackflushYellowFill(container);
+  return XLSX.CFB.write(container, { type: "buffer", fileType: "zip", compression: true });
 }
 
 function variantFor(card: ProductionAchievementCard, variantName: "1TR" | "2TR") {

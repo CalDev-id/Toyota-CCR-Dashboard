@@ -324,7 +324,7 @@ export default function ProductionAchievementRealtimeDashboard({
     void audio.play().then(() => setIsSoundBlocked(false)).catch(() => setIsSoundBlocked(true));
   }
 
-  async function downloadExcel(format: "report" | "data" | "monthly") {
+  async function downloadExcel(format: "report" | "data" | "monthly" | "backflush") {
     setIsExporting(true);
     setIsDownloadMenuOpen(false);
     setExportError(null);
@@ -453,6 +453,7 @@ export default function ProductionAchievementRealtimeDashboard({
                   <button type="button" role="menuitem" onClick={() => void downloadExcel("report")} className="w-full px-3 py-2 text-left text-sm font-semibold text-[#344054] hover:bg-[#f9fafb] dark:text-[#d4dae5] dark:hover:bg-[#162033]">Laporan Excel</button>
                   <button type="button" role="menuitem" onClick={() => void downloadExcel("data")} className="w-full px-3 py-2 text-left text-sm font-semibold text-[#344054] hover:bg-[#f9fafb] dark:text-[#d4dae5] dark:hover:bg-[#162033]">Data Excel</button>
                   <button type="button" role="menuitem" onClick={() => void downloadExcel("monthly")} className="w-full px-3 py-2 text-left text-sm font-semibold text-[#344054] hover:bg-[#f9fafb] dark:text-[#d4dae5] dark:hover:bg-[#162033]">Monthly Excel</button>
+                  <button type="button" role="menuitem" onClick={() => void downloadExcel("backflush")} className="w-full px-3 py-2 text-left text-sm font-semibold text-[#344054] hover:bg-[#f9fafb] dark:text-[#d4dae5] dark:hover:bg-[#162033]">BackFlush</button>
                 </div>
               ) : null}
             </div>
