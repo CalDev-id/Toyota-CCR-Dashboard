@@ -347,9 +347,11 @@ export default function ProductionAchievementRealtimeDashboard({
       const disposition = response.headers.get("Content-Disposition") ?? "";
       const filename =
         disposition.match(/filename="([^"]+)"/)?.[1] ??
-        format === "monthly"
+        (format === "monthly"
           ? "production-achievement-monthly.xlsx"
-          : `production-achievement${format === "data" ? "-data" : ""}_${dashboard.date}_${dashboard.shift}.xlsx`;
+          : format === "backflush"
+            ? `backflush_${dashboard.date}_${dashboard.shift}.xlsx`
+            : `production-achievement${format === "data" ? "-data" : ""}_${dashboard.date}_${dashboard.shift}.xlsx`);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
