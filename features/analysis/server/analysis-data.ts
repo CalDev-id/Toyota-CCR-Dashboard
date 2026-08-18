@@ -73,7 +73,10 @@ export async function getAnalysisLineRows(
       OT_act AS otAct,
       OT_diff AS otDiff
      FROM ${quoteIdentifier(summaryViewName(line.tableName))}
-     WHERE \`DATE\` >= ? AND \`DATE\` < ?
+     WHERE \`DATE\` >= ?
+       AND \`DATE\` < ?
+       AND OEE IS NOT NULL
+       AND TRIM(CAST(OEE AS CHAR)) <> ''
      ORDER BY \`DATE\` ASC, SHIFT ASC`,
     start,
     endExclusive,
