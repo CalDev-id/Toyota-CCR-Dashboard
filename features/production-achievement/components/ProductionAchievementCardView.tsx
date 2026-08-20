@@ -165,19 +165,39 @@ function MetricTile({
 function TooltipMetricRow({
   label,
   value,
+  unit = "units",
   tone = "default",
 }: {
   label: string;
-  value: number;
+  value: number | null;
+  unit?: "units" | "min" | "%";
   tone?: "default" | "plan";
 }) {
   return (
     <div className="flex items-center justify-between gap-5">
       <span className="text-[#d0d5dd]">{label}</span>
       <span className={`font-bold tabular-nums ${tone === "plan" ? "text-[#fecdca]" : "text-white"}`}>
-        {formatNumber(value)} <span className="text-[10px] font-medium text-[#98a2b3]">units</span>
+        {unit === "%" ? formatPercent(value) : value === null ? "-" : formatNumber(value)}
+        {unit !== "%" ? <span className="text-[10px] font-medium text-[#98a2b3]"> {unit}</span> : null}
       </span>
     </div>
+  );
+}
+
+function SummaryMetricBadge({ label }: { label: "OEE" | "AV" | "PE" | "RQ" }) {
+  const className =
+    label === "OEE"
+      ? "bg-[#ecfdf3] text-[#027a48] dark:bg-[#062b1b] dark:text-[#75e0a7]"
+      : label === "AV"
+        ? "bg-[#fef3f2] text-[#b42318] dark:bg-[#3b1111] dark:text-[#fda29b]"
+        : label === "PE"
+          ? "bg-[#fffaeb] text-[#b54708] dark:bg-[#3a2604] dark:text-[#fdb022]"
+          : "bg-[#ecf3ff] text-[#465fff] dark:bg-[#14245a] dark:text-[#8da2ff]";
+
+  return (
+    <span className={`grid h-5 min-w-7 place-items-center rounded px-1.5 text-[10px] font-bold ${className}`}>
+      {label}
+    </span>
   );
 }
 
@@ -376,7 +396,16 @@ export default function ProductionAchievementCardView({
           <MetricTile
             label="OEE"
             value={<OeeMetricValue value={card.oee} target={card.oeeTarget} />}
-            tooltip={<div className="flex items-center gap-1.5 font-semibold"><span>OEE =</span><span className="text-center"><span className="block border-b border-white pb-0.5">Actual Prod × Actual TT</span><span className="block pt-0.5">Working Hours</span></span></div>}
+            tooltip={
+              <div className="w-36 space-y-2">
+                <span className="flex items-center justify-between gap-4"><SummaryMetricBadge label="OEE" /> {formatPercent(card.summaryOee)}</span>
+                <div className="grid grid-cols-3 gap-1.5 text-center text-[10px]">
+                  <span className="space-y-1"><SummaryMetricBadge label="AV" /><span className="block">{formatPercent(card.av)}</span></span>
+                  <span className="space-y-1"><SummaryMetricBadge label="PE" /><span className="block">{formatPercent(card.pe)}</span></span>
+                  <span className="space-y-1"><SummaryMetricBadge label="RQ" /><span className="block">{formatPercent(card.rq)}</span></span>
+                </div>
+              </div>
+            }
             valueClassName={getOeeTargetClass(card.oee, card.oeeTarget)}
             valueSizeClassName="text-xl"
           />

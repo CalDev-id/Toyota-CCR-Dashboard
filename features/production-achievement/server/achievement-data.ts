@@ -211,6 +211,9 @@ async function getProductionAchievementSummaryRows(
       ${actExpression} AS prodAct,
       Prod_act AS prodInput,
       ${prodScanExpression} AS prodScan,
+      AV AS av,
+      PE AS pe,
+      RQ AS rq,
       Balance AS balance,
       OEE AS oee,
       OT_act AS otAct
@@ -885,6 +888,12 @@ function buildLineCard(
   const prodScan =
     summaryRows.reduce((total, row) => total + toNumber(row.prodScan), 0) /
     pairDivisor;
+  const summaryOee = summaryRows.length
+    ? summaryRows.reduce((total, row) => total + toNumber(row.oee), 0) / summaryRows.length
+    : null;
+  const av = summaryRows.reduce((total, row) => total + toNumber(row.av), 0);
+  const pe = summaryRows.reduce((total, row) => total + toNumber(row.pe), 0);
+  const rq = summaryRows.reduce((total, row) => total + toNumber(row.rq), 0);
   const otAct = summaryRows.length
     ? summaryRows.reduce((total, row) => total + toNumber(row.otAct), 0) /
       summaryRows.length
@@ -912,6 +921,10 @@ function buildLineCard(
     prodAct,
     prodInput,
     prodScan,
+    summaryOee,
+    av,
+    pe,
+    rq,
     oee,
     ttAct: actualTt,
     ttPlan: effectiveTt ? toPlainString(effectiveTt) : "",

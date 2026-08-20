@@ -21,6 +21,9 @@ export type RawProductionAchievementSummaryRow = {
   prodAct: string | number | null;
   prodInput: string | number | null;
   prodScan: string | number | null;
+  av: string | number | null;
+  pe: string | number | null;
+  rq: string | number | null;
   balance: string | number | null;
   oee: string | number | null;
   otAct: string | number | null;
@@ -61,6 +64,10 @@ export type ProductionAchievementCard = {
   prodAct: number;
   prodInput: number;
   prodScan: number;
+  summaryOee: number | null;
+  av: number;
+  pe: number;
+  rq: number;
   oee: number | null;
   ttAct: string;
   ttPlan: string;
