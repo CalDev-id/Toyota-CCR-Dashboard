@@ -416,6 +416,7 @@ type RawDailyPlanningSlotRow = {
   startTime: string;
   endTime: string;
   prodMinutes: string | number | null;
+  slotType: "normal" | "ot";
   totalTarget: string | number | null;
   oneTr: string | number | null;
   twoTr: string | number | null;
@@ -427,6 +428,7 @@ type DailyPlanningPlanOverride = {
   totalDailyProdPlan: number;
   variants: Map<string, number>;
   tt: number;
+  otPlan: number;
   workHoursMinutes: number;
   workSchedule: Array<{ start: string; end: string }>;
 };
@@ -525,6 +527,7 @@ async function getDailyPlanningSlotRows(
       TIME_FORMAT(slot.start_time, '%H:%i') AS startTime,
       TIME_FORMAT(slot.end_time, '%H:%i') AS endTime,
       slot.prod_minutes AS prodMinutes,
+      slot.slot_type AS slotType,
       slot.total_target AS totalTarget,
       slot.one_tr AS oneTr,
       slot.two_tr AS twoTr,
@@ -694,6 +697,7 @@ async function getDailyPlanningPlanOverrides(
       totalDailyProdPlan: 0,
       variants: new Map<string, number>(),
       tt: toNumber(row.tt),
+      otPlan: 0,
       workHoursMinutes: 0,
       workSchedule: [],
     };
@@ -702,6 +706,9 @@ async function getDailyPlanningPlanOverrides(
 
     current.prodPlan += toNumber(row.totalTarget) * progress;
     current.totalDailyProdPlan += toNumber(row.totalTarget);
+    if (row.slotType === "ot") {
+      current.otPlan += toNumber(row.prodMinutes) / 60;
+    }
     current.variants.set("1TR", (current.variants.get("1TR") ?? 0) + oneTr * progress);
     current.variants.set("2TR", (current.variants.get("2TR") ?? 0) + twoTr * progress);
     overrides.set(row.lineKey, current);
@@ -930,7 +937,7 @@ function buildLineCard(
     ttPlan: effectiveTt ? toPlainString(effectiveTt) : "",
     oeeTarget: monthlyParameters.oeeTarget || (line.key === "camshaft" ? 93 : 90),
     otAct,
-    otPlan: monthlyParameters.otPlan,
+    otPlan: planOverride?.otPlan ?? monthlyParameters.otPlan,
     balance: prodAct - prodPlan,
     hasData: summaryRows.length > 0,
     isAutoNoProduction,

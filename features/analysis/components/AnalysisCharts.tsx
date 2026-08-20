@@ -528,19 +528,19 @@ function VanningModule({ lineKey }: { lineKey: AnalysisChartLine["key"] }) {
       {config.kamigo ? (
         <div className="mt-2 grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-2">
           <div className="min-w-0">
-            <h4 className="px-1 pb-1 text-xs font-semibold text-[#344054] dark:text-[#e4e7ec]">This Week Vanning</h4>
+            <h4 className="whitespace-nowrap px-1 pb-1 text-[11px] font-semibold leading-none text-[#344054] dark:text-[#e4e7ec]">This Week Vanning</h4>
             <VanningTable {...config.kamigo} />
           </div>
           <div className="min-w-0">
-            <h4 className="px-1 pb-1 text-xs font-semibold text-[#344054] dark:text-[#e4e7ec]">Date</h4>
+            <h4 className="whitespace-nowrap px-1 pb-1 text-[11px] font-semibold leading-none text-[#344054] dark:text-[#e4e7ec]">Date</h4>
             <VanningTable {...config.stm} />
           </div>
         </div>
       ) : (
         <div className="mt-2 min-w-0">
-          <div className="flex items-center justify-between px-1 pb-1 text-xs font-semibold text-[#344054] dark:text-[#e4e7ec]">
-            <h4>This Week Vanning</h4>
-            <h4>Date</h4>
+          <div className="flex items-center justify-between px-1 pb-1 text-[11px] font-semibold leading-none text-[#344054] dark:text-[#e4e7ec]">
+            <h4 className="whitespace-nowrap">This Week Vanning</h4>
+            <h4 className="whitespace-nowrap">Date</h4>
           </div>
           <VanningTable {...config.stm} />
         </div>
