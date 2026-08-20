@@ -9,9 +9,9 @@ import {
   normalizePercent,
 } from "@/features/analysis/components/analysisChartUtils";
 
-const CHART_HEIGHT = 176;
-const PLOT_TOP = 28;
-const PLOT_BOTTOM = 44;
+const CHART_HEIGHT = 112;
+const PLOT_TOP = 14;
+const PLOT_BOTTOM = 28;
 const POINT_GAP = 25;
 const SIDE_PADDING = 20;
 const TARGET_LINE_PADDING_X = 20;
@@ -161,7 +161,7 @@ export default function PercentLineCanvasChart({
     const colors = isDarkMode ? DARK_CHART_COLORS : LIGHT_CHART_COLORS;
 
     const plotHeight = CHART_HEIGHT - PLOT_TOP - PLOT_BOTTOM;
-    const axisValues = [100, 75, 50, 25, 0];
+    const axisValues = [100, 50, 0];
 
     axisValues.forEach((value) => {
       const y = PLOT_TOP + plotHeight - (value / 100) * plotHeight;
@@ -241,11 +241,11 @@ export default function PercentLineCanvasChart({
 
   return (
     <>
-      <div ref={scrollRef} className="h-[188px] overflow-x-auto overflow-y-hidden">
+      <div ref={scrollRef} className="h-[120px] overflow-x-auto overflow-y-hidden">
         <canvas ref={canvasRef} role="img" aria-label={ariaLabel} />
       </div>
       {monthLabel ? (
-        <p className="mt-1 text-center text-[10px] font-semibold text-[#667085]">
+        <p className="mt-0 text-center text-[10px] font-semibold leading-none text-[#667085]">
           {monthLabel}
         </p>
       ) : null}

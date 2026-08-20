@@ -15,9 +15,8 @@ export default function DailyShiftPercentChart({
 }) {
   return (
     <article className="rounded-2xl border border-[#e4e7ec] bg-white px-4 pb-4 pt-4 shadow-sm">
-      <div className="mb-2">
+      <div className="mb-5">
         <h2 className="text-sm font-semibold text-[#101828]">{title}</h2>
-        <p className="mt-0.5 text-xs font-medium text-[#667085]">{line.label}</p>
       </div>
 
       <PercentLineCanvasChart

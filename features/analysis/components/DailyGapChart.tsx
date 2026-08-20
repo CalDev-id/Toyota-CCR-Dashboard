@@ -43,10 +43,10 @@ export default function DailyGapChart({
   }, [rowDateKey]);
 
   return (
-    <div className="mt-4 flex flex-1 flex-col">
+    <div className="mt-3 flex flex-1 flex-col">
       <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-hidden">
-        <div className="px-4 pb-3" style={{ minWidth: chartMinWidth }}>
-          <div className="relative h-36">
+        <div className="px-4 pb-2" style={{ minWidth: chartMinWidth }}>
+          <div className="relative h-28">
             <div className="absolute left-0 right-0 top-1/2 border-t border-dashed border-[#98a2b3]" />
             <div
               className={`flex h-full items-stretch gap-2 ${
@@ -127,7 +127,7 @@ export default function DailyGapChart({
           </div>
 
           <div
-            className={`mt-3 flex gap-2 text-[10px] font-medium text-[#667085] ${
+            className={`mt-2 flex gap-2 text-[10px] font-medium text-[#667085] ${
               hasSparseRows ? "justify-around" : "justify-between"
             }`}
           >

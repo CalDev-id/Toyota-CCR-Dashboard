@@ -54,6 +54,10 @@ function replaceRow(xml: string, row: number, nextRow: string) {
   return xml.replace("</sheetData>", `${nextRow}</sheetData>`);
 }
 
+function removeRow(xml: string, row: number) {
+  return xml.replace(rowPattern(row), "");
+}
+
 function moveRow(templateRow: string, from: number, to: number) {
   return templateRow
     .replace(new RegExp(`r="${from}"`, "g"), `r="${to}"`)
@@ -416,9 +420,10 @@ export async function createBackflushWorkbook(date: string, rows: BackflushRow[]
     row = setCell(row, `L${rowNumber}`, description);
     worksheet = replaceRow(worksheet, rowNumber, row);
   });
-  for (let rowNumber = outputRows.length + 4; rowNumber <= 20; rowNumber += 1) {
-    worksheet = replaceRow(worksheet, rowNumber, clearRow(getRow(worksheet, rowNumber)));
+  for (let rowNumber = outputRows.length + 4; rowNumber <= 22; rowNumber += 1) {
+    worksheet = removeRow(worksheet, rowNumber);
   }
+  worksheet = updateDimension(worksheet, "L", outputRows.length + 3);
 
   setXml(container, worksheetPath, worksheet);
   removeBackflushYellowFill(container);
