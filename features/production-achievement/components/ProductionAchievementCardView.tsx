@@ -132,12 +132,14 @@ function MetricTile({
   label,
   value,
   tooltip,
+  tooltipClassName = "",
   valueClassName = "text-[#101828]",
   valueSizeClassName = "text-lg",
 }: {
   label: string;
   value: ReactNode;
   tooltip?: ReactNode;
+  tooltipClassName?: string;
   valueClassName?: string;
   valueSizeClassName?: string;
 }) {
@@ -152,10 +154,29 @@ function MetricTile({
         {value}
       </p>
       {tooltip ? (
-        <div className="pointer-events-none invisible absolute bottom-full left-1/2 z-30 mb-2 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-lg bg-[#101828] px-3 py-2 text-left text-xs font-medium leading-5 text-white opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
+        <div className={`pointer-events-none invisible absolute bottom-full left-1/2 z-30 mb-2 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-lg bg-[#101828] px-3 py-2 text-left text-xs font-medium leading-5 text-white opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 ${tooltipClassName}`}>
           {tooltip}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function TooltipMetricRow({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: number;
+  tone?: "default" | "plan";
+}) {
+  return (
+    <div className="flex items-center justify-between gap-5">
+      <span className="text-[#d0d5dd]">{label}</span>
+      <span className={`font-bold tabular-nums ${tone === "plan" ? "text-[#fecdca]" : "text-white"}`}>
+        {formatNumber(value)} <span className="text-[10px] font-medium text-[#98a2b3]">units</span>
+      </span>
     </div>
   );
 }
@@ -340,7 +361,16 @@ export default function ProductionAchievementCardView({
           <MetricTile
             label="Prod."
             value={<ProductionMetricValue actual={card.prodAct} plan={card.prodPlan} />}
-            tooltip={<><span className="block font-semibold">Total Plan</span><span>{formatNumber(card.totalDailyProdPlan)} units</span></>}
+            tooltip={
+              <div className="w-52 rounded-md bg-[#101828] px-3 py-2.5">
+                <div className="space-y-2 text-xs">
+                  <TooltipMetricRow label="Prod Input" value={card.prodInput} />
+                  <TooltipMetricRow label="Prod Scan" value={card.prodScan} />
+                  <TooltipMetricRow label="Total Plan" value={card.totalDailyProdPlan} tone="plan" />
+                </div>
+              </div>
+            }
+            tooltipClassName="border-0 bg-transparent p-0 leading-normal shadow-none"
             valueSizeClassName="text-2xl"
           />
           <MetricTile

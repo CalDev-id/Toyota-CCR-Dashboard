@@ -200,6 +200,8 @@ async function getProductionAchievementSummaryRows(
 ) {
   const { where, values } = buildDateShiftWhere(date, shift);
   const actExpression = productionAchievementActExpression(line);
+  const prodScanExpression =
+    line.key === "assy" ? "NULL" : quoteIdentifier("Prod_realtime");
   const summaryView = summaryViewName(line.summaryView);
   const sql = `SELECT
       SHOP AS shop,
@@ -207,6 +209,8 @@ async function getProductionAchievementSummaryRows(
       TT AS tt,
       Prod_plan AS prodPlan,
       ${actExpression} AS prodAct,
+      Prod_act AS prodInput,
+      ${prodScanExpression} AS prodScan,
       Balance AS balance,
       OEE AS oee,
       OT_act AS otAct
@@ -875,6 +879,12 @@ function buildLineCard(
   const prodAct =
     summaryRows.reduce((total, row) => total + toNumber(row.prodAct), 0) /
     pairDivisor;
+  const prodInput =
+    summaryRows.reduce((total, row) => total + toNumber(row.prodInput), 0) /
+    pairDivisor;
+  const prodScan =
+    summaryRows.reduce((total, row) => total + toNumber(row.prodScan), 0) /
+    pairDivisor;
   const otAct = summaryRows.length
     ? summaryRows.reduce((total, row) => total + toNumber(row.otAct), 0) /
       summaryRows.length
@@ -900,6 +910,8 @@ function buildLineCard(
     prodPlan,
     totalDailyProdPlan,
     prodAct,
+    prodInput,
+    prodScan,
     oee,
     ttAct: actualTt,
     ttPlan: effectiveTt ? toPlainString(effectiveTt) : "",
