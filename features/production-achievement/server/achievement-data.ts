@@ -378,7 +378,7 @@ function normalizeShift(value: string | null | undefined) {
 
 function getActiveShiftLabel() {
   const current = getCurrentTimeMinutes();
-  const dayStart = parseTimeMinutes("07:00");
+  const dayStart = parseTimeMinutes("07:15");
   const nightStart = parseTimeMinutes("20:00");
 
   return current >= dayStart && current < nightStart ? "DAY" : "NIGHT";
@@ -387,7 +387,7 @@ function getActiveShiftLabel() {
 function getActiveProductionDateKey() {
   const date = new Date();
 
-  if (getActiveShiftLabel() === "NIGHT" && getCurrentTimeMinutes() < 7 * 60) {
+  if (getActiveShiftLabel() === "NIGHT" && getCurrentTimeMinutes() < 7 * 60 + 15) {
     date.setDate(date.getDate() - 1);
   }
 
@@ -396,7 +396,7 @@ function getActiveProductionDateKey() {
 
 function getShiftStartedAt(date: string, shift: string) {
   const [year, month, day] = date.split("-").map(Number);
-  const [hour, minute] = shift === "DAY" ? [7, 0] : [20, 0];
+  const [hour, minute] = shift === "DAY" ? [7, 15] : [20, 0];
 
   return new Date(year, month - 1, day, hour, minute, 0, 0);
 }
