@@ -895,12 +895,15 @@ function buildLineCard(
   const prodScan =
     summaryRows.reduce((total, row) => total + toNumber(row.prodScan), 0) /
     pairDivisor;
-  const summaryOee = summaryRows.length
-    ? summaryRows.reduce((total, row) => total + toNumber(row.oee), 0) / summaryRows.length
-    : null;
-  const av = summaryRows.reduce((total, row) => total + toNumber(row.av), 0);
-  const pe = summaryRows.reduce((total, row) => total + toNumber(row.pe), 0);
-  const rq = summaryRows.reduce((total, row) => total + toNumber(row.rq), 0);
+  const summaryMetricRow =
+    summaryRows.find((row) => {
+      const variant = String(row.variant ?? "").trim().toUpperCase();
+      return variant === "1TR" || (line.key === "camshaft" && (variant === "01" || variant === "IN"));
+    }) ?? summaryRows[0];
+  const summaryOee = summaryMetricRow ? toNumber(summaryMetricRow.oee) : null;
+  const av = toNumber(summaryMetricRow?.av);
+  const pe = toNumber(summaryMetricRow?.pe);
+  const rq = toNumber(summaryMetricRow?.rq);
   const otAct = summaryRows.length
     ? summaryRows.reduce((total, row) => total + toNumber(row.otAct), 0) /
       summaryRows.length
