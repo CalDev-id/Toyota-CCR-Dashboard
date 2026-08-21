@@ -1,5 +1,7 @@
 import type {
   AnalysisGapSeriesRow as GapSeriesRow,
+  AnalysisMachiningEmergencyStock,
+  AnalysisEmergencyStockMetrics,
   AnalysisOeeCard as OeeCard,
   AnalysisOeeSeriesRow as SeriesRow,
   AnalysisShiftSeriesRow as ShiftSeriesRow,
@@ -282,12 +284,30 @@ type ExpandableStockRow = {
   children?: string[];
 };
 
+const machiningStockMetricKeys: Array<keyof AnalysisEmergencyStockMetrics> = [
+  "balancePallet",
+  "targetPallet",
+  "actPallet",
+  "actUnit",
+  "actDay",
+];
+
+function StockMetricCells({ metrics }: { metrics?: AnalysisEmergencyStockMetrics }) {
+  return machiningStockMetricKeys.map((key) => (
+    <td key={key} className={metrics ? "px-1.5 py-2 text-center font-medium text-[#344054]" : "px-1.5 py-2 text-center text-[#98a2b3]"}>
+      {metrics ? (key === "actDay" ? formatNumber(metrics[key], 1) : formatUnit(metrics[key])) : "-"}
+    </td>
+  ));
+}
+
 function ExpandableStockTable({
   rows,
   tone,
+  machiningStock,
 }: {
   rows: ExpandableStockRow[];
   tone: "gray" | "blue";
+  machiningStock?: AnalysisMachiningEmergencyStock;
 }) {
   const isBlue = tone === "blue";
   const [expandedLines, setExpandedLines] = useState<Set<string>>(
@@ -336,6 +356,17 @@ function ExpandableStockTable({
           {rows.flatMap((row) => {
             const isExpandable = Boolean(row.children?.length);
             const isExpanded = isExpandable && expandedLines.has(row.line);
+            const stockKey = ({
+              "CB 1": "cb1",
+              "CB 2": "cb2",
+              "CH 1": "ch1",
+              "CH 2": "ch2",
+              "CR 1": "cr1",
+              "CR 2": "cr2",
+              "CAM 1": "cam1",
+              "CAM 2": "cam2",
+            } as const)[row.line];
+            const parentMetrics = stockKey ? machiningStock?.[stockKey].total : undefined;
             const parentRow = (
               <tr
                 key={row.line}
@@ -369,22 +400,25 @@ function ExpandableStockTable({
                     <span className="whitespace-nowrap">{row.line}</span>
                   )}
                 </td>
-                {machiningStockColumns.map((column) => (
-                  <td key={column} className="px-1.5 py-2 text-center text-[#98a2b3]">-</td>
-                ))}
+                <StockMetricCells metrics={parentMetrics} />
               </tr>
             );
             const childRows = isExpanded && row.children
-              ? row.children.map((child, index) => (
-                  <tr key={`${row.line}-${child}-${index}`} className={isBlue ? "bg-[#eff8ff] dark:bg-[#14245a]" : "bg-[#eaecf0] dark:bg-[#273449]"}>
-                    <td className={`px-1.5 py-2 pl-6 text-left font-medium ${isBlue ? "text-[#175cd3] dark:text-[#a6b6ff]" : "text-[#475467] dark:text-[#d0d5dd]"}`}>
-                      {child}
-                    </td>
-                    {machiningStockColumns.map((column) => (
-                      <td key={column} className="px-1.5 py-2 text-center text-[#98a2b3]">-</td>
-                    ))}
-                  </tr>
-                ))
+              ? row.children.map((child, index) => {
+                  const childKey = child === "Local" ? "local" : child === "Export" ? "export" : null;
+                  const childMetrics = stockKey && childKey
+                    ? machiningStock?.[stockKey][childKey]
+                    : undefined;
+
+                  return (
+                    <tr key={`${row.line}-${child}-${index}`} className={isBlue ? "bg-[#eff8ff] dark:bg-[#14245a]" : "bg-[#eaecf0] dark:bg-[#273449]"}>
+                      <td className={`px-1.5 py-2 pl-6 text-left font-medium ${isBlue ? "text-[#175cd3] dark:text-[#a6b6ff]" : "text-[#475467] dark:text-[#d0d5dd]"}`}>
+                        {child}
+                      </td>
+                      <StockMetricCells metrics={childMetrics} />
+                    </tr>
+                  );
+                })
               : [];
 
             return [parentRow, ...childRows];
@@ -730,6 +764,7 @@ export function OeeLineChart({
   gapSeries,
   lines,
   cards,
+  machiningEmergencyStock,
 }: {
   series: SeriesRow[];
   shiftSeries: ShiftSeriesRow[];
@@ -739,6 +774,7 @@ export function OeeLineChart({
   gapSeries: GapSeriesRow[];
   lines: AnalysisChartLine[];
   cards: OeeCard[];
+  machiningEmergencyStock?: AnalysisMachiningEmergencyStock;
 }) {
   const monthLabel = formatMonthLabel(series);
 
@@ -940,7 +976,11 @@ export function OeeLineChart({
                 i
               </span>
             </div>
-            <ExpandableStockTable rows={group.rows} tone="gray" />
+            <ExpandableStockTable
+              rows={group.rows}
+              tone="gray"
+              machiningStock={machiningEmergencyStock}
+            />
           </article>
         ))}
       </section>

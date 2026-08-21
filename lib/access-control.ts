@@ -15,6 +15,13 @@ export function canAccessPath(role: UserRole, pathname: string) {
     return true;
   }
 
+  if (
+    pathname === "/analysis/input-data" ||
+    pathname.startsWith("/analysis/input-data/")
+  ) {
+    return role !== "USER";
+  }
+
   if (CCR_ROLES.includes(role)) {
     return pathname !== "/users" && !pathname.startsWith("/users/");
   }

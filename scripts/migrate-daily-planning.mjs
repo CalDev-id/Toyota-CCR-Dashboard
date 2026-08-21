@@ -18,6 +18,7 @@ const migrations = [
   "../database/migrations/20260818_ramadan_schedule.sql",
   "../database/migrations/20260818_ramadan_schedule_day_breaks.sql",
   "../database/migrations/20260818_ramadan_schedule_day_start.sql",
+  "../database/migrations/20260821_asakai_stock.sql",
   "../database/migrations/20260807_daily_monthly_signature.sql",
   "../database/migrations/20260721_production_realtime_status.sql",
   "../database/migrations/20260724_line_stop_decisions.sql",

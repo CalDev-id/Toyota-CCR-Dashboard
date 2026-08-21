@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS asakai_stock (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `date` DATE NOT NULL,
+  line VARCHAR(191) NOT NULL,
+  type VARCHAR(191) NOT NULL,
+  unit_module DECIMAL(18,4) NOT NULL,
+  module_code VARCHAR(191) NULL,
+  target_day DECIMAL(18,4) NULL,
+  target_module DECIMAL(18,4) NULL,
+  act_module DECIMAL(18,4) NULL,
+  actual_stock_unit_es_packcomp_new DECIMAL(18,4) NULL,
+  act_local DECIMAL(18,4) NULL,
+  actual_stock_unit_adv DECIMAL(18,4) NULL,
+  balance_stock_adv_new DECIMAL(18,4) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY asakai_stock_unique_row (`date`, line, type, unit_module),
+  KEY asakai_stock_date_idx (`date`)
+);

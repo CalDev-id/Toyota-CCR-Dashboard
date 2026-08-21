@@ -9,6 +9,7 @@ import type {
 } from "@/features/analysis/types";
 import { getReportPrisma } from "@/lib/report-prisma";
 import { summaryViewName } from "@/lib/report-views";
+import { getMachiningEmergencyStock } from "@/features/asakai-stock/server/asakai-stock";
 
 export const analysisLines: AnalysisLine[] = [
   {
@@ -434,7 +435,8 @@ function buildDailyGap(line: AnalysisLine, rows: RawAnalysisOeeRow[]) {
 export async function getAnalysisOee(dateParam: string | null) {
   const range = parseDate(dateParam);
   const days = getRangeDays(range.year, range.month, range.dayCount);
-  const entries = await Promise.all(
+  const [entries, machiningEmergencyStock] = await Promise.all([
+    Promise.all(
     analysisLines.map(async (line) => {
       const [rows, problemRows] = await Promise.all([
         getAnalysisLineRows(line, range.start, range.endExclusive),
@@ -443,7 +445,9 @@ export async function getAnalysisOee(dateParam: string | null) {
 
       return { line, rows, problemRows };
     }),
-  );
+    ),
+    getMachiningEmergencyStock(range.date),
+  ]);
   const cards = entries.map((entry) =>
     buildCard(entry.line, entry.rows, entry.problemRows, range.date),
   );
@@ -592,6 +596,7 @@ export async function getAnalysisOee(dateParam: string | null) {
     peShiftSeries,
     rqSeries,
     rqShiftSeries,
+    machiningEmergencyStock,
     lines: analysisLines.map(({ key, label, shiftMode, displayShiftLabel }) => ({
       key,
       label,

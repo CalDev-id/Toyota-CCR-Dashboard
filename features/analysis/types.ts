@@ -73,6 +73,22 @@ export type AnalysisGapSeriesRow = {
   date: string;
 } & Record<`${AnalysisLineKey}R` | `${AnalysisLineKey}W`, number | null>;
 
+export type AnalysisEmergencyStockMetrics = {
+  balancePallet: number;
+  targetPallet: number;
+  actPallet: number;
+  actUnit: number;
+  actDay: number;
+};
+
+export type AnalysisMachiningEmergencyStock = Record<
+  "cb1" | "cb2" | "ch1" | "ch2" | "cr1" | "cr2" | "cam1" | "cam2",
+{
+  total: AnalysisEmergencyStockMetrics;
+  local: AnalysisEmergencyStockMetrics;
+  export: AnalysisEmergencyStockMetrics;
+}>;
+
 export type AnalysisResponse = {
   date: string;
   start: string;
@@ -87,6 +103,7 @@ export type AnalysisResponse = {
   rqSeries: AnalysisOeeSeriesRow[];
   rqShiftSeries: AnalysisShiftSeriesRow[];
   gapSeries: AnalysisGapSeriesRow[];
+  machiningEmergencyStock: AnalysisMachiningEmergencyStock;
   lines: Array<{
     key: AnalysisLineKey;
     label: string;

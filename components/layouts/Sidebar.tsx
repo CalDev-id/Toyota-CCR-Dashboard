@@ -18,6 +18,7 @@ type MenuChild = {
   label: string;
   href: string;
   roles?: UserRole[];
+  children?: MenuChild[];
 };
 
 type MenuItem = MenuChild & {
@@ -57,6 +58,31 @@ const menuItems: MenuItem[] = [
         />
       </svg>
     ),
+    children: [
+      {
+        label: "Asakai Board",
+        href: "/analysis",
+      },
+      {
+        label: "Input Data",
+        href: "/analysis/input-data",
+        roles: ["ADMIN", "CCR_OPERATION", "CCR_GROUP_LEADER"],
+        children: [
+          {
+            label: "Input Stock",
+            href: "/analysis/input-data/stock",
+          },
+          {
+            label: "Input Shipment",
+            href: "/analysis/input-data/shipment",
+          },
+          {
+            label: "Input LSR",
+            href: "/analysis/input-data/lsr",
+          },
+        ],
+      },
+    ],
   },
   {
     label: "Production Instructions",
@@ -316,8 +342,81 @@ function Menu({
             {!collapsed && childItems?.length && isExpanded ? (
               <div className="ml-11 space-y-1">
                 {childItems.map((child) => {
+                  const grandchildItems = child.children;
                   const isChildActive =
-                    pathname === child.href || pathname.startsWith(`${child.href}/`);
+                    pathname === child.href ||
+                    (child.href !== item.href &&
+                      pathname.startsWith(`${child.href}/`));
+                  const isChildExpanded = Boolean(
+                    grandchildItems?.length &&
+                      (openMenus[child.href] ?? isChildActive),
+                  );
+
+                  if (grandchildItems?.length) {
+                    return (
+                      <div key={child.href} className="space-y-1">
+                        <button
+                          type="button"
+                          aria-expanded={isChildExpanded}
+                          onClick={() =>
+                            setOpenMenus((current) => ({
+                              ...current,
+                              [child.href]: !isChildExpanded,
+                            }))
+                          }
+                          className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
+                            isChildActive
+                              ? "bg-[#eef4ff] text-[#465fff] dark:bg-[#162033] dark:text-[#a6b6ff]"
+                              : "text-[#667085] hover:bg-[#f9fafb] hover:text-[#101828] dark:text-[#a7b0c0] dark:hover:bg-[#162033] dark:hover:text-[#f8fafc]"
+                          }`}
+                        >
+                          <span className="flex-1">{child.label}</span>
+                          <svg
+                            viewBox="0 0 20 20"
+                            aria-hidden="true"
+                            className={`size-4 shrink-0 transition-transform ${
+                              isChildExpanded ? "rotate-180" : ""
+                            }`}
+                          >
+                            <path
+                              d="m5 7.5 5 5 5-5"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="1.8"
+                            />
+                          </svg>
+                        </button>
+
+                        {isChildExpanded ? (
+                          <div className="ml-3 space-y-1 border-l border-[#d0d5dd] pl-3 dark:border-[#384860]">
+                            {grandchildItems.map((grandchild) => {
+                              const isGrandchildActive =
+                                pathname === grandchild.href ||
+                                pathname.startsWith(`${grandchild.href}/`);
+
+                              return (
+                                <Link
+                                  key={grandchild.href}
+                                  href={grandchild.href}
+                                  aria-current={isGrandchildActive ? "page" : undefined}
+                                  onClick={onNavigate}
+                                  className={`flex items-center rounded-lg px-3 py-2 text-sm font-medium transition ${
+                                    isGrandchildActive
+                                      ? "bg-[#eef4ff] text-[#465fff] dark:bg-[#162033] dark:text-[#a6b6ff]"
+                                      : "text-[#667085] hover:bg-[#f9fafb] hover:text-[#101828] dark:text-[#a7b0c0] dark:hover:bg-[#162033] dark:hover:text-[#f8fafc]"
+                                  }`}
+                                >
+                                  {grandchild.label}
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  }
 
                   return (
                     <Link

@@ -31,6 +31,11 @@ const pageHeaders = [
     subtitle: "Production OEE, attainment, overtime, and shift performance",
   },
   {
+    href: "/analysis/input-data",
+    title: "Input Data Asakai",
+    subtitle: "Asakai Board data input workspace",
+  },
+  {
     href: "/analysis",
     title: "Asakai Board",
     subtitle: "PPIC performance, material readiness, and inventory trends",

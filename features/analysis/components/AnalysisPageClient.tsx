@@ -217,6 +217,7 @@ export default function AnalysisPage() {
               gapSeries={data?.gapSeries ?? []}
               lines={lines}
               cards={data?.cards ?? []}
+              machiningEmergencyStock={data?.machiningEmergencyStock}
             />
           </section>
         </>
