@@ -105,6 +105,178 @@ const advancedStockVariants = [
   "2TR STM [K5]",
 ];
 
+type LsrDummyConfig = {
+  partName: string;
+  kpi: {
+    r: number;
+    w: number;
+    totalDMinusOne: number;
+    monthTotal: number;
+    allowance: number;
+  };
+  amountBase: number[];
+  target: number;
+  chartMax: number;
+  weekly: number[];
+  weeklyTotal: number;
+};
+
+const lsrDummyConfigs: LsrDummyConfig[] = [
+  {
+    partName: "CB",
+    kpi: { r: 12.8, w: 8.9, totalDMinusOne: 21.7, monthTotal: 299, allowance: 129.13 },
+    amountBase: [6.1, 9.4, 15.8, 30.7, 37, 40.2, 17.2, 9.4, 14.9, 28.2, 19.2, 17.5, 0, 0],
+    target: 6.1,
+    chartMax: 60,
+    weekly: [17, 296, 208, 43],
+    weeklyTotal: 564,
+  },
+  {
+    partName: "CH",
+    kpi: { r: 4.7, w: 18.4, totalDMinusOne: 23.1, monthTotal: 234, allowance: 425.64 },
+    amountBase: [1.2, 20.3, 23.5, 33.4, 13.8, 9.8, 4.9, 11.9, 18.3, 15.5, 25.2, 0, 0],
+    target: 20.3,
+    chartMax: 60,
+    weekly: [30, 172, 138, 29],
+    weeklyTotal: 369,
+  },
+  {
+    partName: "CR",
+    kpi: { r: 0, w: 3.1, totalDMinusOne: 3.1, monthTotal: 52, allowance: 115.86 },
+    amountBase: [5.5, 4.5, 7.7, 7.7, 1.5, 2.1, 3.2, 0, 0],
+    target: 5.5,
+    chartMax: 60,
+    weekly: [12, 136, 58, 11],
+    weeklyTotal: 217,
+  },
+  {
+    partName: "CA",
+    kpi: { r: 0.1, w: 0.4, totalDMinusOne: 0.5, monthTotal: 10, allowance: 184.17 },
+    amountBase: [0, 1.04, 0.71, 0.66, 0, 1.04, 1.44, 1.63, 0.66, 1.19, 0, 0],
+    target: 0,
+    chartMax: 2,
+    weekly: [0, 289, 319, 59],
+    weeklyTotal: 667,
+  },
+];
+
+function formatLsrAmount(value: number) {
+  return `${value.toFixed(value >= 10 ? 0 : 1)}M`;
+}
+
+function LsrAmountBaseChart({ config }: { config: LsrDummyConfig }) {
+  const width = 320;
+  const height = 154;
+  const padding = { top: 18, right: 8, bottom: 24, left: 28 };
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const amountCount = config.amountBase.length;
+  const barWidth = Math.max(5, (plotWidth / amountCount) * 0.62);
+  const max = config.chartMax;
+  const targetY = padding.top + plotHeight - (config.target / max) * plotHeight;
+  const gridValues = [max, max / 2, 0];
+
+  return (
+    <article className="min-w-0 rounded-2xl border border-[#e4e7ec] bg-white p-3 shadow-sm dark:border-[#2f4059] dark:bg-[#111827]">
+      <h3 className="text-xs font-semibold text-[#101828] dark:text-[#f8fafc]">LSR Amount Base</h3>
+      <div className="mt-1 overflow-x-auto rounded-xl bg-[#f9fafb] p-2 dark:bg-[#162033]">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="block h-[154px] min-w-[280px] w-full"
+          role="img"
+          aria-label={`Dummy LSR Amount Base chart for ${config.partName}`}
+        >
+          {gridValues.map((value) => {
+            const y = padding.top + plotHeight - (value / max) * plotHeight;
+            return (
+              <g key={value}>
+                <line x1={padding.left} x2={width - padding.right} y1={y} y2={y} stroke="var(--border-strong)" strokeDasharray="2 3" strokeWidth="0.75" />
+                <text x={2} y={y + 3} fill="var(--text-muted)" fontSize="8">{formatLsrAmount(value)}</text>
+              </g>
+            );
+          })}
+          <line x1={padding.left} x2={width - padding.right} y1={targetY} y2={targetY} stroke="var(--error-text)" strokeDasharray="5 4" strokeWidth="1.5" />
+          <text x={padding.left + 2} y={targetY - 4} fill="var(--error-text)" fontSize="8" fontWeight="700">{formatLsrAmount(config.target)}</text>
+          {config.amountBase.map((amount, index) => {
+            const x = padding.left + ((index + 0.5) / amountCount) * plotWidth;
+            const barHeight = (amount / max) * plotHeight;
+            const y = padding.top + plotHeight - barHeight;
+            const labelY = Math.max(padding.top + 8, y - 3);
+
+            return (
+              <g key={`${config.partName}-${index}`}>
+                <rect x={x - barWidth / 2} y={y} width={barWidth} height={barHeight} rx="1" fill="var(--brand-500)" />
+                <text x={x} y={labelY} textAnchor="middle" fill="var(--foreground)" fontSize="7.5" fontWeight="700">{formatLsrAmount(amount)}</text>
+                <text x={x} y={height - 9} textAnchor="middle" fill="var(--text-muted)" fontSize="7.5">{index + 1}</text>
+              </g>
+            );
+          })}
+          <text x={width / 2} y={height - 1} textAnchor="middle" fill="var(--text-muted)" fontSize="8">August</text>
+        </svg>
+      </div>
+    </article>
+  );
+}
+
+function LsrWeeklyTable({ config }: { config: LsrDummyConfig }) {
+  return (
+    <article className="min-w-0 rounded-2xl border border-[#e4e7ec] bg-white p-3 shadow-sm dark:border-[#2f4059] dark:bg-[#111827]">
+      <h3 className="text-xs font-semibold text-[#101828] dark:text-[#f8fafc]">LSR Unit Base (Weekly)</h3>
+      <div className="mt-1 overflow-x-auto rounded-xl border border-[#e4e7ec] dark:border-[#2f4059]">
+        <table className="w-full min-w-[260px] table-fixed text-center text-[10px]">
+          <thead className="bg-[#f9fafb] text-[#667085] dark:bg-[#18243a] dark:text-[#b7c2d8]">
+            <tr>
+              <th className="px-1 py-1.5 text-left font-bold leading-tight">PART<br />NAME</th>
+              {[1, 2, 3, 4].map((week) => <th key={week} className="px-1 py-1.5 font-bold">{week}</th>)}
+              <th className="px-1 py-1.5 font-bold">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="bg-[#ecf3ff] text-[#344054] dark:bg-[#14245a] dark:text-[#e4e7ec]">
+              <td className="px-1 py-1.5 text-left font-semibold">{config.partName}</td>
+              {config.weekly.map((value, index) => <td key={`${config.partName}-${index}`} className="px-1 py-1.5 font-semibold">{value}</td>)}
+              <td className="bg-[#f9fafb] px-1 py-1.5 font-bold text-[#344054] dark:bg-[#18243a] dark:text-[#f8fafc]">{config.weeklyTotal}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  );
+}
+
+function LsrMachiningCard({ config }: { config: LsrDummyConfig }) {
+  const kpis = [
+    ["R", config.kpi.r],
+    ["W", config.kpi.w],
+    ["Total (D-1)", config.kpi.totalDMinusOne],
+  ] as const;
+
+  return (
+    <section className="flex min-h-[420px] min-w-0 flex-col gap-2">
+      <div className="px-1">
+        <h2 className="text-sm font-semibold text-[#101828] dark:text-[#f8fafc]">LSR <span className="text-xs font-medium text-[#667085] dark:text-[#a7b0c0]">(Line Supply Request) *Mio</span></h2>
+        <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+        {kpis.map(([label, value]) => (
+          <div key={label} className={`rounded-xl border border-[#e4e7ec] bg-white p-2 shadow-sm dark:border-[#2f4059] dark:bg-[#111827] ${label === "R" ? "text-[#b42318] dark:text-[#ff6b6b]" : "text-[#344054] dark:text-[#e4e7ec]"}`}>
+            <p className="text-[10px] font-bold">{label}</p>
+            <p className="mt-0.5 text-xs font-bold">{formatLsrAmount(value)}</p>
+          </div>
+        ))}
+      </div>
+        <div className="mt-2">
+          <p className="text-center text-[10px] font-medium text-[#667085] dark:text-[#a7b0c0]">Month</p>
+          <div className="mt-1 grid grid-cols-2 gap-2 text-center text-[10px] font-medium text-[#667085] dark:text-[#a7b0c0]">
+            <div className="rounded-xl border border-[#e4e7ec] bg-white p-2 shadow-sm dark:border-[#2f4059] dark:bg-[#111827]"><p>Total</p><p className="mt-0.5 text-xs font-bold text-[#101828] dark:text-[#f8fafc]">{formatLsrAmount(config.kpi.monthTotal)}</p></div>
+            <div className="rounded-xl border border-[#e4e7ec] bg-white p-2 shadow-sm dark:border-[#2f4059] dark:bg-[#111827]"><p>Allowance</p><p className="mt-0.5 text-xs font-bold text-[#101828] dark:text-[#f8fafc]">{formatLsrAmount(config.kpi.allowance)}</p></div>
+          </div>
+        </div>
+      </div>
+      <LsrAmountBaseChart config={config} />
+      <LsrWeeklyTable config={config} />
+    </section>
+  );
+}
+
 type ExpandableStockRow = {
   line: string;
   children?: string[];
@@ -811,6 +983,15 @@ export function OeeLineChart({
               ))}
             </div>
           </article>
+        ))}
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+        <article className="grid min-h-[420px] place-items-center rounded-2xl border border-[#e4e7ec] bg-white p-4 text-center text-sm font-semibold text-[#98a2b3] shadow-sm dark:border-[#2f4059] dark:bg-[#111827]">
+          Under Development
+        </article>
+        {lsrDummyConfigs.map((config) => (
+          <LsrMachiningCard key={config.partName} config={config} />
         ))}
       </section>
     </div>
