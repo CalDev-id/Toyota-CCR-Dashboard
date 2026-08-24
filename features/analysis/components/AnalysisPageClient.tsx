@@ -74,6 +74,7 @@ export default function AnalysisPage() {
   const [data, setData] = useState<AnalysisResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMobileDisplay, setIsMobileDisplay] = useState(false);
   const [portraitContentHeight, setPortraitContentHeight] = useState<number | null>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const boardContentRef = useRef<HTMLDivElement>(null);
@@ -132,7 +133,18 @@ export default function AnalysisPage() {
   }, [loadData]);
 
   useEffect(() => {
-    if (!isPortraitDisplay || !boardContentRef.current) return;
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const updateMobileDisplay = () => setIsMobileDisplay(mediaQuery.matches);
+
+    updateMobileDisplay();
+    mediaQuery.addEventListener("change", updateMobileDisplay);
+    return () => mediaQuery.removeEventListener("change", updateMobileDisplay);
+  }, []);
+
+  const isCompactDisplay = isPortraitDisplay || isMobileDisplay;
+
+  useEffect(() => {
+    if (!isCompactDisplay || !boardContentRef.current) return;
 
     const board = boardContentRef.current;
     const updateHeight = () => setPortraitContentHeight(board.offsetHeight / 3);
@@ -141,7 +153,7 @@ export default function AnalysisPage() {
     observer.observe(board);
     updateHeight();
     return () => observer.disconnect();
-  }, [isPortraitDisplay]);
+  }, [isCompactDisplay]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -169,24 +181,24 @@ export default function AnalysisPage() {
   }
 
   return (
-    <div style={isPortraitDisplay && portraitContentHeight ? { height: portraitContentHeight } : undefined}>
+    <div style={isCompactDisplay && portraitContentHeight ? { height: portraitContentHeight } : undefined}>
       <div
         ref={boardContentRef}
-        className={`w-full max-w-none ${isPortraitDisplay ? "p-0" : "p-1 md:p-1 2xl:p-1"}`}
-        style={isPortraitDisplay ? { width: "300%", transform: "scale(0.333333)", transformOrigin: "top left" } : undefined}
+        className={`w-full max-w-none ${isCompactDisplay ? "p-0" : "p-1 md:p-1 2xl:p-1"}`}
+        style={isCompactDisplay ? { width: "300%", transform: "scale(0.333333)", transformOrigin: "top left" } : undefined}
       >
       <section className={`flex gap-3 rounded-2xl border border-[#e4e7ec] bg-white shadow-sm ${
-        isPortraitDisplay ? "items-center justify-between px-8 py-6" : "items-center justify-between p-3 sm:p-4"
+        isCompactDisplay ? "items-center justify-between px-8 py-6" : "items-center justify-between p-3 sm:p-4"
       }`}>
         <div className="min-w-0">
-          <h2 className={`font-semibold text-[#101828] ${isPortraitDisplay ? "text-3xl" : "text-lg"}`}>Asakai Board</h2>
-          <p className={`mt-1 text-[#667085] ${isPortraitDisplay ? "text-lg" : "text-sm"}`}>
+          <h2 className={`font-semibold text-[#101828] ${isCompactDisplay ? "text-3xl" : "text-lg"}`}>Asakai Board</h2>
+          <p className={`mt-1 text-[#667085] ${isCompactDisplay ? "text-lg" : "text-sm"}`}>
             Line comparison from the first day of the month to selected date
           </p>
         </div>
-        <div className={`flex shrink-0 items-end ${isPortraitDisplay ? "gap-2" : "gap-1.5 sm:gap-2"}`}>
+        <div className={`flex shrink-0 items-end ${isCompactDisplay ? "gap-2" : "gap-1.5 sm:gap-2"}`}>
           <label
-            className={`grid cursor-pointer gap-1.5 font-medium text-[#344054] ${isPortraitDisplay ? "w-64 text-xl" : "w-32 text-xs sm:w-56 sm:text-sm"}`}
+            className={`grid cursor-pointer gap-1.5 font-medium text-[#344054] ${isCompactDisplay ? "w-64 text-xl" : "w-32 text-xs sm:w-56 sm:text-sm"}`}
             onClick={openDatePicker}
           >
             Tanggal
@@ -196,14 +208,14 @@ export default function AnalysisPage() {
               value={date}
               onChange={(event) => setDate(event.target.value)}
               className={`cursor-pointer rounded-lg border border-[#d0d5dd] font-medium outline-none transition focus:border-[#465fff] focus:ring-2 focus:ring-[#ecf3ff] ${
-                isPortraitDisplay ? "h-16 px-4 text-lg" : "h-9 px-2 text-xs sm:h-10 sm:px-3 sm:text-sm"
+                isCompactDisplay ? "h-16 px-4 text-lg" : "h-9 px-2 text-xs sm:h-10 sm:px-3 sm:text-sm"
               }`}
             />
           </label>
           <button
             type="button"
             onClick={() => void (isPortraitDisplay ? exitPortraitDisplay() : enterPortraitDisplay())}
-            className={`whitespace-nowrap rounded-lg font-semibold text-white transition ${isPortraitDisplay ? "h-16 px-6 text-lg" : "h-9 px-2 text-xs sm:h-10 sm:px-3 sm:text-sm"} ${
+            className={`whitespace-nowrap rounded-lg font-semibold text-white transition ${isCompactDisplay ? "h-16 px-6 text-lg" : "h-9 px-2 text-xs sm:h-10 sm:px-3 sm:text-sm"} ${
               isPortraitDisplay ? "bg-[#d92d20] hover:bg-[#b42318]" : "bg-[#465fff] hover:bg-[#3641f5]"
             }`}
           >
@@ -220,12 +232,12 @@ export default function AnalysisPage() {
 
       {isLoading ? (
         <>
-          <section className={`mt-4 grid ${isPortraitDisplay ? "grid-cols-5 gap-2" : "gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5"}`}>
+          <section className={`mt-4 grid ${isCompactDisplay ? "grid-cols-5 gap-2" : "gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5"}`}>
             {lines.map((line) => (
               <OeeCardSkeleton key={line.key} />
             ))}
           </section>
-          <section className={`mt-4 grid ${isPortraitDisplay ? "grid-cols-5 gap-2" : "gap-4 xl:grid-cols-5"}`}>
+          <section className={`mt-4 grid ${isCompactDisplay ? "grid-cols-5 gap-2" : "gap-4 xl:grid-cols-5"}`}>
             {lines.map((line) => (
               <ChartSkeleton key={line.key} label={line.label} />
             ))}
@@ -233,7 +245,7 @@ export default function AnalysisPage() {
         </>
       ) : (
         <>
-          <section className={`mt-4 grid ${isPortraitDisplay ? "grid-cols-5 gap-2" : "gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5"}`}>
+          <section className={`mt-4 grid ${isCompactDisplay ? "grid-cols-5 gap-2" : "gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5"}`}>
             {data?.cards.length ? (
               data.cards.map((card) => <OeeSummaryCard key={card.key} card={card} />)
             ) : (
@@ -256,7 +268,7 @@ export default function AnalysisPage() {
               machiningEmergencyStock={data?.machiningEmergencyStock}
               machiningModuleExportStock={data?.machiningModuleExportStock}
               machiningAdvancedStock={data?.machiningAdvancedStock}
-              portraitDisplay={isPortraitDisplay}
+              portraitDisplay={isCompactDisplay}
             />
           </section>
         </>
