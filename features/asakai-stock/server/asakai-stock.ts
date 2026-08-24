@@ -64,6 +64,18 @@ export type MachiningEmergencyStock = Record<EmergencyStockGroup, {
   export: EmergencyStockMetrics;
 }>;
 
+export type MachiningModuleExportStock = Record<EmergencyStockGroup, {
+  total: EmergencyStockMetrics;
+  modules: Record<string, EmergencyStockMetrics>;
+}>;
+
+type AdvancedStockGroup = "cylBlock" | "cylHead" | "crankshaft" | "camshaft";
+
+export type MachiningAdvancedStock = Record<AdvancedStockGroup, {
+  actualUnit: number;
+  balanceUnit: number;
+}>;
+
 type DatabaseStockRow = StockRow & { id: number };
 
 function formatDate(date: Date) {
@@ -232,6 +244,18 @@ type EmergencyStockRow = {
   actLocal: number | null;
 };
 
+type ModuleExportStockRow = Omit<EmergencyStockRow, "actLocal"> & {
+  moduleCode: string;
+};
+
+type AdvancedStockRow = {
+  line: string;
+  type: string;
+  moduleCode: string | null;
+  actualUnit: number | null;
+  balanceUnit: number | null;
+};
+
 function emptyEmergencyStockMetrics(): EmergencyStockMetrics {
   return { balancePallet: 0, targetPallet: 0, actPallet: 0, actUnit: 0, actDay: 0 };
 }
@@ -302,16 +326,16 @@ function buildEmergencyStockGroup(rows: EmergencyStockRow[]): {
 
 const machiningEmergencyStockGroups: Array<{
   key: EmergencyStockGroup;
-  matches: (row: EmergencyStockRow) => boolean;
+  matches: (row: Pick<EmergencyStockRow, "line" | "type">) => boolean;
 }> = [
-  { key: "cb1", matches: (row) => row.line === "CYL. BLOCK" && row.type === "1 TR-K" },
-  { key: "cb2", matches: (row) => row.line === "CYL. BLOCK" && row.type === "2 TR-K" },
-  { key: "ch1", matches: (row) => row.line === "CYL. HEAD" && row.type.startsWith("1 TR") },
-  { key: "ch2", matches: (row) => row.line === "CYL. HEAD" && row.type.startsWith("2 TR") },
-  { key: "cr1", matches: (row) => row.line === "CRANKSHAFT" && row.type === "1 TR-K" },
-  { key: "cr2", matches: (row) => row.line === "CRANKSHAFT" && row.type === "2 TR-K" },
-  { key: "cam1", matches: (row) => row.line === "CAMSHAFT" && row.type === "No.1 & No.2" },
-  { key: "cam2", matches: (row) => row.line === "CAMSHAFT" && row.type === "No.1 & No.2" },
+  { key: "cb1", matches: (row) => row.line === "CYL. BLOCK" && row.type.trim().startsWith("1 TR") },
+  { key: "cb2", matches: (row) => row.line === "CYL. BLOCK" && row.type.trim().startsWith("2 TR") },
+  { key: "ch1", matches: (row) => row.line === "CYL. HEAD" && row.type.trim().startsWith("1 TR") },
+  { key: "ch2", matches: (row) => row.line === "CYL. HEAD" && row.type.trim().startsWith("2 TR") },
+  { key: "cr1", matches: (row) => row.line === "CRANKSHAFT" && row.type.trim().startsWith("1 TR") },
+  { key: "cr2", matches: (row) => row.line === "CRANKSHAFT" && row.type.trim().startsWith("2 TR") },
+  { key: "cam1", matches: (row) => row.line === "CAMSHAFT" && row.type.trim().startsWith("No.1 & No.2") },
+  { key: "cam2", matches: (row) => row.line === "CAMSHAFT" && row.type.trim().startsWith("No.1 & No.2") },
 ];
 
 export async function getMachiningEmergencyStock(date: string): Promise<MachiningEmergencyStock> {
@@ -330,6 +354,107 @@ export async function getMachiningEmergencyStock(date: string): Promise<Machinin
   return Object.fromEntries(
     machiningEmergencyStockGroups.map(({ key, matches }) => [key, buildEmergencyStockGroup(rows.filter(matches))]),
   ) as MachiningEmergencyStock;
+}
+
+function buildModuleExportMetrics(rows: ModuleExportStockRow[]): EmergencyStockMetrics {
+  const totals = rows.reduce((current, row) => {
+    const unitModule = Number(row.unitModule) || 0;
+    const targetDay = Number(row.targetDay) || 0;
+    const targetPallet = Number(row.targetModule) || 0;
+    const actPallet = Number(row.actModule) || 0;
+
+    return {
+      targetPallet: current.targetPallet + targetPallet,
+      actPallet: current.actPallet + actPallet,
+      actUnit: current.actUnit + actPallet * unitModule,
+      actDayDenominator: current.actDayDenominator + (targetDay > 0 ? targetPallet * unitModule / targetDay : 0),
+    };
+  }, {
+    targetPallet: 0,
+    actPallet: 0,
+    actUnit: 0,
+    actDayDenominator: 0,
+  });
+
+  return buildEmergencyStockMetrics(
+    totals.actPallet,
+    totals.targetPallet,
+    totals.actUnit,
+    totals.actDayDenominator,
+  );
+}
+
+export async function getMachiningModuleExportStock(date: string): Promise<MachiningModuleExportStock> {
+  const rows = await prisma.$queryRawUnsafe<ModuleExportStockRow[]>(
+    `SELECT line, type, module_code AS moduleCode, CAST(unit_module AS DOUBLE) AS unitModule,
+      CAST(target_day AS DOUBLE) AS targetDay, CAST(target_module AS DOUBLE) AS targetModule,
+      CAST(act_module AS DOUBLE) AS actModule
+     FROM asakai_stock
+     WHERE \`date\` = ?
+       AND line IN ('CYL. BLOCK', 'CYL. HEAD', 'CRANKSHAFT', 'CAMSHAFT')
+       AND module_code IS NOT NULL
+       AND TRIM(module_code) <> ''`,
+    date,
+  );
+
+  return Object.fromEntries(
+    machiningEmergencyStockGroups.map(({ key, matches }) => {
+      const groupRows = rows.filter(matches);
+      const moduleCodes = [...new Set(groupRows.map((row) => row.moduleCode))].sort((left, right) => left.localeCompare(right));
+
+      return [key, {
+        total: buildModuleExportMetrics(groupRows),
+        modules: Object.fromEntries(
+          moduleCodes.map((moduleCode) => [moduleCode, buildModuleExportMetrics(groupRows.filter((row) => row.moduleCode === moduleCode))]),
+        ),
+      }];
+    }),
+  ) as MachiningModuleExportStock;
+}
+
+const machiningAdvancedStockGroups: Array<{
+  key: AdvancedStockGroup;
+  matches: (row: AdvancedStockRow) => boolean;
+}> = [
+  {
+    key: "cylBlock",
+    matches: (row) => row.line === "CYL. BLOCK" && /^2\s*TR\b/i.test(row.type.trim()) && /STM/i.test(row.type) && row.moduleCode?.trim().toUpperCase() === "K2",
+  },
+  {
+    key: "cylHead",
+    matches: (row) => row.line === "CYL. HEAD" && /^2\s*TR\b/i.test(row.type.trim()) && /STM/i.test(row.type) && row.moduleCode?.trim().toUpperCase() === "K7",
+  },
+  {
+    key: "crankshaft",
+    matches: (row) => row.line === "CRANKSHAFT" && /^2\s*TR\b/i.test(row.type.trim()) && /STM/i.test(row.type) && row.moduleCode?.trim().toUpperCase() === "K4",
+  },
+  {
+    key: "camshaft",
+    matches: (row) => row.line === "CAMSHAFT" && row.type.trim().startsWith("No.1 & No.2") && row.moduleCode?.trim().toUpperCase() === "K5",
+  },
+];
+
+export async function getMachiningAdvancedStock(date: string): Promise<MachiningAdvancedStock> {
+  const rows = await prisma.$queryRawUnsafe<AdvancedStockRow[]>(
+    `SELECT line, type, module_code AS moduleCode,
+      CAST(actual_stock_unit_adv AS DOUBLE) AS actualUnit,
+      CAST(balance_stock_adv_new AS DOUBLE) AS balanceUnit
+     FROM asakai_stock
+     WHERE \`date\` = ?
+       AND line IN ('CYL. BLOCK', 'CYL. HEAD', 'CRANKSHAFT', 'CAMSHAFT')`,
+    date,
+  );
+
+  return Object.fromEntries(
+    machiningAdvancedStockGroups.map(({ key, matches }) => {
+      const totals = rows.filter(matches).reduce((current, row) => ({
+        actualUnit: current.actualUnit + (Number(row.actualUnit) || 0),
+        balanceUnit: current.balanceUnit + (Number(row.balanceUnit) || 0),
+      }), { actualUnit: 0, balanceUnit: 0 });
+
+      return [key, totals];
+    }),
+  ) as MachiningAdvancedStock;
 }
 
 async function updateAsakaiStockValuesWithDatabase(

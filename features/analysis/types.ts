@@ -89,6 +89,20 @@ export type AnalysisMachiningEmergencyStock = Record<
   export: AnalysisEmergencyStockMetrics;
 }>;
 
+export type AnalysisMachiningModuleExportStock = Record<
+  "cb1" | "cb2" | "ch1" | "ch2" | "cr1" | "cr2" | "cam1" | "cam2",
+{
+  total: AnalysisEmergencyStockMetrics;
+  modules: Record<string, AnalysisEmergencyStockMetrics>;
+}>;
+
+export type AnalysisMachiningAdvancedStock = Record<
+  "cylBlock" | "cylHead" | "crankshaft" | "camshaft",
+{
+  actualUnit: number;
+  balanceUnit: number;
+}>;
+
 export type AnalysisResponse = {
   date: string;
   start: string;
@@ -104,6 +118,8 @@ export type AnalysisResponse = {
   rqShiftSeries: AnalysisShiftSeriesRow[];
   gapSeries: AnalysisGapSeriesRow[];
   machiningEmergencyStock: AnalysisMachiningEmergencyStock;
+  machiningModuleExportStock: AnalysisMachiningModuleExportStock;
+  machiningAdvancedStock: AnalysisMachiningAdvancedStock;
   lines: Array<{
     key: AnalysisLineKey;
     label: string;

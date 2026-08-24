@@ -6,6 +6,8 @@ import { useState, useSyncExternalStore } from "react";
 
 type TopbarProps = {
   isMobileSidebarOpen: boolean;
+  compact?: boolean;
+  forceMenuButton?: boolean;
   onToggleMobileSidebar: () => void;
 };
 
@@ -95,6 +97,8 @@ function saveTheme(theme: Theme) {
 
 export default function Topbar({
   isMobileSidebarOpen,
+  compact = false,
+  forceMenuButton = false,
   onToggleMobileSidebar,
 }: TopbarProps) {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -135,17 +139,17 @@ export default function Topbar({
 
   return (
     <header className="sticky top-0 z-30 border-b border-[#e4e7ec] bg-white">
-      <div className="flex min-h-16 items-center justify-between gap-3 px-4 py-3 md:px-6">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
+      <div className={`flex items-center justify-between gap-3 ${compact ? "min-h-10 px-2 py-1" : "min-h-16 px-4 py-3 md:px-6"}`}>
+        <div className={`flex min-w-0 flex-1 ${compact ? "gap-2" : "gap-3"}`}>
           <button
-            className="grid size-10 shrink-0 place-items-center rounded-lg border border-[#e4e7ec] bg-white text-[#667085] transition hover:bg-[#f9fafb] hover:text-[#101828] lg:hidden"
+            className={`grid shrink-0 place-items-center rounded-lg border border-[#e4e7ec] bg-white text-[#667085] transition hover:bg-[#f9fafb] hover:text-[#101828] ${compact ? "size-6" : forceMenuButton ? "size-10" : "size-10 lg:hidden"}`}
             aria-label="Open sidebar"
             aria-expanded={isMobileSidebarOpen}
             aria-controls="mobile-sidebar"
             onClick={onToggleMobileSidebar}
             type="button"
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
+            <svg viewBox="0 0 24 24" aria-hidden="true" className={compact ? "size-3.5" : "size-5"}>
               <path
                 d="M4 7h16M4 12h16M4 17h16"
                 fill="none"
@@ -157,10 +161,10 @@ export default function Topbar({
           </button>
 
           <div className="min-w-0">
-            <h1 className="truncate text-base font-semibold text-[#101828]">
+            <h1 className={`truncate font-semibold text-[#101828] ${compact ? "text-xs" : "text-base"}`}>
               {pageHeader.title}
             </h1>
-            <p className="truncate text-xs font-medium text-[#667085]">
+            <p className={`truncate font-medium text-[#667085] ${compact ? "text-[8px]" : "text-xs"}`}>
               {pageHeader.subtitle}
             </p>
           </div>
@@ -170,11 +174,11 @@ export default function Topbar({
           <button
             aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
             aria-pressed={isDarkMode}
-            className="relative grid size-10 place-items-center rounded-full border border-[#e4e7ec] bg-white text-[#667085] transition hover:bg-[#f9fafb] hover:text-[#101828]"
+            className={`relative grid place-items-center rounded-full border border-[#e4e7ec] bg-white text-[#667085] transition hover:bg-[#f9fafb] hover:text-[#101828] ${compact ? "size-6" : "size-10"}`}
             type="button"
             onClick={toggleTheme}
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
+            <svg viewBox="0 0 24 24" aria-hidden="true" className={compact ? "size-3.5" : "size-5"}>
               {isDarkMode ? (
                 <path
                   d="M12 4.25V3m0 18v-1.25M5.52 5.52l-.88-.88m14.72 14.72-.88-.88M4.25 12H3m18 0h-1.25M5.52 18.48l-.88.88M19.36 4.64l-.88.88M16.25 12a4.25 4.25 0 1 1-8.5 0 4.25 4.25 0 0 1 8.5 0Z"
@@ -198,10 +202,10 @@ export default function Topbar({
 
           <button
             aria-label="Notifications"
-            className="relative grid size-10 place-items-center rounded-full border border-[#e4e7ec] bg-white text-[#667085] transition hover:bg-[#f9fafb] hover:text-[#101828]"
+            className={`relative grid place-items-center rounded-full border border-[#e4e7ec] bg-white text-[#667085] transition hover:bg-[#f9fafb] hover:text-[#101828] ${compact ? "size-6" : "size-10"}`}
             type="button"
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
+            <svg viewBox="0 0 24 24" aria-hidden="true" className={compact ? "size-3.5" : "size-5"}>
               <path
                 d="M18 9.75a6 6 0 0 0-12 0c0 6-2 6.5-2 6.5h16s-2-.5-2-6.5ZM10 19h4"
                 fill="none"
@@ -225,27 +229,27 @@ export default function Topbar({
             ) : null}
 
             <button
-              className="relative z-50 flex h-11 items-center gap-3 rounded-full border border-[#e4e7ec] bg-white py-1 pl-1 pr-3 transition hover:bg-[#f9fafb]"
+              className={`relative z-50 flex items-center rounded-full border border-[#e4e7ec] bg-white py-1 pl-1 transition hover:bg-[#f9fafb] ${compact ? "h-7 gap-1 pr-1.5" : "h-11 gap-3 pr-3"}`}
               type="button"
               onClick={() => setIsProfileMenuOpen((current) => !current)}
               aria-expanded={isProfileMenuOpen}
               aria-haspopup="menu"
             >
-              <span className="grid size-9 place-items-center rounded-full bg-[#101828] text-xs font-semibold text-white">
+              <span className={`grid place-items-center rounded-full bg-[#101828] text-xs font-semibold text-white ${compact ? "size-5 text-[8px]" : "size-9"}`}>
                 {userInitials}
               </span>
                 <span className="hidden text-left sm:block">
-                  <span className="block text-sm font-medium leading-4 text-[#101828]">
+                  <span className={`block font-medium text-[#101828] ${compact ? "text-[8px] leading-2.5" : "text-sm leading-4"}`}>
                     {userName}
                   </span>
-                  <span className="mt-0.5 block text-xs text-[#667085]">
+                  <span className={`block text-[#667085] ${compact ? "text-[7px] leading-2" : "mt-0.5 text-xs"}`}>
                     {userRoleLabel}
+                  </span>
                 </span>
-              </span>
               <svg
                 viewBox="0 0 20 20"
                 aria-hidden="true"
-                className={`hidden size-4 text-[#667085] transition-transform sm:block ${
+                className={`hidden text-[#667085] transition-transform sm:block ${compact ? "size-3" : "size-4"} ${
                   isProfileMenuOpen ? "rotate-180" : ""
                 }`}
               >

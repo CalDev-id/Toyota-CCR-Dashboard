@@ -10,6 +10,8 @@ import type { UserRole } from "@/features/users/types";
 type SidebarProps = {
   isCollapsed: boolean;
   isMobileOpen: boolean;
+  forceDesktopVisible?: boolean;
+  hideCollapseControl?: boolean;
   onCloseMobile: () => void;
   onToggleCollapsed: () => void;
 };
@@ -467,6 +469,8 @@ function MenuSection({
 export default function Sidebar({
   isCollapsed,
   isMobileOpen,
+  forceDesktopVisible = false,
+  hideCollapseControl = false,
   onCloseMobile,
   onToggleCollapsed,
 }: SidebarProps) {
@@ -531,38 +535,45 @@ export default function Sidebar({
         <MenuSection onNavigate={onCloseMobile} />
       </aside>
 
-      <aside
-        className={`relative z-40 hidden h-full shrink-0 border-r border-[#e4e7ec] bg-white transition-[width] duration-200 ease-out lg:flex lg:flex-col ${
-          isCollapsed ? "w-[92px]" : "w-[290px]"
-        }`}
-      >
-        <button
-          className="absolute -right-4 top-6 z-50 hidden size-8 place-items-center rounded-full border border-[#e4e7ec] bg-white text-[#667085] shadow-sm transition hover:bg-[#f9fafb] hover:text-[#101828] lg:grid"
-          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          onClick={onToggleCollapsed}
-          type="button"
+      <div className={forceDesktopVisible ? "relative z-40 h-full w-[31px] shrink-0 overflow-hidden" : "contents"}>
+        <aside
+          className={`relative z-40 h-full shrink-0 border-r border-[#e4e7ec] bg-white transition-[width] duration-200 ease-out ${
+            forceDesktopVisible ? "flex flex-col" : "hidden lg:flex lg:flex-col"
+          } ${
+            isCollapsed ? "w-[92px]" : "w-[290px]"
+          }`}
+          style={forceDesktopVisible ? { height: "300%", transform: "scale(0.333333)", transformOrigin: "top left" } : undefined}
         >
-          <svg
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            className={`size-4 transition-transform ${
-              isCollapsed ? "rotate-180" : ""
-            }`}
-          >
-            <path
-              d="m15 6-6 6 6 6"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-            />
-          </svg>
-        </button>
+          {!hideCollapseControl ? (
+            <button
+              className="absolute -right-4 top-6 z-50 hidden size-8 place-items-center rounded-full border border-[#e4e7ec] bg-white text-[#667085] shadow-sm transition hover:bg-[#f9fafb] hover:text-[#101828] lg:grid"
+              aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              onClick={onToggleCollapsed}
+              type="button"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                className={`size-4 transition-transform ${
+                  isCollapsed ? "rotate-180" : ""
+                }`}
+              >
+                <path
+                  d="m15 6-6 6 6 6"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                />
+              </svg>
+            </button>
+          ) : null}
 
-        <Brand collapsed={isCollapsed} />
-        <MenuSection collapsed={isCollapsed} />
-      </aside>
+          <Brand collapsed={isCollapsed} />
+          <MenuSection collapsed={isCollapsed} />
+        </aside>
+      </div>
     </>
   );
 }

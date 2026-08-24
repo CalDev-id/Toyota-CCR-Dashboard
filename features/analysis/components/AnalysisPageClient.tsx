@@ -6,6 +6,7 @@ import type {
 } from "@/features/analysis/types";
 import { OeeLineChart } from "@/features/analysis/components/AnalysisCharts";
 import OeeSummaryCard from "@/features/analysis/components/OeeSummaryCard";
+import { useAsakaiDisplayMode } from "@/components/layouts/AsakaiDisplayModeContext";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const lineLabels: Record<LineKey, string> = {
@@ -68,11 +69,14 @@ async function readResponse(response: Response) {
 }
 
 export default function AnalysisPage() {
+  const { isPortraitDisplay, enterPortraitDisplay, exitPortraitDisplay } = useAsakaiDisplayMode();
   const [date, setDate] = useState(todayKey);
   const [data, setData] = useState<AnalysisResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [portraitContentHeight, setPortraitContentHeight] = useState<number | null>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
+  const boardContentRef = useRef<HTMLDivElement>(null);
   const isRefreshingRef = useRef(false);
 
   const loadData = useCallback(async (options?: {
@@ -128,6 +132,18 @@ export default function AnalysisPage() {
   }, [loadData]);
 
   useEffect(() => {
+    if (!isPortraitDisplay || !boardContentRef.current) return;
+
+    const board = boardContentRef.current;
+    const updateHeight = () => setPortraitContentHeight(board.offsetHeight / 3);
+    const observer = new ResizeObserver(updateHeight);
+
+    observer.observe(board);
+    updateHeight();
+    return () => observer.disconnect();
+  }, [isPortraitDisplay]);
+
+  useEffect(() => {
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible") {
         void loadData({ showLoading: false, silent: true });
@@ -153,27 +169,47 @@ export default function AnalysisPage() {
   }
 
   return (
-    <div className="w-full max-w-none p-1 md:p-1 2xl:p-1">
-      <section className="flex flex-col gap-4 rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-[#101828]">Asakai Board</h2>
-          <p className="mt-1 text-sm text-[#667085]">
+    <div style={isPortraitDisplay && portraitContentHeight ? { height: portraitContentHeight } : undefined}>
+      <div
+        ref={boardContentRef}
+        className={`w-full max-w-none ${isPortraitDisplay ? "p-0" : "p-1 md:p-1 2xl:p-1"}`}
+        style={isPortraitDisplay ? { width: "300%", transform: "scale(0.333333)", transformOrigin: "top left" } : undefined}
+      >
+      <section className={`flex gap-3 rounded-2xl border border-[#e4e7ec] bg-white shadow-sm ${
+        isPortraitDisplay ? "items-center justify-between px-8 py-6" : "items-center justify-between p-3 sm:p-4"
+      }`}>
+        <div className="min-w-0">
+          <h2 className={`font-semibold text-[#101828] ${isPortraitDisplay ? "text-3xl" : "text-lg"}`}>Asakai Board</h2>
+          <p className={`mt-1 text-[#667085] ${isPortraitDisplay ? "text-lg" : "text-sm"}`}>
             Line comparison from the first day of the month to selected date
           </p>
         </div>
-        <label
-          className="grid cursor-pointer gap-1.5 text-sm font-medium text-[#344054] md:w-56"
-          onClick={openDatePicker}
-        >
-          Tanggal
-          <input
-            ref={dateInputRef}
-            type="date"
-            value={date}
-            onChange={(event) => setDate(event.target.value)}
-            className="h-10 cursor-pointer rounded-lg border border-[#d0d5dd] px-3 text-sm font-medium outline-none transition focus:border-[#465fff] focus:ring-2 focus:ring-[#ecf3ff]"
-          />
-        </label>
+        <div className={`flex shrink-0 items-end ${isPortraitDisplay ? "gap-2" : "gap-1.5 sm:gap-2"}`}>
+          <label
+            className={`grid cursor-pointer gap-1.5 font-medium text-[#344054] ${isPortraitDisplay ? "w-64 text-xl" : "w-32 text-xs sm:w-56 sm:text-sm"}`}
+            onClick={openDatePicker}
+          >
+            Tanggal
+            <input
+              ref={dateInputRef}
+              type="date"
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+              className={`cursor-pointer rounded-lg border border-[#d0d5dd] font-medium outline-none transition focus:border-[#465fff] focus:ring-2 focus:ring-[#ecf3ff] ${
+                isPortraitDisplay ? "h-16 px-4 text-lg" : "h-9 px-2 text-xs sm:h-10 sm:px-3 sm:text-sm"
+              }`}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => void (isPortraitDisplay ? exitPortraitDisplay() : enterPortraitDisplay())}
+            className={`whitespace-nowrap rounded-lg font-semibold text-white transition ${isPortraitDisplay ? "h-16 px-6 text-lg" : "h-9 px-2 text-xs sm:h-10 sm:px-3 sm:text-sm"} ${
+              isPortraitDisplay ? "bg-[#d92d20] hover:bg-[#b42318]" : "bg-[#465fff] hover:bg-[#3641f5]"
+            }`}
+          >
+            {isPortraitDisplay ? "Keluar Layar Penuh" : "Layar Penuh"}
+          </button>
+        </div>
       </section>
 
       {error ? (
@@ -184,12 +220,12 @@ export default function AnalysisPage() {
 
       {isLoading ? (
         <>
-          <section className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+          <section className={`mt-4 grid ${isPortraitDisplay ? "grid-cols-5 gap-2" : "gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5"}`}>
             {lines.map((line) => (
               <OeeCardSkeleton key={line.key} />
             ))}
           </section>
-          <section className="mt-4 grid gap-4 xl:grid-cols-5">
+          <section className={`mt-4 grid ${isPortraitDisplay ? "grid-cols-5 gap-2" : "gap-4 xl:grid-cols-5"}`}>
             {lines.map((line) => (
               <ChartSkeleton key={line.key} label={line.label} />
             ))}
@@ -197,7 +233,7 @@ export default function AnalysisPage() {
         </>
       ) : (
         <>
-          <section className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+          <section className={`mt-4 grid ${isPortraitDisplay ? "grid-cols-5 gap-2" : "gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5"}`}>
             {data?.cards.length ? (
               data.cards.map((card) => <OeeSummaryCard key={card.key} card={card} />)
             ) : (
@@ -218,10 +254,14 @@ export default function AnalysisPage() {
               lines={lines}
               cards={data?.cards ?? []}
               machiningEmergencyStock={data?.machiningEmergencyStock}
+              machiningModuleExportStock={data?.machiningModuleExportStock}
+              machiningAdvancedStock={data?.machiningAdvancedStock}
+              portraitDisplay={isPortraitDisplay}
             />
           </section>
         </>
       )}
+      </div>
     </div>
   );
 }

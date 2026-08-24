@@ -1,6 +1,8 @@
 import type {
   AnalysisGapSeriesRow as GapSeriesRow,
+  AnalysisMachiningAdvancedStock,
   AnalysisMachiningEmergencyStock,
+  AnalysisMachiningModuleExportStock,
   AnalysisEmergencyStockMetrics,
   AnalysisOeeCard as OeeCard,
   AnalysisOeeSeriesRow as SeriesRow,
@@ -66,24 +68,15 @@ const machiningStockGroups = [
 const machiningExportGroups = [
   {
     title: "Cyl Block",
-    rows: [
-      { line: "CB 1", children: ["CD", "K1", "CB"] },
-      { line: "CB 2", children: ["CB", "K2"] },
-    ],
+    rows: [{ line: "CB 1" }, { line: "CB 2" }],
   },
   {
     title: "Cyl Head",
-    rows: [
-      { line: "CH 1", children: ["HC", "K6", "KJ"] },
-      { line: "CH 2", children: ["HD", "HE", "HF", "K7", "K8", "KR"] },
-    ],
+    rows: [{ line: "CH 1" }, { line: "CH 2" }],
   },
   {
     title: "Crankshaft",
-    rows: [
-      { line: "CR 1", children: ["CS", "K3"] },
-      { line: "CR 2", children: ["CT", "K4"] },
-    ],
+    rows: [{ line: "CR 1" }, { line: "CR 2" }],
   },
   {
     title: "Camshaft",
@@ -99,12 +92,15 @@ const machiningStockColumns = [
   "Act Day",
 ];
 
-const advancedStockVariants = [
-  "All Variant",
-  "2TR STM [K2]",
-  "2TR STM [K7]",
-  "2TR STM [K4]",
-  "2TR STM [K5]",
+const advancedStockVariants: Array<{
+  key?: keyof AnalysisMachiningAdvancedStock;
+  label: string;
+}> = [
+  { label: "All Variant" },
+  { key: "cylBlock", label: "2TR STM [K2]" },
+  { key: "cylHead", label: "2TR STM [K7]" },
+  { key: "crankshaft", label: "2TR STM [K4]" },
+  { key: "camshaft", label: "No.1 & No.2 [K5]" },
 ];
 
 type LsrDummyConfig = {
@@ -168,7 +164,7 @@ function formatLsrAmount(value: number) {
 
 function LsrAmountBaseChart({ config }: { config: LsrDummyConfig }) {
   const width = 320;
-  const height = 154;
+  const height = 144;
   const padding = { top: 18, right: 8, bottom: 24, left: 28 };
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
@@ -181,10 +177,10 @@ function LsrAmountBaseChart({ config }: { config: LsrDummyConfig }) {
   return (
     <article className="min-w-0 rounded-2xl border border-[#e4e7ec] bg-white p-3 shadow-sm dark:border-[#2f4059] dark:bg-[#111827]">
       <h3 className="text-xs font-semibold text-[#101828] dark:text-[#f8fafc]">LSR Amount Base</h3>
-      <div className="mt-1 overflow-x-auto rounded-xl bg-[#f9fafb] p-2 dark:bg-[#162033]">
+      <div className="mt-1 overflow-x-auto rounded-xl bg-[#f9fafb] px-2 pb-0 pt-2 dark:bg-[#162033]">
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="block h-[154px] min-w-[280px] w-full"
+          className="block h-[144px] min-w-[280px] w-full"
           role="img"
           aria-label={`Dummy LSR Amount Base chart for ${config.partName}`}
         >
@@ -193,12 +189,12 @@ function LsrAmountBaseChart({ config }: { config: LsrDummyConfig }) {
             return (
               <g key={value}>
                 <line x1={padding.left} x2={width - padding.right} y1={y} y2={y} stroke="var(--border-strong)" strokeDasharray="2 3" strokeWidth="0.75" />
-                <text x={2} y={y + 3} fill="var(--text-muted)" fontSize="8">{formatLsrAmount(value)}</text>
+                <text x={2} y={y + 3} fill="var(--text-muted)" fontSize="10">{formatLsrAmount(value)}</text>
               </g>
             );
           })}
           <line x1={padding.left} x2={width - padding.right} y1={targetY} y2={targetY} stroke="var(--error-text)" strokeDasharray="5 4" strokeWidth="1.5" />
-          <text x={padding.left + 2} y={targetY - 4} fill="var(--error-text)" fontSize="8" fontWeight="700">{formatLsrAmount(config.target)}</text>
+          <text x={padding.left + 2} y={targetY - 4} fill="var(--error-text)" fontSize="10" fontWeight="700">{formatLsrAmount(config.target)}</text>
           {config.amountBase.map((amount, index) => {
             const x = padding.left + ((index + 0.5) / amountCount) * plotWidth;
             const barHeight = (amount / max) * plotHeight;
@@ -208,14 +204,16 @@ function LsrAmountBaseChart({ config }: { config: LsrDummyConfig }) {
             return (
               <g key={`${config.partName}-${index}`}>
                 <rect x={x - barWidth / 2} y={y} width={barWidth} height={barHeight} rx="1" fill="var(--brand-500)" />
-                <text x={x} y={labelY} textAnchor="middle" fill="var(--foreground)" fontSize="7.5" fontWeight="700">{formatLsrAmount(amount)}</text>
-                <text x={x} y={height - 9} textAnchor="middle" fill="var(--text-muted)" fontSize="7.5">{index + 1}</text>
+                <text x={x} y={labelY} textAnchor="middle" fill="var(--foreground)" fontSize="9" fontWeight="700">{formatLsrAmount(amount)}</text>
+                <text x={x} y={height - 5} textAnchor="middle" fill="var(--text-muted)" fontSize="9">{index + 1}</text>
               </g>
             );
           })}
-          <text x={width / 2} y={height - 1} textAnchor="middle" fill="var(--text-muted)" fontSize="8">August</text>
         </svg>
       </div>
+      <p className="mt-1 text-center text-[11px] font-medium leading-none text-[#667085] dark:text-[#a7b0c0]">
+        August
+      </p>
     </article>
   );
 }
@@ -224,8 +222,8 @@ function LsrWeeklyTable({ config }: { config: LsrDummyConfig }) {
   return (
     <article className="min-w-0 rounded-2xl border border-[#e4e7ec] bg-white p-3 shadow-sm dark:border-[#2f4059] dark:bg-[#111827]">
       <h3 className="text-xs font-semibold text-[#101828] dark:text-[#f8fafc]">LSR Unit Base (Weekly)</h3>
-      <div className="mt-1 overflow-x-auto rounded-xl border border-[#e4e7ec] dark:border-[#2f4059]">
-        <table className="w-full min-w-[260px] table-fixed text-center text-[10px]">
+      <div className="mt-1 overflow-hidden rounded-xl border border-[#e4e7ec] dark:border-[#2f4059]">
+        <table className="w-full table-fixed text-center text-[11px]">
           <thead className="bg-[#f9fafb] text-[#667085] dark:bg-[#18243a] dark:text-[#b7c2d8]">
             <tr>
               <th className="px-1 py-1.5 text-left font-bold leading-tight">PART<br />NAME</th>
@@ -260,16 +258,16 @@ function LsrMachiningCard({ config }: { config: LsrDummyConfig }) {
         <div className="mt-2 grid grid-cols-3 gap-2 text-center">
         {kpis.map(([label, value]) => (
           <div key={label} className={`rounded-xl border border-[#e4e7ec] bg-white p-2 shadow-sm dark:border-[#2f4059] dark:bg-[#111827] ${label === "R" ? "text-[#b42318] dark:text-[#ff6b6b]" : "text-[#344054] dark:text-[#e4e7ec]"}`}>
-            <p className="text-[10px] font-bold">{label}</p>
-            <p className="mt-0.5 text-xs font-bold">{formatLsrAmount(value)}</p>
+            <p className="text-xs font-bold">{label}</p>
+            <p className="mt-0.5 text-sm font-bold">{formatLsrAmount(value)}</p>
           </div>
         ))}
       </div>
         <div className="mt-2">
-          <p className="text-center text-[10px] font-medium text-[#667085] dark:text-[#a7b0c0]">Month</p>
-          <div className="mt-1 grid grid-cols-2 gap-2 text-center text-[10px] font-medium text-[#667085] dark:text-[#a7b0c0]">
-            <div className="rounded-xl border border-[#e4e7ec] bg-white p-2 shadow-sm dark:border-[#2f4059] dark:bg-[#111827]"><p>Total</p><p className="mt-0.5 text-xs font-bold text-[#101828] dark:text-[#f8fafc]">{formatLsrAmount(config.kpi.monthTotal)}</p></div>
-            <div className="rounded-xl border border-[#e4e7ec] bg-white p-2 shadow-sm dark:border-[#2f4059] dark:bg-[#111827]"><p>Allowance</p><p className="mt-0.5 text-xs font-bold text-[#101828] dark:text-[#f8fafc]">{formatLsrAmount(config.kpi.allowance)}</p></div>
+          <p className="text-center text-xs font-medium text-[#667085] dark:text-[#a7b0c0]">Month</p>
+          <div className="mt-1 grid grid-cols-2 gap-2 text-center text-xs font-medium text-[#667085] dark:text-[#a7b0c0]">
+            <div className="rounded-xl border border-[#e4e7ec] bg-white p-2 shadow-sm dark:border-[#2f4059] dark:bg-[#111827]"><p>Total</p><p className="mt-0.5 text-sm font-bold text-[#101828] dark:text-[#f8fafc]">{formatLsrAmount(config.kpi.monthTotal)}</p></div>
+            <div className="rounded-xl border border-[#e4e7ec] bg-white p-2 shadow-sm dark:border-[#2f4059] dark:bg-[#111827]"><p>Allowance</p><p className="mt-0.5 text-sm font-bold text-[#101828] dark:text-[#f8fafc]">{formatLsrAmount(config.kpi.allowance)}</p></div>
           </div>
         </div>
       </div>
@@ -304,16 +302,18 @@ function ExpandableStockTable({
   rows,
   tone,
   machiningStock,
+  machiningModuleExportStock,
 }: {
   rows: ExpandableStockRow[];
   tone: "gray" | "blue";
   machiningStock?: AnalysisMachiningEmergencyStock;
+  machiningModuleExportStock?: AnalysisMachiningModuleExportStock;
 }) {
   const isBlue = tone === "blue";
   const [expandedLines, setExpandedLines] = useState<Set<string>>(
     () => new Set(
       (isBlue ? rows.slice(0, 1) : rows.slice(1, 2))
-        .filter((row) => row.children?.length)
+        .filter((row) => isBlue || row.children?.length)
         .map((row) => row.line),
     ),
   );
@@ -354,8 +354,6 @@ function ExpandableStockTable({
         </thead>
         <tbody className="divide-y divide-[#eaecf0] text-[#344054]">
           {rows.flatMap((row) => {
-            const isExpandable = Boolean(row.children?.length);
-            const isExpanded = isExpandable && expandedLines.has(row.line);
             const stockKey = ({
               "CB 1": "cb1",
               "CB 2": "cb2",
@@ -366,7 +364,14 @@ function ExpandableStockTable({
               "CAM 1": "cam1",
               "CAM 2": "cam2",
             } as const)[row.line];
-            const parentMetrics = stockKey ? machiningStock?.[stockKey].total : undefined;
+            const moduleMetrics = stockKey ? machiningModuleExportStock?.[stockKey] : undefined;
+            const isExpandable = isBlue
+              ? Boolean(moduleMetrics && Object.keys(moduleMetrics.modules).length)
+              : Boolean(row.children?.length);
+            const isExpanded = isExpandable && expandedLines.has(row.line);
+            const parentMetrics = stockKey
+              ? isBlue ? moduleMetrics?.total : machiningStock?.[stockKey].total
+              : undefined;
             const parentRow = (
               <tr
                 key={row.line}
@@ -403,12 +408,15 @@ function ExpandableStockTable({
                 <StockMetricCells metrics={parentMetrics} />
               </tr>
             );
-            const childRows = isExpanded && row.children
-              ? row.children.map((child, index) => {
+            const children = isBlue
+              ? Object.entries(moduleMetrics?.modules ?? {})
+              : (row.children ?? []).map((child) => [child, undefined] as const);
+            const childRows = isExpanded
+              ? children.map(([child, moduleMetrics], index) => {
                   const childKey = child === "Local" ? "local" : child === "Export" ? "export" : null;
-                  const childMetrics = stockKey && childKey
-                    ? machiningStock?.[stockKey][childKey]
-                    : undefined;
+                  const childMetrics = isBlue
+                    ? moduleMetrics
+                    : stockKey && childKey ? machiningStock?.[stockKey][childKey] : undefined;
 
                   return (
                     <tr key={`${row.line}-${child}-${index}`} className={isBlue ? "bg-[#eff8ff] dark:bg-[#14245a]" : "bg-[#eaecf0] dark:bg-[#273449]"}>
@@ -765,6 +773,9 @@ export function OeeLineChart({
   lines,
   cards,
   machiningEmergencyStock,
+  machiningModuleExportStock,
+  machiningAdvancedStock,
+  portraitDisplay,
 }: {
   series: SeriesRow[];
   shiftSeries: ShiftSeriesRow[];
@@ -775,12 +786,15 @@ export function OeeLineChart({
   lines: AnalysisChartLine[];
   cards: OeeCard[];
   machiningEmergencyStock?: AnalysisMachiningEmergencyStock;
+  machiningModuleExportStock?: AnalysisMachiningModuleExportStock;
+  machiningAdvancedStock?: AnalysisMachiningAdvancedStock;
+  portraitDisplay?: boolean;
 }) {
   const monthLabel = formatMonthLabel(series);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+    <div className={`flex flex-col ${portraitDisplay ? "gap-2" : "gap-4"}`}>
+      <div className={`grid ${portraitDisplay ? "grid-cols-5 gap-2" : "gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5"}`}>
         {lines.map((line) => {
           const card = cards.find((item) => item.key === line.key);
           const isSingleShift = isSingleShiftLine(line);
@@ -937,7 +951,7 @@ export function OeeLineChart({
                     ? ["Emergency Stock Domestic [Unit]"]
                     : ["Emergency Stock", "Export Module"]
                   ).map((label) => (
-                    <article key={label} className="min-w-0 flex-1 rounded-2xl border border-[#e4e7ec] bg-white p-2.5 text-center shadow-sm">
+                    <article key={label} className="min-h-[90px] min-w-0 flex-1 rounded-2xl border border-[#e4e7ec] bg-white p-2.5 text-center shadow-sm">
                       <p className="text-xs font-medium leading-tight text-[#667085]">{label}</p>
                       {line.key !== "assyline" ? (
                         <p className="mt-0.5 text-xs font-medium leading-tight text-[#667085]">[Unit]</p>
@@ -952,7 +966,7 @@ export function OeeLineChart({
         })}
       </div>
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+      <section className={`grid ${portraitDisplay ? "grid-cols-5 gap-2" : "gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5"}`}>
         <article className="rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-[#101828]">
             Stock Engine Assy [Domestic]
@@ -985,7 +999,7 @@ export function OeeLineChart({
         ))}
       </section>
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+      <section className={`grid ${portraitDisplay ? "grid-cols-5 gap-2" : "gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5"}`}>
         <article className="rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-[#101828]">
             Stock Engine Assy [Export]
@@ -1000,33 +1014,46 @@ export function OeeLineChart({
             <h2 className="text-sm font-semibold text-[#101828]">
               Stock Module Export [Biru]
             </h2>
-            <ExpandableStockTable rows={group.rows} tone="blue" />
+            <ExpandableStockTable
+              rows={group.rows}
+              tone="blue"
+              machiningModuleExportStock={machiningModuleExportStock}
+            />
           </article>
         ))}
       </section>
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
-        {advancedStockVariants.map((variant) => (
-          <article key={variant} className="rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm">
+      <section className={`grid ${portraitDisplay ? "grid-cols-5 gap-2" : "gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5"}`}>
+        {advancedStockVariants.map((variant) => {
+          const metrics = variant.key ? machiningAdvancedStock?.[variant.key] : undefined;
+
+          return (
+          <article key={variant.label} className="rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-2">
               <h2 className="text-sm font-semibold text-[#101828]">Advanced Stock</h2>
-              <p className="text-right text-xs font-semibold text-[#667085]">{variant}</p>
+              <p className="text-right text-xs font-semibold text-[#667085]">{variant.label}</p>
             </div>
             <div className="mt-3 flex gap-2.5">
-              {["Actual", "Balance"].map((label) => (
+              {[
+                ["Actual", metrics ? metrics.actualUnit : null],
+                ["Balance", metrics ? metrics.balanceUnit : null],
+              ].map(([label, value]) => (
                 <div key={label} className="min-w-0 flex-1 rounded-xl bg-[#f9fafb] p-2.5 text-center">
                   <p className="text-xs font-medium leading-tight text-[#667085]">
                     {label} [Unit]
                   </p>
-                  <p className="mt-1 text-base font-semibold leading-tight text-[#101828]">-</p>
+                  <p className="mt-1 text-base font-semibold leading-tight text-[#101828]">
+                    {value === null ? "-" : formatUnit(Number(value))}
+                  </p>
                 </div>
               ))}
             </div>
           </article>
-        ))}
+          );
+        })}
       </section>
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+      <section className={`grid ${portraitDisplay ? "grid-cols-5 gap-2" : "gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5"}`}>
         <article className="grid min-h-[420px] place-items-center rounded-2xl border border-[#e4e7ec] bg-white p-4 text-center text-sm font-semibold text-[#98a2b3] shadow-sm dark:border-[#2f4059] dark:bg-[#111827]">
           Under Development
         </article>

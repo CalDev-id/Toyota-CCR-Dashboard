@@ -9,7 +9,11 @@ import type {
 } from "@/features/analysis/types";
 import { getReportPrisma } from "@/lib/report-prisma";
 import { summaryViewName } from "@/lib/report-views";
-import { getMachiningEmergencyStock } from "@/features/asakai-stock/server/asakai-stock";
+import {
+  getMachiningAdvancedStock,
+  getMachiningEmergencyStock,
+  getMachiningModuleExportStock,
+} from "@/features/asakai-stock/server/asakai-stock";
 
 export const analysisLines: AnalysisLine[] = [
   {
@@ -435,7 +439,7 @@ function buildDailyGap(line: AnalysisLine, rows: RawAnalysisOeeRow[]) {
 export async function getAnalysisOee(dateParam: string | null) {
   const range = parseDate(dateParam);
   const days = getRangeDays(range.year, range.month, range.dayCount);
-  const [entries, machiningEmergencyStock] = await Promise.all([
+  const [entries, machiningEmergencyStock, machiningModuleExportStock, machiningAdvancedStock] = await Promise.all([
     Promise.all(
     analysisLines.map(async (line) => {
       const [rows, problemRows] = await Promise.all([
@@ -447,6 +451,8 @@ export async function getAnalysisOee(dateParam: string | null) {
     }),
     ),
     getMachiningEmergencyStock(range.date),
+    getMachiningModuleExportStock(range.date),
+    getMachiningAdvancedStock(range.date),
   ]);
   const cards = entries.map((entry) =>
     buildCard(entry.line, entry.rows, entry.problemRows, range.date),
@@ -597,6 +603,8 @@ export async function getAnalysisOee(dateParam: string | null) {
     rqSeries,
     rqShiftSeries,
     machiningEmergencyStock,
+    machiningModuleExportStock,
+    machiningAdvancedStock,
     lines: analysisLines.map(({ key, label, shiftMode, displayShiftLabel }) => ({
       key,
       label,
