@@ -320,7 +320,11 @@ export default function ProductionAchievementCardView({
             <p className="mt-1 text-xs font-medium text-[#667085] dark:text-[#a7b0c0]">
               Last updated: {formatLastUpdated(card.lastUpdatedAt)}
             </p>
-          ) : null}
+          ) : (
+            <p className="mt-1 text-xs font-medium text-[#667085] dark:text-[#a7b0c0]">
+              Belum realtime • Update tiap jam
+            </p>
+          )}
         </div>
         <span
           className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${

@@ -1,13 +1,20 @@
 export type PackomLineKey = "cylhead" | "cylblock" | "crankshaft" | "camshaft";
 
+export type PackomProblem = {
+  label: string;
+  value: number;
+  unit: "min";
+  type: "AV" | "PE" | "RQ";
+};
+
 export type PackomCard = {
   key: PackomLineKey;
   label: string;
   imageSrc: string;
   totalPacking: number;
+  plan: number;
   good: number;
   defect: number;
-  defectRate: number | null;
   partBreakdown: Array<{
     code: string;
     label: string;
@@ -27,6 +34,7 @@ export type PackomCard = {
   incompleteCaseCount: number;
   anomalyCaseCount: number;
   lastUpdatedTime: string | null;
+  problems: PackomProblem[];
 };
 
 export type PackomDashboard = {

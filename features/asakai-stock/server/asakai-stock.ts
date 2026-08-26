@@ -14,7 +14,7 @@ const requiredHeaders = [
   "Act_Module",
   "Actual_Stock_Unit_ES_PackComp_New",
   "Act_Local",
-  "Actual_Stock_Unit_ADV",
+  "Actual_Stock_Unit_ADV_New",
   "Balance_Stock_ADV_New",
 ] as const;
 
@@ -177,7 +177,7 @@ function parseRows(file: File, month: string) {
         actModule: numberOrNull(row.Act_Module, "Act_Module"),
         actualStockUnitEsPackcompNew: numberOrNull(row.Actual_Stock_Unit_ES_PackComp_New, "Actual_Stock_Unit_ES_PackComp_New"),
         actLocal: numberOrNull(row.Act_Local, "Act_Local"),
-        actualStockUnitAdv: numberOrNull(row.Actual_Stock_Unit_ADV, "Actual_Stock_Unit_ADV"),
+        actualStockUnitAdv: numberOrNull(row.Actual_Stock_Unit_ADV_New, "Actual_Stock_Unit_ADV_New"),
         balanceStockAdvNew: numberOrNull(row.Balance_Stock_ADV_New, "Balance_Stock_ADV_New"),
       };
     }).filter((row) => row.date >= start && row.date < end);
