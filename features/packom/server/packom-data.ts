@@ -8,42 +8,77 @@ type PackomLineConfig = {
   label: string;
   imageSrc: string;
   view: string;
-  destinationExpression: string;
-  noteExpression: string;
   workExpression: string;
+  goodWorkCountExpression: string;
+  caseUnitCountExpression: string;
   workUnitsPerPair: number;
+  unitsPerCase: number;
 };
 
 type PackomAggregateRow = {
   totalPacking: string | number | null;
-  domestic: string | number | null;
-  export: string | number | null;
   good: string | number | null;
   defect: string | number | null;
-  noteCaseCount: string | number | null;
   lastUpdatedTime: string | null;
 };
 
-type PackomNoteRow = {
+type PackomCaseStatusRow = {
   caseNumber: string | null;
-  note: string | null;
+  code: string | null;
+  units: string | number | null;
+  latestAt: Date | string | null;
+};
+
+type PartCodeConfig = {
+  code: string;
+  label: string;
 };
 
 const packomLines: PackomLineConfig[] = [
-  { key: "cylblock", label: "Cylinder Block", imageSrc: "/images/block2.png", view: "v_cylblock_packom", destinationExpression: "destination", noteExpression: "note", workExpression: "no_work", workUnitsPerPair: 1 },
-  { key: "cylhead", label: "Cylinder Head", imageSrc: "/images/ch.png", view: "v_cylhead_packom", destinationExpression: "destination", noteExpression: "note", workExpression: "no_work", workUnitsPerPair: 1 },
-  { key: "crankshaft", label: "Crankshaft", imageSrc: "/images/crank.png", view: "v_crankshaft_packom", destinationExpression: "destination", noteExpression: "note", workExpression: "no_work", workUnitsPerPair: 1 },
+  { key: "cylblock", label: "Cylinder Block", imageSrc: "/images/block2.png", view: "v_cylblock_packom", workExpression: "no_work", goodWorkCountExpression: "COUNT(DISTINCT CASE WHEN {condition} THEN no_work END)", caseUnitCountExpression: "COUNT(DISTINCT no_work)", workUnitsPerPair: 1, unitsPerCase: 18 },
+  { key: "cylhead", label: "Cylinder Head", imageSrc: "/images/ch.png", view: "v_cylhead_packom", workExpression: "no_work", goodWorkCountExpression: "COUNT(DISTINCT CASE WHEN {condition} THEN no_work END)", caseUnitCountExpression: "COUNT(DISTINCT no_work)", workUnitsPerPair: 1, unitsPerCase: 24 },
+  { key: "crankshaft", label: "Crankshaft", imageSrc: "/images/crank.png", view: "v_crankshaft_packom", workExpression: "no_work", goodWorkCountExpression: "COUNT(DISTINCT CASE WHEN {condition} THEN no_work END)", caseUnitCountExpression: "COUNT(DISTINCT no_work)", workUnitsPerPair: 1, unitsPerCase: 48 },
   {
     key: "camshaft",
     label: "Camshaft",
     imageSrc: "/images/cam.png",
     view: "v_camshaft_packom",
-    destinationExpression: "COALESCE(NULLIF(TRIM(destination_in), ''), NULLIF(TRIM(destination_ex), ''))",
-    noteExpression: "COALESCE(NULLIF(TRIM(note_in), ''), NULLIF(TRIM(note_ex), ''))",
     workExpression: "COALESCE(NULLIF(TRIM(no_work_in), ''), NULLIF(TRIM(no_work_ex), ''))",
+    goodWorkCountExpression: "COUNT(DISTINCT CASE WHEN {condition} THEN NULLIF(TRIM(no_work_in), '') END) + COUNT(DISTINCT CASE WHEN {condition} THEN NULLIF(TRIM(no_work_ex), '') END)",
+    caseUnitCountExpression: "COUNT(DISTINCT NULLIF(TRIM(no_work_in), '')) + COUNT(DISTINCT NULLIF(TRIM(no_work_ex), ''))",
     workUnitsPerPair: 2,
+    unitsPerCase: 96,
   },
 ];
+
+const partCodes: Record<PackomLineKey, PartCodeConfig[]> = {
+  cylblock: [
+    { code: "K1", label: "Cyl Block 1TR (STM)" },
+    { code: "CD", label: "Cyl Block 1TR (Kamigo)" },
+    { code: "K2", label: "Cyl Block 2TR (STM)" },
+    { code: "CB", label: "Cyl Block 2TR (Kamigo)" },
+  ],
+  crankshaft: [
+    { code: "K3", label: "Crankshaft 1TR (STM)" },
+    { code: "K4", label: "Crankshaft 2TR (STM)" },
+    { code: "CS", label: "Crankshaft 1TR (Kamigo)" },
+    { code: "CT", label: "Crankshaft 2TR (Kamigo)" },
+  ],
+  camshaft: [
+    { code: "K5", label: "Cam Shaft TR-KA No. 1 & No. 2" },
+  ],
+  cylhead: [
+    { code: "K6", label: "Cyl Head 1TR-KA LA (STM)" },
+    { code: "K7", label: "Cyl Head 2TR-KA WA (STM)" },
+    { code: "K8", label: "Cyl Head 2TR-KA LA (STM)" },
+    { code: "KJ", label: "Cyl Head 1TR-K WIAI L/PIPE" },
+    { code: "KR", label: "Cyl Head 2TR-K WIAI L/PIPE" },
+    { code: "HC", label: "Cyl Head 1TR-KA WA (Kamigo)" },
+    { code: "HD", label: "Cyl Head 2TR-KA WA (Kamigo)" },
+    { code: "HF", label: "Cyl Head 2TR LA (Kamigo)" },
+    { code: "HE", label: "Cyl Head 2TR WA (Kamigo)" },
+  ],
+};
 
 function quoteIdentifier(value: string) {
   return `\`${value.replaceAll("`", "``")}\``;
@@ -74,63 +109,87 @@ async function getLineCard(
   productionDate: string,
   shiftValue: string,
 ): Promise<PackomCard> {
-  const destination = `UPPER(TRIM(COALESCE(${line.destinationExpression}, '')))`;
-  const hasNote = `TRIM(COALESCE(${line.noteExpression}, '')) <> ''`;
   const hasWork = `TRIM(COALESCE(${line.workExpression}, '')) <> ''`;
   const isGood = "TRIM(COALESCE(defect_type, '')) IN ('', '-') OR UPPER(TRIM(defect_type)) IN ('NO DEFECT', 'NO DEFFECT')";
+  const goodWorkCount = line.goodWorkCountExpression.replaceAll("{condition}", `${hasWork} AND (${isGood})`);
+  const defectWorkCount = line.goodWorkCountExpression.replaceAll("{condition}", `${hasWork} AND NOT (${isGood})`);
   const eventAt = shiftValue === "2"
     ? "DATE_ADD(TIMESTAMP(prod_date, ftime), INTERVAL IF(TIME(ftime) < '07:15:00', 1, 0) DAY)"
     : "TIMESTAMP(prod_date, ftime)";
   const rows = await getReportPrisma().$queryRawUnsafe<PackomAggregateRow[]>(
     `SELECT
-      COUNT(DISTINCT NULLIF(TRIM(COALESCE(no_case, '')), '')) AS totalPacking,
-      COUNT(DISTINCT CASE WHEN ${destination} = 'D' THEN NULLIF(TRIM(COALESCE(no_case, '')), '') END) AS domestic,
-      COUNT(DISTINCT CASE WHEN ${destination} = 'E' THEN NULLIF(TRIM(COALESCE(no_case, '')), '') END) AS export,
-      COALESCE(SUM(CASE WHEN ${hasWork} AND (${isGood}) THEN 1 ELSE 0 END), 0) / ${line.workUnitsPerPair} AS good,
-      COALESCE(SUM(CASE WHEN ${hasWork} AND NOT (${isGood}) THEN 1 ELSE 0 END), 0) / ${line.workUnitsPerPair} AS defect,
-      COUNT(DISTINCT CASE WHEN ${hasNote} AND TRIM(COALESCE(no_case, '')) <> '' THEN no_case END) AS noteCaseCount,
+      (${goodWorkCount}) / ${line.workUnitsPerPair} AS good,
+      (${defectWorkCount}) / ${line.workUnitsPerPair} AS defect,
       DATE_FORMAT(MAX(${eventAt}), '%H:%i') AS lastUpdatedTime
     FROM ${quoteIdentifier(line.view)}
     WHERE prod_date = ? AND TRIM(CAST(shift AS CHAR)) = ?`,
     productionDate,
     shiftValue,
   );
-  const noteRows = await getReportPrisma().$queryRawUnsafe<PackomNoteRow[]>(
+  const caseStatusRows = await getReportPrisma().$queryRawUnsafe<PackomCaseStatusRow[]>(
     `SELECT
        TRIM(COALESCE(no_case, '')) AS caseNumber,
-       TRIM(COALESCE(${line.noteExpression}, '')) AS note
+       UPPER(LEFT(TRIM(COALESCE(no_case, '')), 2)) AS code,
+       (${line.caseUnitCountExpression}) / ${line.workUnitsPerPair} AS units,
+       MAX(${eventAt}) AS latestAt
      FROM ${quoteIdentifier(line.view)}
      WHERE prod_date = ?
        AND TRIM(CAST(shift AS CHAR)) = ?
-       AND ${hasNote}
        AND TRIM(COALESCE(no_case, '')) <> ''
-     GROUP BY TRIM(COALESCE(no_case, '')), TRIM(COALESCE(${line.noteExpression}, ''))
-     ORDER BY MAX(${eventAt}) DESC
-     LIMIT 3`,
+     GROUP BY TRIM(COALESCE(no_case, ''))`,
     productionDate,
     shiftValue,
   );
   const row = rows[0];
-  const totalPacking = toNumber(row?.totalPacking);
   const good = toNumber(row?.good);
   const defect = toNumber(row?.defect);
+  const completeCases = caseStatusRows.filter((item) => toNumber(item.units) === line.unitsPerCase);
+  const incompleteCases = caseStatusRows
+    .filter((item) => toNumber(item.units) < line.unitsPerCase)
+    .sort((left, right) => new Date(String(right.latestAt)).getTime() - new Date(String(left.latestAt)).getTime());
+  const anomalyCases = caseStatusRows
+    .filter((item) => toNumber(item.units) > line.unitsPerCase)
+    .sort((left, right) => new Date(String(right.latestAt)).getTime() - new Date(String(left.latestAt)).getTime());
+  const partBreakdownRows = completeCases.reduce<Map<string, number>>((counts, item) => {
+    const code = item.code?.trim().toUpperCase();
+    if (code) counts.set(code, (counts.get(code) ?? 0) + 1);
+    return counts;
+  }, new Map());
+  const countsByCode = new Map(
+    partBreakdownRows,
+  );
+  const knownCodes = partCodes[line.key];
+  const knownCodeSet = new Set(knownCodes.map((item) => item.code));
+  const partBreakdown = [
+    ...knownCodes.flatMap((item) => {
+      const count = countsByCode.get(item.code) ?? 0;
+      return count > 0 ? [{ ...item, count, isUnknown: false }] : [];
+    }),
+    ...[...countsByCode.entries()]
+      .filter(([code]) => !knownCodeSet.has(code))
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([code, count]) => ({ code, label: `Unknown part [${code}]`, count, isUnknown: true })),
+  ];
 
   return {
     key: line.key,
     label: line.label,
     imageSrc: line.imageSrc,
-    totalPacking,
-    domestic: toNumber(row?.domestic),
-    export: toNumber(row?.export),
+    totalPacking: completeCases.length,
     good,
     defect,
     defectRate: good + defect > 0 ? defect / (good + defect) : null,
-    noteCaseCount: toNumber(row?.noteCaseCount),
-    notes: noteRows.flatMap((item) => {
+    partBreakdown,
+    incompleteCases: incompleteCases.slice(0, 3).flatMap((item) => {
       const caseNumber = item.caseNumber?.trim();
-      const text = item.note?.trim();
-      return caseNumber && text ? [{ caseNumber, text }] : [];
+      return caseNumber ? [{ caseNumber, units: toNumber(item.units), capacity: line.unitsPerCase }] : [];
     }),
+    anomalyCases: anomalyCases.slice(0, 3).flatMap((item) => {
+      const caseNumber = item.caseNumber?.trim();
+      return caseNumber ? [{ caseNumber, units: toNumber(item.units), capacity: line.unitsPerCase }] : [];
+    }),
+    incompleteCaseCount: incompleteCases.length,
+    anomalyCaseCount: anomalyCases.length,
     lastUpdatedTime: row?.lastUpdatedTime?.trim() || null,
   };
 }

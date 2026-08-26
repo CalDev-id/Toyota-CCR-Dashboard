@@ -5,13 +5,27 @@ export type PackomCard = {
   label: string;
   imageSrc: string;
   totalPacking: number;
-  domestic: number;
-  export: number;
   good: number;
   defect: number;
   defectRate: number | null;
-  noteCaseCount: number;
-  notes: Array<{ caseNumber: string; text: string }>;
+  partBreakdown: Array<{
+    code: string;
+    label: string;
+    count: number;
+    isUnknown: boolean;
+  }>;
+  incompleteCases: Array<{
+    caseNumber: string;
+    units: number;
+    capacity: number;
+  }>;
+  anomalyCases: Array<{
+    caseNumber: string;
+    units: number;
+    capacity: number;
+  }>;
+  incompleteCaseCount: number;
+  anomalyCaseCount: number;
   lastUpdatedTime: string | null;
 };
 
