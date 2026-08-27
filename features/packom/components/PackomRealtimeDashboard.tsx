@@ -1,17 +1,13 @@
 "use client";
 
-import type { PackomCard, PackomDashboard, PackomProblem } from "@/features/packom/types";
+import type { PackomCard, PackomDashboard } from "@/features/packom/types";
 import ProductionAchievementClock from "@/features/production-achievement/components/ProductionAchievementClock";
 import ProductionAchievementFilters from "@/features/production-achievement/components/ProductionAchievementFilters";
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
-}
-
-function formatNumberAuto(value: number) {
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: value % 1 === 0 ? 0 : 1 }).format(value);
 }
 
 function isSpdCase(caseNumber: string) {
@@ -35,34 +31,11 @@ function formatWeekday(value: string) {
   return new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(parseDashboardDate(value));
 }
 
-function ProblemTypeBadge({ type }: { type: PackomProblem["type"] }) {
-  const className = type === "AV"
-    ? "bg-[#fef3f2] text-[#b42318] dark:bg-[#3b1111] dark:text-[#fda29b]"
-    : type === "PE"
-      ? "bg-[#fffaeb] text-[#b54708] dark:bg-[#3a2604] dark:text-[#fdb022]"
-      : "bg-[#ecf3ff] text-[#465fff] dark:bg-[#14245a] dark:text-[#8da2ff]";
-
-  return <span className={`grid h-5 min-w-6 shrink-0 place-items-center rounded px-1.5 text-[10px] font-bold ${className}`}>{type}</span>;
-}
-
 function PackomCardView({ card }: { card: PackomCard }) {
-  const hasProblems = card.problems.length > 0;
-  const [isProblemTooltipOpen, setIsProblemTooltipOpen] = useState(false);
-  const problemPanelRef = useRef<HTMLDivElement>(null);
-  const problemTooltipId = `packom-problem-tooltip-${card.key}`;
-
-  useEffect(() => {
-    if (!isProblemTooltipOpen) return;
-
-    function closeOnOutsideClick(event: MouseEvent) {
-      if (!problemPanelRef.current?.contains(event.target as Node)) {
-        setIsProblemTooltipOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", closeOnOutsideClick);
-    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
-  }, [isProblemTooltipOpen]);
+  const partColumnCount = Math.min(3, Math.max(1, card.partBreakdown.length));
+  const partColumns = Array.from({ length: partColumnCount }, () => [] as typeof card.partBreakdown);
+  const partGridClass = partColumnCount === 1 ? "grid-cols-1" : partColumnCount === 2 ? "grid-cols-2" : "grid-cols-3";
+  card.partBreakdown.forEach((part, index) => partColumns[index % partColumns.length].push(part));
 
   return (
     <article className="flex h-fit flex-col rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm dark:border-[#273449] dark:bg-[#111827]">
@@ -79,44 +52,41 @@ function PackomCardView({ card }: { card: PackomCard }) {
       <div className="mt-4 grid h-36 place-items-center rounded-xl bg-[#f9fafb] dark:bg-[#162033]">
         <Image src={card.imageSrc} alt={`${card.label} production part`} width={220} height={150} className="max-h-32 w-auto max-w-[88%] object-contain" />
       </div>
-      <div className="mt-4 grid gap-2">
-        <div className="grid grid-cols-2 gap-2">
-          <MetricTile label="Plan" value={formatNumber(card.plan)} valueClassName="text-[#465fff] dark:text-[#8da2ff]" valueSizeClassName="text-2xl" />
-          <MetricTile label="Act Modul" value={formatNumber(card.totalPacking)} valueSizeClassName="text-2xl" />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <MetricTile label="Good [Unit]" value={formatNumber(card.good)} valueClassName="text-[#027a48]" valueSizeClassName="text-2xl" />
-          <MetricTile label="Defect [Unit]" value={formatNumber(card.defect)} valueClassName={card.defect > 0 ? "text-[#b42318]" : undefined} valueSizeClassName="text-2xl" />
-        </div>
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <MetricTile
+          label="Plan"
+          value={formatNumber(card.plan)}
+          tooltip={<div className="flex items-center gap-2"><span>Plan =</span><div className="text-center"><p>Plan machining − Plan assy</p><p className="mt-1 border-t border-[#98a2b3] pt-1">Kapasitas per modul</p></div></div>}
+          valueClassName="text-[#465fff] dark:text-[#8da2ff]"
+          valueSizeClassName="text-3xl"
+        />
+        <MetricTile label="Act Modul" value={formatNumber(card.totalPacking)} valueSizeClassName="text-3xl" />
       </div>
-      <div className="mt-5">
+      <div className="order-2 mt-3">
         {card.partBreakdown.length ? (
-          <div className="overflow-hidden rounded-xl border border-[#e4e7ec] dark:border-[#273449]">
-            <table className="w-full table-fixed text-xs">
-              <thead className="bg-[#f9fafb] text-[#667085] dark:bg-[#162033] dark:text-[#a7b0c0]">
-                <tr>
-                  <th className="w-[24%] px-4 py-2.5 text-left font-semibold">Type</th>
-                  <th className="px-3 py-2.5 text-left font-semibold">Part</th>
-                  <th className="w-[20%] px-3 py-2.5 text-center font-semibold"><span className="relative -left-1">Module</span></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#e4e7ec] dark:divide-[#273449]">
-                {card.partBreakdown.map((part) => (
-                  <tr key={part.code}>
-                    <td className={`px-4 py-2.5 font-semibold ${part.isUnknown ? "text-[#b54708] dark:text-[#fdb022]" : "text-[#101828] dark:text-[#f8fafc]"}`}>{part.code}</td>
-                    <td className="truncate px-3 py-2.5 font-medium text-[#667085] dark:text-[#a7b0c0]" title={part.label}>{part.label}</td>
-                    <td className="px-3 py-2.5 text-center font-semibold text-[#101828] dark:text-[#f8fafc]"><span className="relative -left-1">{formatNumber(part.count)}</span></td>
-                  </tr>
+          <div className={`grid ${partGridClass} overflow-hidden rounded-xl border border-[#e4e7ec] text-xs dark:border-[#273449]`}>
+            {partColumns.map((parts, columnIndex) => (
+              <div key={columnIndex} className={columnIndex ? "border-l border-[#e4e7ec] dark:border-[#273449]" : ""}>
+                {parts.map((part, index) => (
+                  <section key={part.code} className={index ? "border-t border-[#e4e7ec] dark:border-[#273449]" : ""}>
+                    <div className="flex items-center justify-between gap-2 bg-[#f9fafb] px-3 py-2 font-semibold dark:bg-[#162033]">
+                      <span className={part.isUnknown ? "text-[#b54708] dark:text-[#fdb022]" : "text-[#101828] dark:text-[#f8fafc]"}>{part.code}</span>
+                      <span className="text-[#667085] dark:text-[#a7b0c0]">{formatNumber(part.count)}</span>
+                    </div>
+                    <ul className="divide-y divide-[#eaecf0] dark:divide-[#273449]">
+                      {part.caseNumbers.map((caseNumber) => <li key={caseNumber} className="truncate px-3 py-2 font-medium text-[#667085] dark:text-[#a7b0c0]" title={caseNumber}>{caseNumber}</li>)}
+                    </ul>
+                  </section>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            ))}
           </div>
         ) : (
           <div className="grid min-h-[122px] place-items-center rounded-xl border border-dashed border-[#d0d5dd] px-3 py-4 text-center text-xs font-medium text-[#98a2b3] dark:border-[#384860] dark:text-[#7f8a9d]">No part code data</div>
         )}
       </div>
       {card.incompleteCaseCount > 0 || card.anomalyCaseCount > 0 ? (
-        <div className={`mt-3 border-l-4 py-2 pl-3 pr-3 ${card.anomalyCaseCount ? "border-[#f04438] bg-[#fffbfa] dark:bg-[#2d1215]" : "border-[#fdb022] bg-[#fffaeb] dark:bg-[#342400]"}`}>
+        <div className={`order-1 mt-5 border-l-4 py-2 pl-3 pr-3 ${card.anomalyCaseCount ? "border-[#f04438] bg-[#fffbfa] dark:bg-[#2d1215]" : "border-[#fdb022] bg-[#fffaeb] dark:bg-[#342400]"}`}>
           <div className="flex items-center justify-between gap-2">
             <p className={`text-xs font-semibold uppercase tracking-wide ${card.anomalyCaseCount ? "text-[#b42318] dark:text-[#fda29b]" : "text-[#b54708] dark:text-[#fdb022]"}`}>Case Status</p>
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${card.anomalyCaseCount ? "bg-[#fee4e2] text-[#b42318] dark:bg-[#5d1919] dark:text-[#fda29b]" : "bg-[#fef0c7] text-[#b54708] dark:bg-[#5a4308] dark:text-[#fdb022]"}`}>{formatNumber(card.incompleteCaseCount + card.anomalyCaseCount)}</span>
@@ -124,7 +94,7 @@ function PackomCardView({ card }: { card: PackomCard }) {
           <div className="mt-2 space-y-1 text-xs font-medium text-[#344054] dark:text-[#d4dae5]">
             {card.incompleteCases.map((item) => {
               const isSpd = isSpdCase(item.caseNumber);
-              return <div key={`progress-${item.caseNumber}`} className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate font-semibold" title={item.caseNumber}>{item.caseNumber}</span><span className="shrink-0 text-[#667085] dark:text-[#a7b0c0]">{formatNumber(item.units)}{isSpd ? " Unit" : ` / ${formatNumber(item.capacity)}`}</span>{isSpd ? null : <span className="shrink-0 rounded bg-[#fef0c7] px-1.5 py-0.5 text-[10px] font-bold text-[#b54708] dark:bg-[#5a4308] dark:text-[#fdb022]">Progress</span>}</div>;
+              return <div key={`progress-${item.caseNumber}`} className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate font-semibold" title={item.caseNumber}>{item.caseNumber}</span><span className="shrink-0 text-[#667085] dark:text-[#a7b0c0]">{formatNumber(item.units)}{isSpd ? " Unit" : ` / ${formatNumber(item.capacity)}`}</span>{item.fromPreviousShift ? <span className="shrink-0 rounded bg-[#ecf3ff] px-1.5 py-0.5 text-[10px] font-bold text-[#465fff] dark:bg-[#14245a] dark:text-[#8da2ff]">Prev. shift</span> : isSpd ? null : <span className="shrink-0 rounded bg-[#fef0c7] px-1.5 py-0.5 text-[10px] font-bold text-[#b54708] dark:bg-[#5a4308] dark:text-[#fdb022]">Progress</span>}</div>;
             })}
             {card.anomalyCases.map((item) => <div key={`anomaly-${item.caseNumber}`} className="flex items-center justify-between gap-2"><span className="min-w-0 truncate font-semibold">{item.caseNumber}</span><span className="shrink-0 text-[#b42318] dark:text-[#fda29b]">{formatNumber(item.units)} / {formatNumber(item.capacity)}</span><span className="shrink-0 rounded bg-[#fee4e2] px-1.5 py-0.5 text-[10px] font-bold text-[#b42318] dark:bg-[#5d1919] dark:text-[#fda29b]">Anomaly</span></div>)}
             {card.incompleteCaseCount > card.incompleteCases.length ? <p className="text-xs text-[#667085] dark:text-[#a7b0c0]">+{formatNumber(card.incompleteCaseCount - card.incompleteCases.length)} more in progress</p> : null}
@@ -132,65 +102,17 @@ function PackomCardView({ card }: { card: PackomCard }) {
           </div>
         </div>
       ) : null}
-      <div
-        ref={problemPanelRef}
-        aria-controls={hasProblems ? problemTooltipId : undefined}
-        aria-expanded={hasProblems ? isProblemTooltipOpen : undefined}
-        className={`relative mt-3 min-h-[122px] rounded-xl border px-3 py-3 ${
-          hasProblems
-            ? "border-[#fecdca] bg-[#fffbfa] dark:border-[#7a271a] dark:bg-[#3b1111]"
-            : "border-[#e4e7ec] bg-[#f9fafb] dark:border-[#273449] dark:bg-[#162033]"
-        } ${hasProblems ? "cursor-pointer transition hover:border-[#f97066] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f04438]" : ""}`}
-        onClick={hasProblems ? () => setIsProblemTooltipOpen((current) => !current) : undefined}
-        onKeyDown={hasProblems ? (event) => {
-          if (event.key !== "Enter" && event.key !== " ") return;
-          event.preventDefault();
-          setIsProblemTooltipOpen((current) => !current);
-        } : undefined}
-        role={hasProblems ? "button" : undefined}
-        tabIndex={hasProblems ? 0 : undefined}
-      >
-        <div className="flex items-center justify-between gap-2">
-          <p className={`text-xs font-semibold uppercase tracking-wide ${hasProblems ? "text-[#b42318] dark:text-[#fda29b]" : "text-[#667085] dark:text-[#a7b0c0]"}`}>Problem</p>
-          {hasProblems ? <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4 text-[#b42318] dark:text-[#fda29b]" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><path d="M12 16v-4M12 8h.01" /><circle cx="12" cy="12" r="9" /></svg> : null}
-        </div>
-        {hasProblems ? (
-          <ol className="mt-2 space-y-1.5">
-            {card.problems.slice(0, 3).map((problem, index) => (
-              <li key={`${problem.label}-${problem.value}-${index}`} className="flex gap-2 text-sm font-medium text-[#344054] dark:text-[#d4dae5]">
-                <ProblemTypeBadge type={problem.type} />
-                <span className="min-w-0 flex-1 truncate" title={problem.label}>{problem.label}</span>
-                <span className="shrink-0 font-semibold">{formatNumberAuto(problem.value)} {problem.unit}</span>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="mt-8 text-center text-sm font-medium text-[#344054] dark:text-[#d4dae5]">No problem data</p>
-        )}
-        {hasProblems ? (
-          <div id={problemTooltipId} className={`pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-lg bg-[#101828] px-3 py-2 text-xs font-medium text-white shadow-lg transition ${isProblemTooltipOpen ? "visible opacity-100" : "invisible opacity-0"}`}>
-            <ol className="space-y-1.5">
-              {card.problems.map((problem, index) => (
-                <li key={`${problem.label}-${problem.value}-${index}`} className="flex min-w-52 items-center gap-2">
-                  <ProblemTypeBadge type={problem.type} />
-                  <span className="min-w-0 flex-1">{problem.label}</span>
-                  <span className="shrink-0 font-semibold">{formatNumberAuto(problem.value)} {problem.unit}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
-        ) : null}
-      </div>
     </article>
   );
 }
 
-function MetricTile({ label, value, detail, valueClassName = "text-[#101828] dark:text-[#f8fafc]", valueSizeClassName = "text-xl" }: { label: string; value: string; detail?: string; valueClassName?: string; valueSizeClassName?: string }) {
+function MetricTile({ label, value, detail, tooltip, valueClassName = "text-[#101828] dark:text-[#f8fafc]", valueSizeClassName = "text-xl" }: { label: string; value: string; detail?: string; tooltip?: ReactNode; valueClassName?: string; valueSizeClassName?: string }) {
   return (
-    <div className="flex min-h-[76px] flex-col justify-between rounded-lg bg-[#f9fafb] px-3 py-2.5 dark:bg-[#162033]">
+    <div className={`group relative flex min-h-[76px] flex-col justify-between rounded-lg bg-[#f9fafb] px-3 py-2.5 dark:bg-[#162033] ${tooltip ? "cursor-help" : ""}`} tabIndex={tooltip ? 0 : undefined}>
       <p className="text-xs font-semibold text-[#667085] dark:text-[#a7b0c0]">{label}</p>
       <p className={`mt-1 text-right font-semibold leading-none tabular-nums ${valueSizeClassName} ${valueClassName}`}>{value}</p>
       {detail ? <p className="mt-1 text-right text-xs font-semibold text-[#667085] dark:text-[#a7b0c0]">{detail}</p> : null}
+      {tooltip ? <div className="pointer-events-none invisible absolute bottom-full left-1/2 z-30 mb-2 w-56 -translate-x-1/2 rounded-lg bg-[#101828] px-3 py-2 text-xs font-medium leading-5 text-white opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus-visible:visible group-focus-visible:opacity-100">{tooltip}</div> : null}
     </div>
   );
 }

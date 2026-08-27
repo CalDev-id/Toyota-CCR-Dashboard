@@ -312,3 +312,28 @@ export async function deletePlanningRowAction(
 
   return { data: { id } };
 }
+
+export async function deletePlanningRowsAction(
+  partParam: PlanningPartKey,
+  ids: string[],
+) {
+  await requireSession();
+
+  const part = requirePlanningPart(partParam);
+  const uniqueIds = [...new Set(ids.map(String).filter(Boolean))];
+  if (uniqueIds.length === 0) throw new Error("No planning data selected");
+
+  const columns = await getPlanningColumns(part);
+  const primary = getPrimaryColumn(columns);
+  await getReportPrisma().$transaction(async (transaction) => {
+    for (const id of uniqueIds) {
+      await transaction.$executeRawUnsafe(
+        `DELETE FROM ${quotedTable(part)} WHERE ${quotedColumn(primary.field)} = ?`,
+        id,
+      );
+    }
+  });
+
+  revalidatePath("/planning");
+  return { data: { deleted: uniqueIds.length } };
+}

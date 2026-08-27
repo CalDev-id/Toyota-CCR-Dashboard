@@ -138,6 +138,45 @@ function shiftAliases(shift: string) {
   return shift === "DAY" ? ["1", "Day", "DAY", "day"] : ["2", "Night", "NIGHT", "night"];
 }
 
+function previousProductionShift(productionDate: string, shift: "DAY" | "NIGHT") {
+  if (shift === "NIGHT") {
+    return { productionDate, shiftValue: "1" } as const;
+  }
+
+  const [year, month, day] = productionDate.split("-").map(Number);
+  const previousDate = new Date(Date.UTC(year, month - 1, day - 1));
+  return { productionDate: previousDate.toISOString().slice(0, 10), shiftValue: "2" } as const;
+}
+
+function caseKey(caseNumber: string | null) {
+  return String(caseNumber ?? "").trim().toUpperCase();
+}
+
+function isSpdCase(caseNumber: string | null) {
+  return caseKey(caseNumber).startsWith("SPD");
+}
+
+function getCaseStatusRows(line: PackomLineConfig, productionDate: string, shiftValue: string) {
+  const eventAt = shiftValue === "2"
+    ? "DATE_ADD(TIMESTAMP(prod_date, ftime), INTERVAL IF(TIME(ftime) < '07:15:00', 1, 0) DAY)"
+    : "TIMESTAMP(prod_date, ftime)";
+
+  return getReportPrisma().$queryRawUnsafe<PackomCaseStatusRow[]>(
+    `SELECT
+       TRIM(COALESCE(no_case, '')) AS caseNumber,
+       UPPER(LEFT(TRIM(COALESCE(no_case, '')), 2)) AS code,
+       (${line.caseUnitCountExpression}) / ${line.workUnitsPerPair} AS units,
+       MAX(${eventAt}) AS latestAt
+     FROM ${quoteIdentifier(line.view)}
+     WHERE prod_date = ?
+       AND TRIM(CAST(shift AS CHAR)) = ?
+       AND TRIM(COALESCE(no_case, '')) <> ''
+     GROUP BY TRIM(COALESCE(no_case, ''))`,
+    productionDate,
+    shiftValue,
+  );
+}
+
 async function getMonthlyPlanTotal(table: string, productionDate: string, shift: string) {
   const shifts = shiftAliases(shift);
   const rows = await getReportPrisma().$queryRawUnsafe<MonthlyPlanRow[]>(
@@ -178,20 +217,9 @@ async function getLineCard(
     productionDate,
     shiftValue,
   );
-  const caseStatusRowsPromise = reportPrisma.$queryRawUnsafe<PackomCaseStatusRow[]>(
-    `SELECT
-       TRIM(COALESCE(no_case, '')) AS caseNumber,
-       UPPER(LEFT(TRIM(COALESCE(no_case, '')), 2)) AS code,
-       (${line.caseUnitCountExpression}) / ${line.workUnitsPerPair} AS units,
-       MAX(${eventAt}) AS latestAt
-     FROM ${quoteIdentifier(line.view)}
-     WHERE prod_date = ?
-       AND TRIM(CAST(shift AS CHAR)) = ?
-       AND TRIM(COALESCE(no_case, '')) <> ''
-     GROUP BY TRIM(COALESCE(no_case, ''))`,
-    productionDate,
-    shiftValue,
-  );
+  const previousShift = previousProductionShift(productionDate, shift);
+  const caseStatusRowsPromise = getCaseStatusRows(line, productionDate, shiftValue);
+  const previousCaseStatusRowsPromise = getCaseStatusRows(line, previousShift.productionDate, previousShift.shiftValue);
   const problemRowsPromise = reportPrisma.$queryRawUnsafe<PackomProblemRow[]>(
     `SELECT
        Problem_AV AS problemAv,
@@ -207,7 +235,12 @@ async function getLineCard(
     productionDate,
     shift,
   );
-  const [rows, caseStatusRows, problemRows] = await Promise.all([rowsPromise, caseStatusRowsPromise, problemRowsPromise]);
+  const [rows, caseStatusRows, previousCaseStatusRows, problemRows] = await Promise.all([
+    rowsPromise,
+    caseStatusRowsPromise,
+    previousCaseStatusRowsPromise,
+    problemRowsPromise,
+  ]);
   const row = rows[0];
   const linePlanTotal = await getMonthlyPlanTotal(line.planningTable, productionDate, shift);
   const good = toNumber(row?.good);
@@ -216,6 +249,14 @@ async function getLineCard(
   const incompleteCases = caseStatusRows
     .filter((item) => toNumber(item.units) < line.unitsPerCase)
     .sort((left, right) => new Date(String(right.latestAt)).getTime() - new Date(String(left.latestAt)).getTime());
+  const currentCaseKeys = new Set(caseStatusRows.map((item) => caseKey(item.caseNumber)).filter(Boolean));
+  const carriedIncompleteCases = previousCaseStatusRows
+    .filter((item) => toNumber(item.units) < line.unitsPerCase)
+    .filter((item) => !isSpdCase(item.caseNumber))
+    .filter((item) => !currentCaseKeys.has(caseKey(item.caseNumber)))
+    .sort((left, right) => new Date(String(right.latestAt)).getTime() - new Date(String(left.latestAt)).getTime());
+  const visibleIncompleteCases = [...incompleteCases, ...carriedIncompleteCases];
+  const carriedCaseKeys = new Set(carriedIncompleteCases.map((item) => caseKey(item.caseNumber)));
   const anomalyCases = caseStatusRows
     .filter((item) => toNumber(item.units) > line.unitsPerCase)
     .sort((left, right) => new Date(String(right.latestAt)).getTime() - new Date(String(left.latestAt)).getTime());
@@ -227,17 +268,23 @@ async function getLineCard(
   const countsByCode = new Map(
     partBreakdownRows,
   );
+  const caseNumbersByCode = completeCases.reduce<Map<string, string[]>>((cases, item) => {
+    const code = item.code?.trim().toUpperCase();
+    const caseNumber = item.caseNumber?.trim();
+    if (code && caseNumber) cases.set(code, [...(cases.get(code) ?? []), caseNumber]);
+    return cases;
+  }, new Map());
   const knownCodes = partCodes[line.key];
   const knownCodeSet = new Set(knownCodes.map((item) => item.code));
   const partBreakdown = [
     ...knownCodes.flatMap((item) => {
       const count = countsByCode.get(item.code) ?? 0;
-      return count > 0 ? [{ ...item, count, isUnknown: false }] : [];
+      return count > 0 ? [{ ...item, count, caseNumbers: (caseNumbersByCode.get(item.code) ?? []).sort(), isUnknown: false }] : [];
     }),
     ...[...countsByCode.entries()]
       .filter(([code]) => !knownCodeSet.has(code))
       .sort(([left], [right]) => left.localeCompare(right))
-      .map(([code, count]) => ({ code, label: `Unknown part [${code}]`, count, isUnknown: true })),
+      .map(([code, count]) => ({ code, label: `Unknown part [${code}]`, count, caseNumbers: (caseNumbersByCode.get(code) ?? []).sort(), isUnknown: true })),
   ];
 
   return {
@@ -249,15 +296,15 @@ async function getLineCard(
     good,
     defect,
     partBreakdown,
-    incompleteCases: incompleteCases.slice(0, 3).flatMap((item) => {
+    incompleteCases: visibleIncompleteCases.slice(0, 3).flatMap((item) => {
       const caseNumber = item.caseNumber?.trim();
-      return caseNumber ? [{ caseNumber, units: toNumber(item.units), capacity: line.unitsPerCase }] : [];
+      return caseNumber ? [{ caseNumber, units: toNumber(item.units), capacity: line.unitsPerCase, fromPreviousShift: carriedCaseKeys.has(caseKey(caseNumber)) }] : [];
     }),
     anomalyCases: anomalyCases.slice(0, 3).flatMap((item) => {
       const caseNumber = item.caseNumber?.trim();
       return caseNumber ? [{ caseNumber, units: toNumber(item.units), capacity: line.unitsPerCase }] : [];
     }),
-    incompleteCaseCount: incompleteCases.length,
+    incompleteCaseCount: visibleIncompleteCases.length,
     anomalyCaseCount: anomalyCases.length,
     lastUpdatedTime: row?.lastUpdatedTime?.trim() || null,
     problems: buildProblems(problemRows),

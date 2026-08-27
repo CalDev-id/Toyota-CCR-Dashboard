@@ -103,6 +103,14 @@ export type AnalysisMachiningAdvancedStock = Record<
   balanceUnit: number;
 }>;
 
+export type AnalysisMachiningBalanceStock = Record<
+  "cylblock" | "cylhead" | "crankshaft" | "camshaft",
+  {
+    emergency: number | null;
+    exportModule: number | null;
+  }
+>;
+
 export type AnalysisResponse = {
   date: string;
   start: string;
@@ -120,6 +128,7 @@ export type AnalysisResponse = {
   machiningEmergencyStock: AnalysisMachiningEmergencyStock;
   machiningModuleExportStock: AnalysisMachiningModuleExportStock;
   machiningAdvancedStock: AnalysisMachiningAdvancedStock;
+  machiningBalanceStock: AnalysisMachiningBalanceStock;
   lines: Array<{
     key: AnalysisLineKey;
     label: string;

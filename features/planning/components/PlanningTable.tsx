@@ -11,6 +11,10 @@ import {
 } from "@/features/planning/planning-ui";
 import { Fragment } from "react";
 
+function SelectionCheckbox({ checked, label, onChange }: { checked: boolean; label: string; onChange: (checked: boolean) => void }) {
+  return <label className="group mx-auto grid size-5 cursor-pointer place-items-center rounded-md border border-[#98a2b3] bg-white shadow-sm transition hover:border-[#465fff] has-[:checked]:border-[#465fff] has-[:checked]:bg-[#465fff]"><input type="checkbox" aria-label={label} checked={checked} onChange={(event) => onChange(event.target.checked)} className="sr-only" /><svg viewBox="0 0 16 16" aria-hidden="true" className="hidden size-3 text-white group-has-[:checked]:block" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2"><path d="m3 8 3 3 7-7" /></svg></label>;
+}
+
 type PlanningTableProps = {
   visibleColumns: PlanningColumn[];
   isLoading: boolean;
@@ -24,6 +28,8 @@ type PlanningTableProps = {
   saveDraftRow: (id: string) => void;
   setDraftRows: React.Dispatch<React.SetStateAction<Array<{ id: string }>>>;
   setDeleteTarget: React.Dispatch<React.SetStateAction<{ id: string; part: PlanningPartKey } | null>>;
+  selectedRowIds: Set<string>;
+  setSelectedRowIds: React.Dispatch<React.SetStateAction<Set<string>>>;
   canManagePlanning: boolean;
 };
 
@@ -40,6 +46,8 @@ export default function PlanningTable({
   saveDraftRow,
   setDraftRows,
   setDeleteTarget,
+  selectedRowIds,
+  setSelectedRowIds,
   canManagePlanning,
 }: PlanningTableProps) {
   const isCamshaft = activePart === "camshaft";
@@ -54,6 +62,8 @@ export default function PlanningTable({
   const isNumberField = (column: PlanningColumn) => column.inputType === "number";
   const isCompactField = (column: PlanningColumn) =>
     ["shift", "fshift", "group", "fgroup", "tt", "ftt", "oee", "foee", "ratio", "fratio", "f1tr", "f2tr"].includes(column.field.toLowerCase());
+  const rowIds = rows.map((row, index) => primaryColumn ? String(row[primaryColumn.field]) : String(index));
+  const allSelected = rowIds.length > 0 && rowIds.every((id) => selectedRowIds.has(id));
 
   return (
     <section className="overflow-hidden rounded-b-2xl border border-t-0 border-[#e4e7ec] bg-white shadow-sm">
@@ -65,6 +75,7 @@ export default function PlanningTable({
         >
           <thead className="bg-[#f9fafb] text-xs font-medium uppercase tracking-wide text-[#667085]">
             <tr>
+              {canManagePlanning ? <th className="w-12 px-3 py-3 text-center"><SelectionCheckbox label="Pilih semua data" checked={allSelected} onChange={(checked) => setSelectedRowIds((current) => { const next = new Set(current); for (const id of rowIds) { if (checked) next.add(id); else next.delete(id); } return next; })} /></th> : null}
               {visibleColumns.map((column) => (
                 <Fragment key={column.field}>
                   <th className="px-3 py-3">
@@ -77,7 +88,6 @@ export default function PlanningTable({
                   {column.field.toLowerCase() === "f2tr" ? <th className="px-2 py-3 text-center">Total Plan</th> : null}
                 </Fragment>
               ))}
-              {canManagePlanning ? <th className="px-3 py-3 text-right">Actions</th> : null}
             </tr>
           </thead>
           <tbody className="divide-y divide-[#e4e7ec]">
@@ -122,6 +132,7 @@ export default function PlanningTable({
                           : "bg-[#edf2f7] hover:bg-[#dbeafe] dark:bg-[#162033] dark:hover:bg-[#1d3a66]"
                     }`}
                   >
+                    {canManagePlanning ? <td className="px-3 py-4 text-center align-middle">{isDraft ? null : <SelectionCheckbox label={`Pilih data ${rowId}`} checked={selectedRowIds.has(rowId)} onChange={(checked) => setSelectedRowIds((current) => { const next = new Set(current); if (checked) next.add(rowId); else next.delete(rowId); return next; })} />}</td> : null}
                     {visibleColumns.map((column) => (
                       <Fragment key={column.field}>
                       <td className="px-3 py-4">
@@ -269,7 +280,7 @@ export default function PlanningTable({
                       ) : null}
                       </Fragment>
                     ))}
-                    {canManagePlanning ? <td className="px-3 py-4">
+                    {canManagePlanning && isDraft ? <td className="px-3 py-4">
                       <div className="flex justify-end gap-2">
                         {isDraft ? (
                           <button
@@ -283,7 +294,7 @@ export default function PlanningTable({
                         ) : null}
                         <button
                           className="h-10 rounded-lg border border-[#fecdca] px-3 text-sm font-semibold text-[#d92d20] transition hover:bg-[#fef3f2] disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={!isDraft && !primaryColumn}
+                          disabled={!primaryColumn}
                           type="button"
                           onClick={() => {
                             if (isDraft) {

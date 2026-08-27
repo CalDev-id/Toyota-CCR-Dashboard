@@ -18,6 +18,8 @@ const requiredHeaders = [
   "Balance_Stock_ADV_New",
 ] as const;
 
+const importSheetName = "Input_Act_Stock";
+
 type StockRow = {
   date: string;
   line: string;
@@ -76,10 +78,17 @@ export type MachiningAdvancedStock = Record<AdvancedStockGroup, {
   balanceUnit: number;
 }>;
 
+type MachiningBalanceStockGroup = "cylblock" | "cylhead" | "crankshaft" | "camshaft";
+
+export type MachiningBalanceStock = Record<MachiningBalanceStockGroup, {
+  emergency: number | null;
+  exportModule: number | null;
+}>;
+
 type DatabaseStockRow = StockRow & { id: number };
 
 function formatDate(date: Date) {
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function parseDate(value: unknown) {
@@ -133,19 +142,22 @@ function hasChanged(existing: DatabaseStockRow, incoming: StockRow) {
   );
 }
 
-function monthBounds(month: string) {
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error("Pilih bulan dan tahun yang valid");
-  const [year, monthNumber] = month.split("-").map(Number);
-  const start = `${year}-${String(monthNumber).padStart(2, "0")}-01`;
-  const end = `${year}-${String(monthNumber + 1).padStart(2, "0")}-01`;
-  return { start, end };
+function dateRangeBounds(start: string, end: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || start > end) {
+    throw new Error("Pilih rentang tanggal yang valid");
+  }
+  const endDate = new Date(`${end}T00:00:00Z`);
+  endDate.setUTCDate(endDate.getUTCDate() + 1);
+  return { start, end: endDate.toISOString().slice(0, 10) };
 }
 
-function parseRows(file: File, month: string) {
+function parseRows(file: File, startDate: string, endDate: string) {
   return file.arrayBuffer().then((arrayBuffer) => {
-    const workbook = XLSX.read(Buffer.from(arrayBuffer), { type: "buffer", cellDates: true });
-    const sheetName = workbook.SheetNames[0];
-    if (!sheetName) throw new Error("Excel file must contain at least one sheet");
+    // Keep Excel dates as serial numbers. Converting them to JavaScript Dates makes
+    // their calendar day depend on the server timezone.
+    const workbook = XLSX.read(Buffer.from(arrayBuffer), { type: "buffer" });
+    const sheetName = workbook.SheetNames.find((name) => name.trim() === importSheetName);
+    if (!sheetName) throw new Error(`Excel must contain a sheet named ${importSheetName}`);
 
     const sheet = workbook.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "", raw: true });
@@ -155,7 +167,7 @@ function parseRows(file: File, month: string) {
     const missingHeaders = requiredHeaders.filter((header) => !headers.has(header));
     if (missingHeaders.length) throw new Error(`Excel is missing required columns: ${missingHeaders.join(", ")}`);
 
-    const { start, end } = monthBounds(month);
+    const { start, end } = dateRangeBounds(startDate, endDate);
     const parsedRows = rows.map((row, index): StockRow => {
       const date = parseDate(row.Date);
       const line = String(row.Line ?? "").trim();
@@ -182,7 +194,7 @@ function parseRows(file: File, month: string) {
       };
     }).filter((row) => row.date >= start && row.date < end);
 
-    if (parsedRows.length === 0) throw new Error(`Tidak ada data untuk periode ${month}`);
+    if (parsedRows.length === 0) throw new Error(`Tidak ada data untuk rentang ${startDate} sampai ${endDate}`);
 
     const keys = new Set<string>();
     for (const row of parsedRows) {
@@ -195,8 +207,7 @@ function parseRows(file: File, month: string) {
   });
 }
 
-async function getExistingRows(month: string) {
-  const { start, end } = monthBounds(month);
+async function getExistingRowsInRange(start: string, end: string) {
   return prisma.$queryRawUnsafe<DatabaseStockRow[]>(
     `SELECT CAST(id AS DOUBLE) AS id, DATE_FORMAT(\`date\`, '%Y-%m-%d') AS date, line, type, CAST(unit_module AS DOUBLE) AS unitModule,
       module_code AS moduleCode, CAST(target_day AS DOUBLE) AS targetDay, CAST(target_module AS DOUBLE) AS targetModule,
@@ -230,8 +241,9 @@ async function updateRow(database: StockDatabase, id: number, row: StockRow) {
   );
 }
 
-export async function getAsakaiStock(month: string): Promise<AsakaiStockRow[]> {
-  return getExistingRows(month);
+export async function getAsakaiStock(start: string, end: string): Promise<AsakaiStockRow[]> {
+  const bounds = dateRangeBounds(start, end);
+  return getExistingRowsInRange(bounds.start, bounds.end);
 }
 
 type EmergencyStockRow = {
@@ -244,8 +256,9 @@ type EmergencyStockRow = {
   actLocal: number | null;
 };
 
-type ModuleExportStockRow = Omit<EmergencyStockRow, "actLocal"> & {
+type ModuleExportStockRow = Omit<EmergencyStockRow, "actLocal" | "actModule"> & {
   moduleCode: string;
+  actualUnit: number | null;
 };
 
 type AdvancedStockRow = {
@@ -254,6 +267,16 @@ type AdvancedStockRow = {
   moduleCode: string | null;
   actualUnit: number | null;
   balanceUnit: number | null;
+};
+
+type BalanceStockRow = {
+  line: string;
+  unitModule: number | null;
+  moduleCode: string | null;
+  targetModule: number | null;
+  actModule: number | null;
+  actLocal: number | null;
+  actualUnit: number | null;
 };
 
 function emptyEmergencyStockMetrics(): EmergencyStockMetrics {
@@ -361,12 +384,13 @@ function buildModuleExportMetrics(rows: ModuleExportStockRow[]): EmergencyStockM
     const unitModule = Number(row.unitModule) || 0;
     const targetDay = Number(row.targetDay) || 0;
     const targetPallet = Number(row.targetModule) || 0;
-    const actPallet = Number(row.actModule) || 0;
+    const actUnit = Number(row.actualUnit) || 0;
+    const actPallet = unitModule > 0 ? actUnit / unitModule : 0;
 
     return {
       targetPallet: current.targetPallet + targetPallet,
       actPallet: current.actPallet + actPallet,
-      actUnit: current.actUnit + actPallet * unitModule,
+      actUnit: current.actUnit + actUnit,
       actDayDenominator: current.actDayDenominator + (targetDay > 0 ? targetPallet * unitModule / targetDay : 0),
     };
   }, {
@@ -388,7 +412,7 @@ export async function getMachiningModuleExportStock(date: string): Promise<Machi
   const rows = await prisma.$queryRawUnsafe<ModuleExportStockRow[]>(
     `SELECT line, type, module_code AS moduleCode, CAST(unit_module AS DOUBLE) AS unitModule,
       CAST(target_day AS DOUBLE) AS targetDay, CAST(target_module AS DOUBLE) AS targetModule,
-      CAST(act_module AS DOUBLE) AS actModule
+      CAST(actual_stock_unit_es_packcomp_new AS DOUBLE) AS actualUnit
      FROM asakai_stock
      WHERE \`date\` = ?
        AND line IN ('CYL. BLOCK', 'CYL. HEAD', 'CRANKSHAFT', 'CAMSHAFT')
@@ -410,6 +434,62 @@ export async function getMachiningModuleExportStock(date: string): Promise<Machi
       }];
     }),
   ) as MachiningModuleExportStock;
+}
+
+const machiningBalanceStockLines: Array<{ key: MachiningBalanceStockGroup; line: string }> = [
+  { key: "cylblock", line: "CYL. BLOCK" },
+  { key: "cylhead", line: "CYL. HEAD" },
+  { key: "crankshaft", line: "CRANKSHAFT" },
+  { key: "camshaft", line: "CAMSHAFT" },
+];
+
+function buildBalanceStockUnit(rows: BalanceStockRow[], category: "emergency" | "exportModule") {
+  const sourceRows = rows.filter((row) => category === "emergency"
+    ? !row.moduleCode?.trim()
+    : Boolean(row.moduleCode?.trim()));
+  const unitModule = sourceRows
+    .map((row) => Number(row.unitModule) || 0)
+    .filter((unit) => unit > 0)
+    .sort((left, right) => left - right)[0];
+
+  if (!unitModule) return null;
+
+  const balancePallet = sourceRows.reduce((total, row) => {
+    const targetModule = Number(row.targetModule) || 0;
+
+    if (category === "emergency") {
+      return total + (Number(row.actLocal) || 0) + (Number(row.actModule) || 0) - targetModule;
+    }
+
+    const rowUnitModule = Number(row.unitModule) || 0;
+    const actModule = rowUnitModule > 0 ? (Number(row.actualUnit) || 0) / rowUnitModule : 0;
+    return total + actModule - targetModule;
+  }, 0);
+
+  return balancePallet * unitModule;
+}
+
+export async function getMachiningBalanceStock(date: string): Promise<MachiningBalanceStock> {
+  const rows = await prisma.$queryRawUnsafe<BalanceStockRow[]>(
+    `SELECT line, CAST(unit_module AS DOUBLE) AS unitModule, module_code AS moduleCode,
+      CAST(target_module AS DOUBLE) AS targetModule, CAST(act_module AS DOUBLE) AS actModule,
+      CAST(act_local AS DOUBLE) AS actLocal,
+      CAST(actual_stock_unit_es_packcomp_new AS DOUBLE) AS actualUnit
+     FROM asakai_stock
+     WHERE \`date\` = ?
+       AND line IN ('CYL. BLOCK', 'CYL. HEAD', 'CRANKSHAFT', 'CAMSHAFT')`,
+    date,
+  );
+
+  return Object.fromEntries(
+    machiningBalanceStockLines.map(({ key, line }) => {
+      const lineRows = rows.filter((row) => row.line === line);
+      return [key, {
+        emergency: buildBalanceStockUnit(lineRows, "emergency"),
+        exportModule: buildBalanceStockUnit(lineRows, "exportModule"),
+      }];
+    }),
+  ) as MachiningBalanceStock;
 }
 
 const machiningAdvancedStockGroups: Array<{
@@ -498,9 +578,24 @@ export async function deleteAsakaiStock(id: number) {
   if (result === 0) throw new Error("Data stock tidak ditemukan");
 }
 
-export async function importAsakaiStock(file: File, month: string, confirmChanges: boolean) {
-  const incomingRows = await parseRows(file, month);
-  const existingByKey = new Map((await getExistingRows(month)).map((row) => [keyFor(row), row]));
+export async function deleteAsakaiStocks(ids: number[]) {
+  const stockIds = [...new Set(ids.map(Number))];
+  if (stockIds.length === 0 || stockIds.some((id) => !Number.isSafeInteger(id) || id < 1)) {
+    throw new Error("Data stock tidak valid");
+  }
+
+  await prisma.$transaction(async (transaction) => {
+    for (const id of stockIds) {
+      const result = await transaction.$executeRawUnsafe("DELETE FROM asakai_stock WHERE id=?", id);
+      if (result === 0) throw new Error("Data stock tidak ditemukan");
+    }
+  });
+}
+
+export async function importAsakaiStock(file: File, startDate: string, endDate: string, confirmChanges: boolean) {
+  const incomingRows = await parseRows(file, startDate, endDate);
+  const bounds = dateRangeBounds(startDate, endDate);
+  const existingByKey = new Map((await getExistingRowsInRange(bounds.start, bounds.end)).map((row) => [keyFor(row), row]));
   const changes = incomingRows.filter((row) => {
     const existing = existingByKey.get(keyFor(row));
     return existing && hasChanged(existing, row);

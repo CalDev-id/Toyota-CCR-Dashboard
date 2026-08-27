@@ -2,6 +2,7 @@
 
 import {
   createPlanningRowAction,
+  deletePlanningRowsAction,
   deletePlanningRowAction,
   updatePlanningRowAction,
 } from "@/features/planning/server/planning-mutation";
@@ -111,6 +112,8 @@ export default function PlanningPage() {
     id: string;
     part: PlanningPartKey;
   } | null>(null);
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteTarget, setBulkDeleteTarget] = useState<string[] | null>(null);
   const [importConflict, setImportConflict] = useState<ImportConflict | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const manuallyLoadedPartRef = useRef<PlanningPartKey | null>(null);
@@ -192,6 +195,7 @@ export default function PlanningPage() {
       setColumns(data.columns);
       setRows(data.rows);
       setEditing(makeEditing(data.rows, data.columns));
+      setSelectedRowIds(new Set());
     } catch (loadError) {
       showToast(
         loadError instanceof Error
@@ -226,6 +230,7 @@ export default function PlanningPage() {
         setColumns(data.columns);
         setRows(data.rows);
         setEditing(makeEditing(data.rows, data.columns));
+        setSelectedRowIds(new Set());
         setToast(null);
       })
       .catch((loadError: unknown) => {
@@ -353,6 +358,22 @@ export default function PlanningPage() {
     }
   }
 
+  async function deleteSelectedRows() {
+    if (!bulkDeleteTarget || bulkDeleteTarget.length === 0) return;
+    setIsSaving(true);
+    try {
+      const result = await deletePlanningRowsAction(activePart, bulkDeleteTarget);
+      showToast(`${result.data.deleted} data planning berhasil dihapus.`, "success");
+      setSelectedRowIds(new Set());
+      setBulkDeleteTarget(null);
+      await loadPlanning(activePart);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Unable to delete planning data", "error");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   async function uploadExcel(part: PlanningPartKey, overwrite = false) {
     const file = fileInputRef.current?.files?.[0];
 
@@ -447,6 +468,8 @@ export default function PlanningPage() {
         updateChangedRows={() => void updateChangedRows()}
         hasPendingUpdates={changedRowIds.length > 0}
         isSaving={isSaving}
+        selectedRowCount={selectedRowIds.size}
+        deleteSelectedRows={() => setBulkDeleteTarget([...selectedRowIds])}
         canManagePlanning={canManagePlanning}
       />
 
@@ -463,6 +486,8 @@ export default function PlanningPage() {
         saveDraftRow={(id) => void saveDraftRow(id)}
         setDraftRows={setDraftRows}
         setDeleteTarget={setDeleteTarget}
+        selectedRowIds={selectedRowIds}
+        setSelectedRowIds={setSelectedRowIds}
         canManagePlanning={canManagePlanning}
       />
 
@@ -478,6 +503,9 @@ export default function PlanningPage() {
         deleteTarget={deleteTarget}
         setDeleteTarget={setDeleteTarget}
         confirmDeleteRow={() => void confirmDeleteRow()}
+        bulkDeleteTarget={bulkDeleteTarget}
+        setBulkDeleteTarget={setBulkDeleteTarget}
+        confirmBulkDelete={() => void deleteSelectedRows()}
         importConflict={importConflict}
         setImportConflict={setImportConflict}
         toast={toast}

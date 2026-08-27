@@ -1,6 +1,7 @@
 import type {
   AnalysisGapSeriesRow as GapSeriesRow,
   AnalysisMachiningAdvancedStock,
+  AnalysisMachiningBalanceStock,
   AnalysisMachiningEmergencyStock,
   AnalysisMachiningModuleExportStock,
   AnalysisEmergencyStockMetrics,
@@ -345,7 +346,7 @@ function ExpandableStockTable({
                   index === machiningStockColumns.length - 1 ? "rounded-r-lg" : ""
                 }`}
               >
-                {column.split(" ").map((word) => (
+                {(isBlue && column === "Act Pallet" ? "Act Module" : column).split(" ").map((word) => (
                   <span key={word} className="block">{word}</span>
                 ))}
               </th>
@@ -775,6 +776,7 @@ export function OeeLineChart({
   machiningEmergencyStock,
   machiningModuleExportStock,
   machiningAdvancedStock,
+  machiningBalanceStock,
   portraitDisplay,
 }: {
   series: SeriesRow[];
@@ -788,6 +790,7 @@ export function OeeLineChart({
   machiningEmergencyStock?: AnalysisMachiningEmergencyStock;
   machiningModuleExportStock?: AnalysisMachiningModuleExportStock;
   machiningAdvancedStock?: AnalysisMachiningAdvancedStock;
+  machiningBalanceStock?: AnalysisMachiningBalanceStock;
   portraitDisplay?: boolean;
 }) {
   const monthLabel = formatMonthLabel(series);
@@ -948,15 +951,18 @@ export function OeeLineChart({
                 <h3 className="px-1 text-sm font-semibold text-[#101828]">Balance Stock</h3>
                 <div className="mt-1.5 flex gap-2.5">
                   {(line.key === "assyline"
-                    ? ["Emergency Stock Domestic [Unit]"]
-                    : ["Emergency Stock", "Export Module"]
-                  ).map((label) => (
+                    ? [{ label: "Emergency Stock Domestic [Unit]", value: null }]
+                    : [
+                      { label: "Emergency Stock", value: machiningBalanceStock?.[line.key]?.emergency ?? null },
+                      { label: "Export Module", value: machiningBalanceStock?.[line.key]?.exportModule ?? null },
+                    ]
+                  ).map(({ label, value }) => (
                     <article key={label} className="min-h-[90px] min-w-0 flex-1 rounded-2xl border border-[#e4e7ec] bg-white p-2.5 text-center shadow-sm">
                       <p className="text-xs font-medium leading-tight text-[#667085]">{label}</p>
                       {line.key !== "assyline" ? (
                         <p className="mt-0.5 text-xs font-medium leading-tight text-[#667085]">[Unit]</p>
                       ) : null}
-                      <p className="mt-1 text-base font-semibold leading-tight text-[#101828]">-</p>
+                      <p className="mt-1 text-base font-semibold leading-tight text-[#101828]">{value === null ? "-" : formatUnit(value)}</p>
                     </article>
                   ))}
                 </div>

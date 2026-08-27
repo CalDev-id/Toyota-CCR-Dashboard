@@ -23,6 +23,9 @@ type PlanningOverlaysProps = {
   deleteTarget: { id: string; part: PlanningPartKey } | null;
   setDeleteTarget: React.Dispatch<React.SetStateAction<{ id: string; part: PlanningPartKey } | null>>;
   confirmDeleteRow: () => void;
+  bulkDeleteTarget: string[] | null;
+  setBulkDeleteTarget: React.Dispatch<React.SetStateAction<string[] | null>>;
+  confirmBulkDelete: () => void;
   importConflict: ImportConflict | null;
   setImportConflict: React.Dispatch<React.SetStateAction<ImportConflict | null>>;
   toast: Toast | null;
@@ -41,6 +44,9 @@ export default function PlanningOverlays({
   deleteTarget,
   setDeleteTarget,
   confirmDeleteRow,
+  bulkDeleteTarget,
+  setBulkDeleteTarget,
+  confirmBulkDelete,
   importConflict,
   setImportConflict,
   toast,
@@ -224,6 +230,19 @@ export default function PlanningOverlays({
               >
                 Hapus
               </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {canManagePlanning && bulkDeleteTarget ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#101828]/45 p-4" role="dialog" aria-modal="true" aria-labelledby="bulk-delete-planning-title">
+          <section className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h2 id="bulk-delete-planning-title" className="text-lg font-semibold text-[#101828]">Hapus data planning?</h2>
+            <p className="mt-2 text-sm text-[#667085]">{bulkDeleteTarget.length} data planning terpilih akan dihapus permanen.</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={() => setBulkDeleteTarget(null)} className="h-10 rounded-lg border border-[#d0d5dd] px-4 text-sm font-semibold text-[#344054]">Batal</button>
+              <button type="button" onClick={confirmBulkDelete} className="h-10 rounded-lg bg-[#d92d20] px-4 text-sm font-semibold text-white hover:bg-[#b42318]">Hapus</button>
             </div>
           </section>
         </div>

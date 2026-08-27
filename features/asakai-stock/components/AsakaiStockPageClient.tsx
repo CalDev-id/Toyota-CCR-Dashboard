@@ -4,10 +4,10 @@ import {
   getAsakaiStockAction,
   importAsakaiStockAction,
   updateAsakaiStockValuesAction,
-  deleteAsakaiStockAction,
+  deleteAsakaiStocksAction,
 } from "@/features/asakai-stock/actions";
 import type { AsakaiStockImportConflict, AsakaiStockRow, AsakaiStockValueUpdate } from "@/features/asakai-stock/server/asakai-stock";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 function currentMonth() {
   const now = new Date();
@@ -18,11 +18,36 @@ function formatValue(value: string | number | null) {
   return value ?? "-";
 }
 
-function formatMonth(month: string) {
+function monthEndDate(month: string) {
   const [year, monthNumber] = month.split("-").map(Number);
-  return new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" }).format(
-    new Date(year, monthNumber - 1, 1),
-  );
+  return `${month}-${String(new Date(year, monthNumber, 0).getDate()).padStart(2, "0")}`;
+}
+
+function currentMonthEnd() {
+  return monthEndDate(currentMonth());
+}
+
+function formatDateRange(start: string, end: string) {
+  const format = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" });
+  return `${format.format(new Date(`${start}T00:00:00`))} – ${format.format(new Date(`${end}T00:00:00`))}`;
+}
+
+function calendarDays(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const firstDay = new Date(year, monthNumber - 1, 1).getDay();
+  const lastDay = new Date(year, monthNumber, 0).getDate();
+  return [...Array(firstDay).fill(null), ...Array.from({ length: lastDay }, (_, index) => `${month}-${String(index + 1).padStart(2, "0")}`)];
+}
+
+function shiftMonth(month: string, offset: number) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const date = new Date(year, monthNumber - 1 + offset, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function todayDate() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
 const columns: Array<{ key: keyof AsakaiStockRow; label: string }> = [
@@ -71,8 +96,24 @@ function inputClassName(key: keyof AsakaiStockValueUpdate) {
   return "w-20";
 }
 
+function SelectionCheckbox({ checked, label, onChange }: { checked: boolean; label: string; onChange: (checked: boolean) => void }) {
+  return (
+    <label className="group grid size-5 cursor-pointer place-items-center rounded-md border border-[#98a2b3] bg-white shadow-sm transition hover:border-[#465fff] has-[:checked]:border-[#465fff] has-[:checked]:bg-[#465fff] dark:border-[#667085] dark:bg-[#162033]">
+      <input type="checkbox" aria-label={label} checked={checked} onChange={(event) => onChange(event.target.checked)} className="sr-only" />
+      <svg viewBox="0 0 16 16" aria-hidden="true" className="hidden size-3 text-white group-has-[:checked]:block" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2">
+        <path d="m3 8 3 3 7-7" />
+      </svg>
+    </label>
+  );
+}
+
 export default function AsakaiStockPageClient() {
-  const [month, setMonth] = useState(currentMonth);
+  const [rangeStart, setRangeStart] = useState(() => `${currentMonth()}-01`);
+  const [rangeEnd, setRangeEnd] = useState(currentMonthEnd);
+  const [isRangeOpen, setIsRangeOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(currentMonth);
+  const [pendingStart, setPendingStart] = useState<string | null>(null);
+  const calendarRef = useRef<HTMLDivElement>(null);
   const [rows, setRows] = useState<AsakaiStockRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
@@ -84,17 +125,20 @@ export default function AsakaiStockPageClient() {
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editingValues, setEditingValues] = useState<Record<number, AsakaiStockValueUpdate>>({});
   const [initialValues, setInitialValues] = useState<Record<number, AsakaiStockValueUpdate>>({});
-  const [deleteTarget, setDeleteTarget] = useState<AsakaiStockRow | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [deleteTarget, setDeleteTarget] = useState<number[] | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; direction: "asc" | "desc" }>({ key: "date", direction: "desc" });
+  const today = todayDate();
 
-  async function loadStock(selectedMonth: string) {
+  async function loadStock(start: string, end: string) {
     setIsLoading(true);
     try {
-      const stockRows = await getAsakaiStockAction(selectedMonth);
+      const stockRows = await getAsakaiStockAction(start, end);
       const values = Object.fromEntries(stockRows.map((row) => [row.id, toEditValues(row)]));
       setRows(stockRows);
       setEditingValues(values);
       setInitialValues(values);
+      setSelectedIds(new Set());
     } catch (error) {
       setToast({ type: "error", message: error instanceof Error ? error.message : "Gagal memuat data stock." });
     } finally {
@@ -103,15 +147,26 @@ export default function AsakaiStockPageClient() {
   }
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => void loadStock(month), 0);
+    const timeout = window.setTimeout(() => void loadStock(rangeStart, rangeEnd), 0);
     return () => window.clearTimeout(timeout);
-  }, [month]);
+  }, [rangeStart, rangeEnd]);
 
   useEffect(() => {
     if (!toast) return;
     const timeout = window.setTimeout(() => setToast(null), 5000);
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  useEffect(() => {
+    if (!isRangeOpen) return;
+
+    function closeWhenClickingOutside(event: PointerEvent) {
+      if (!calendarRef.current?.contains(event.target as Node)) setIsRangeOpen(false);
+    }
+
+    document.addEventListener("pointerdown", closeWhenClickingOutside);
+    return () => document.removeEventListener("pointerdown", closeWhenClickingOutside);
+  }, [isRangeOpen]);
 
   async function importFile(confirmChanges = false) {
     if (!selectedFile) {
@@ -123,9 +178,15 @@ export default function AsakaiStockPageClient() {
     try {
       const formData = new FormData();
       formData.set("file", selectedFile);
-      formData.set("month", month);
+      formData.set("startDate", rangeStart);
+      formData.set("endDate", rangeEnd);
       formData.set("confirmChanges", String(confirmChanges));
       const result = await importAsakaiStockAction(formData);
+
+      if ("error" in result) {
+        setToast({ type: "error", message: result.error ?? "Gagal mengimport data stock." });
+        return;
+      }
 
       if ("conflicts" in result) {
         setImportConflicts(result.conflicts ?? []);
@@ -140,7 +201,7 @@ export default function AsakaiStockPageClient() {
       setImportConflicts(null);
       setSelectedFile(null);
       setIsImportModalOpen(false);
-      await loadStock(month);
+      await loadStock(rangeStart, rangeEnd);
     } catch (error) {
       setToast({ type: "error", message: error instanceof Error ? error.message : "Gagal mengimport data stock." });
     } finally {
@@ -165,7 +226,7 @@ export default function AsakaiStockPageClient() {
     try {
       await updateAsakaiStockValuesAction(updates);
       setToast({ type: "success", message: `${updates.length} data stock berhasil diperbarui.` });
-      await loadStock(month);
+      await loadStock(rangeStart, rangeEnd);
     } catch (error) {
       setToast({ type: "error", message: error instanceof Error ? error.message : "Gagal memperbarui data stock." });
     } finally {
@@ -173,14 +234,14 @@ export default function AsakaiStockPageClient() {
     }
   }
 
-  async function deleteRow() {
+  async function deleteRows() {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      await deleteAsakaiStockAction(deleteTarget.id);
-      setToast({ type: "success", message: "Data stock berhasil dihapus." });
+      await deleteAsakaiStocksAction(deleteTarget);
+      setToast({ type: "success", message: `${deleteTarget.length} data stock berhasil dihapus.` });
       setDeleteTarget(null);
-      await loadStock(month);
+      await loadStock(rangeStart, rangeEnd);
     } catch (error) {
       setToast({ type: "error", message: error instanceof Error ? error.message : "Gagal menghapus data stock." });
     } finally {
@@ -194,12 +255,15 @@ export default function AsakaiStockPageClient() {
     return Boolean(values && initial && JSON.stringify(values) !== JSON.stringify(initial));
   });
 
-  const sortedRows = [...rows].sort((first, second) => {
-    const firstValue = first[sort.key];
-    const secondValue = second[sort.key];
-    const comparison = String(firstValue ?? "").localeCompare(String(secondValue ?? ""), "id");
-    return sort.direction === "asc" ? comparison : -comparison;
-  });
+  const sortedRows = rows
+    .filter((row) => row.date >= rangeStart && row.date <= rangeEnd)
+    .sort((first, second) => {
+      const firstValue = first[sort.key];
+      const secondValue = second[sort.key];
+      const comparison = String(firstValue ?? "").localeCompare(String(secondValue ?? ""), "id");
+      return sort.direction === "asc" ? comparison : -comparison;
+    });
+  const allVisibleSelected = sortedRows.length > 0 && sortedRows.every((row) => selectedIds.has(row.id));
 
   function toggleSort(key: SortKey) {
     setSort((current) => ({
@@ -214,18 +278,35 @@ export default function AsakaiStockPageClient() {
         <div className="flex flex-col gap-4 border-b border-[#e4e7ec] px-5 py-4 sm:flex-row sm:items-end sm:justify-between dark:border-[#273449]">
           <div>
             <h1 className="font-semibold text-[#101828] dark:text-[#f8fafc]">Data Stock Asakai</h1>
-            <p className="mt-1 text-sm text-[#667085] dark:text-[#a7b0c0]">{formatMonth(month)}</p>
+            <p className="mt-1 text-sm text-[#667085] dark:text-[#a7b0c0]">{formatDateRange(rangeStart, rangeEnd)}</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <label className="grid gap-1 text-sm font-medium text-[#344054] dark:text-[#d4dae5]">
-              <span className="sr-only">Bulan</span>
-              <input
-                type="month"
-                value={month}
-                onChange={(event) => setMonth(event.target.value)}
-                className="h-10 rounded-lg border border-[#d0d5dd] bg-white px-3 text-sm dark:border-[#384860] dark:bg-[#162033]"
-              />
-            </label>
+            <div ref={calendarRef} className="relative">
+              <button
+                type="button"
+                aria-label="Pilih rentang tanggal"
+                title="Pilih rentang tanggal"
+                onClick={() => {
+                  setIsRangeOpen((open) => !open);
+                  setCalendarMonth(rangeStart.slice(0, 7));
+                  setPendingStart(null);
+                }}
+                className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#d0d5dd] bg-white px-3 text-sm font-semibold text-[#344054] dark:border-[#384860] dark:bg-[#162033] dark:text-[#d4dae5]"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">
+                  <rect x="3" y="5" width="18" height="16" rx="2" />
+                  <path d="M16 3v4M8 3v4M3 10h18" />
+                </svg>
+                <span>{formatDateRange(rangeStart, rangeEnd)}</span>
+              </button>
+              {isRangeOpen ? (
+                <div className="absolute right-0 top-12 z-20 w-72 rounded-xl border border-[#e4e7ec] bg-white p-4 shadow-lg dark:border-[#384860] dark:bg-[#162033]">
+                  <div className="mb-3 flex items-center justify-between"><button type="button" onClick={() => setCalendarMonth((current) => shiftMonth(current, -1))}>‹</button><span className="text-sm font-semibold">{new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" }).format(new Date(`${calendarMonth}-01T00:00:00`))}</span><button type="button" onClick={() => setCalendarMonth((current) => shiftMonth(current, 1))}>›</button></div>
+                  <div className="grid grid-cols-7 gap-1 text-center text-xs text-[#667085]">{["Mg", "Sn", "Sl", "Rb", "Km", "Jm", "Sb"].map((day) => <span key={day}>{day}</span>)}</div>
+                  <div className="mt-1 grid grid-cols-7 gap-1">{calendarDays(calendarMonth).map((date, index) => date ? <button key={date} type="button" onClick={() => { if (!pendingStart) { setPendingStart(date); return; } const [start, end] = pendingStart <= date ? [pendingStart, date] : [date, pendingStart]; setRangeStart(start); setRangeEnd(end); setPendingStart(null); setIsRangeOpen(false); }} className={`aspect-square rounded-md text-xs hover:bg-[#ecf3ff] ${date === pendingStart ? "bg-[#fdb022] font-semibold text-[#344054]" : date === rangeStart || date === rangeEnd ? "bg-[#465fff] font-semibold text-white" : date > rangeStart && date < rangeEnd ? "bg-[#ecf3ff] text-[#3641f5]" : "text-[#344054] dark:text-[#d4dae5]"} ${date === today ? "ring-2 ring-[#12b76a] ring-offset-1 dark:ring-offset-[#162033]" : ""}`}>{Number(date.slice(-2))}</button> : <span key={`empty-${index}`} />)}</div>
+                </div>
+              ) : null}
+            </div>
             <button
               type="button"
               onClick={() => setIsImportModalOpen(true)}
@@ -244,12 +325,23 @@ export default function AsakaiStockPageClient() {
               </svg>
               {isSaving ? "Mengupdate..." : "Update"}
             </button>
+            <button
+              type="button"
+              aria-label="Hapus data terpilih"
+              title="Hapus data terpilih"
+              disabled={selectedIds.size === 0 || isDeleting}
+              onClick={() => setDeleteTarget([...selectedIds])}
+              className="inline-flex size-10 items-center justify-center rounded-lg border border-[#fecdca] text-[#d92d20] disabled:cursor-not-allowed disabled:opacity-40 dark:border-[#7a271a]"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8"><path d="M3 6h18M9 6V4h6v2m-8 0 1 14h8l1-14M10 10v6m4-6v6" /></svg>
+            </button>
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-[#f9fafb] text-xs uppercase tracking-wide text-[#667085] dark:bg-[#162033] dark:text-[#a7b0c0]">
               <tr>
+                <th className="w-12 px-4 py-3"><SelectionCheckbox label="Pilih semua data yang tampil" checked={allVisibleSelected} onChange={(checked) => setSelectedIds((current) => { const next = new Set(current); for (const row of sortedRows) { if (checked) next.add(row.id); else next.delete(row.id); } return next; })} /></th>
                 {columns.map((column) => {
                   const isSortable = column.key === "date";
                   const isActive = isSortable && sort.key === column.key;
@@ -268,14 +360,13 @@ export default function AsakaiStockPageClient() {
                     </th>
                   );
                 })}
-                <th className="px-4 py-3 text-right font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eaecf0] dark:divide-[#273449]">
               {isLoading ? (
                 <tr><td colSpan={columns.length + 1} className="px-4 py-8 text-center text-[#667085]">Memuat data...</td></tr>
-              ) : rows.length === 0 ? (
-                <tr><td colSpan={columns.length + 1} className="px-4 py-8 text-center text-[#667085]">Belum ada data stock untuk periode ini.</td></tr>
+              ) : sortedRows.length === 0 ? (
+                <tr><td colSpan={columns.length + 1} className="px-4 py-8 text-center text-[#667085]">Belum ada data stock untuk rentang tanggal ini.</td></tr>
               ) : sortedRows.map((row, rowIndex) => (
                 <tr
                   key={row.id}
@@ -285,6 +376,7 @@ export default function AsakaiStockPageClient() {
                       : "bg-[#edf2f7] hover:bg-[#dbeafe] dark:bg-[#162033] dark:hover:bg-[#1d3a66]"
                   }`}
                 >
+                  <td className="px-4 py-3"><SelectionCheckbox label={`Pilih data ${row.date} ${row.line} ${row.type}`} checked={selectedIds.has(row.id)} onChange={(checked) => setSelectedIds((current) => { const next = new Set(current); if (checked) next.add(row.id); else next.delete(row.id); return next; })} /></td>
                   {columns.map((column) => {
                     const key = column.key as keyof AsakaiStockValueUpdate;
                     const isEditing = editableKeys.has(key);
@@ -307,16 +399,6 @@ export default function AsakaiStockPageClient() {
                       </td>
                     );
                   })}
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      disabled={isDeleting}
-                      onClick={() => setDeleteTarget(row)}
-                      className="h-9 rounded-lg border border-[#fecdca] px-3 text-sm font-semibold text-[#d92d20] transition hover:bg-[#fef3f2] disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#7a271a] dark:text-[#fda29b] dark:hover:bg-[#2d1215]"
-                    >
-                      Delete
-                    </button>
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -328,12 +410,12 @@ export default function AsakaiStockPageClient() {
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#101828]/45 p-4" role="dialog" aria-modal="true" aria-labelledby="stock-import-title">
           <section className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-[#111827]">
             <h2 id="stock-import-title" className="text-lg font-semibold text-[#101828] dark:text-[#f8fafc]">Import Data Stock</h2>
-            <p className="mt-2 text-sm text-[#667085] dark:text-[#a7b0c0]">Pilih file Excel untuk periode {month}.</p>
+            <p className="mt-2 text-sm text-[#667085] dark:text-[#a7b0c0]">Hanya data dalam rentang {formatDateRange(rangeStart, rangeEnd)} yang akan diimport.</p>
             <label className="mt-5 block text-sm font-medium text-[#344054] dark:text-[#d4dae5]">
               File Excel
               <input
                 type="file"
-                accept=".xlsx,.xls"
+                accept=".xlsx,.xls,.xlsb"
                 onChange={(event) => setSelectedFile(event.currentTarget.files?.[0] ?? null)}
                 className="mt-1 block h-11 w-full cursor-pointer rounded-lg border border-[#e4e7ec] bg-white text-sm text-[#667085] outline-none file:h-full file:border-0 file:border-r file:border-[#e4e7ec] file:bg-[#f9fafb] file:px-4 file:text-sm file:font-semibold file:text-[#344054] focus:border-[#465fff] focus:ring-4 focus:ring-[#ecf3ff] dark:border-[#384860] dark:bg-[#162033] dark:text-[#a7b0c0]"
               />
@@ -387,10 +469,10 @@ export default function AsakaiStockPageClient() {
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#101828]/45 p-4" role="dialog" aria-modal="true" aria-labelledby="delete-stock-title">
           <section className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-[#111827]">
             <h2 id="delete-stock-title" className="text-lg font-semibold text-[#101828] dark:text-[#f8fafc]">Hapus data stock?</h2>
-            <p className="mt-2 text-sm text-[#667085] dark:text-[#a7b0c0]">Data {deleteTarget.date} · {deleteTarget.line} · {deleteTarget.type} akan dihapus permanen.</p>
+            <p className="mt-2 text-sm text-[#667085] dark:text-[#a7b0c0]">{deleteTarget.length} data stock terpilih akan dihapus permanen.</p>
             <div className="mt-6 flex justify-end gap-2">
               <button type="button" disabled={isDeleting} onClick={() => setDeleteTarget(null)} className="h-10 rounded-lg border border-[#d0d5dd] px-4 text-sm font-semibold text-[#344054] dark:border-[#384860] dark:text-[#d4dae5]">Batal</button>
-              <button type="button" disabled={isDeleting} onClick={() => void deleteRow()} className="h-10 rounded-lg bg-[#d92d20] px-4 text-sm font-semibold text-white hover:bg-[#b42318] disabled:opacity-60">{isDeleting ? "Menghapus..." : "Hapus"}</button>
+              <button type="button" disabled={isDeleting} onClick={() => void deleteRows()} className="h-10 rounded-lg bg-[#d92d20] px-4 text-sm font-semibold text-white hover:bg-[#b42318] disabled:opacity-60">{isDeleting ? "Menghapus..." : "Hapus"}</button>
             </div>
           </section>
         </div>

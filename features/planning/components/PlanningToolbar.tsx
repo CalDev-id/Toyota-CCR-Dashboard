@@ -20,6 +20,8 @@ type PlanningToolbarProps = {
   updateChangedRows: () => void;
   hasPendingUpdates: boolean;
   isSaving: boolean;
+  selectedRowCount: number;
+  deleteSelectedRows: () => void;
   canManagePlanning: boolean;
 };
 
@@ -42,6 +44,8 @@ export default function PlanningToolbar({
   updateChangedRows,
   hasPendingUpdates,
   isSaving,
+  selectedRowCount,
+  deleteSelectedRows,
   canManagePlanning,
 }: PlanningToolbarProps) {
   const isAssy = activePart === "assy";
@@ -112,6 +116,15 @@ export default function PlanningToolbar({
               <path d="M20 6 9 17l-5-5" />
             </svg>
             Update
+          </button>
+          <button
+            className="inline-flex size-10 items-center justify-center rounded-lg border border-[#fecdca] text-[#d92d20] disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={selectedRowCount === 0 || isSaving}
+            type="button"
+            title="Hapus data terpilih"
+            onClick={deleteSelectedRows}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8"><path d="M3 6h18M9 6V4h6v2m-8 0 1 14h8l1-14M10 10v6m4-6v6" /></svg>
           </button>
         </div>
         ) : null}

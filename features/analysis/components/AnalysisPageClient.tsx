@@ -268,6 +268,7 @@ export default function AnalysisPage() {
               machiningEmergencyStock={data?.machiningEmergencyStock}
               machiningModuleExportStock={data?.machiningModuleExportStock}
               machiningAdvancedStock={data?.machiningAdvancedStock}
+              machiningBalanceStock={data?.machiningBalanceStock}
               portraitDisplay={isCompactDisplay}
             />
           </section>

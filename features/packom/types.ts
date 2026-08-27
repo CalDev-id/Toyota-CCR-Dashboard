@@ -19,12 +19,14 @@ export type PackomCard = {
     code: string;
     label: string;
     count: number;
+    caseNumbers: string[];
     isUnknown: boolean;
   }>;
   incompleteCases: Array<{
     caseNumber: string;
     units: number;
     capacity: number;
+    fromPreviousShift: boolean;
   }>;
   anomalyCases: Array<{
     caseNumber: string;
