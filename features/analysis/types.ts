@@ -111,6 +111,21 @@ export type AnalysisMachiningBalanceStock = Record<
   }
 >;
 
+export type AnalysisShipmentVanningMetrics = {
+  plan: number;
+  finish: number;
+  remain: number;
+};
+
+export type AnalysisShipmentVanningDestination = {
+  dates: string[];
+  modules: Record<string, AnalysisShipmentVanningMetrics[]>;
+  totalPlan: number[];
+};
+
+export type AnalysisShipmentVanning = Partial<Record<"kamigo" | "stm", AnalysisShipmentVanningDestination>>;
+export type AnalysisAsakaiShipmentVanning = Record<Exclude<AnalysisLineKey, "assyline">, AnalysisShipmentVanning>;
+
 export type AnalysisResponse = {
   date: string;
   start: string;
@@ -129,6 +144,7 @@ export type AnalysisResponse = {
   machiningModuleExportStock: AnalysisMachiningModuleExportStock;
   machiningAdvancedStock: AnalysisMachiningAdvancedStock;
   machiningBalanceStock: AnalysisMachiningBalanceStock;
+  shipmentVanning: AnalysisAsakaiShipmentVanning;
   lines: Array<{
     key: AnalysisLineKey;
     label: string;

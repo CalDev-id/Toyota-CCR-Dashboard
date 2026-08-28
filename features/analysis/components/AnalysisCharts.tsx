@@ -1,5 +1,7 @@
 import type {
   AnalysisGapSeriesRow as GapSeriesRow,
+  AnalysisAsakaiShipmentVanning,
+  AnalysisShipmentVanningDestination,
   AnalysisMachiningAdvancedStock,
   AnalysisMachiningBalanceStock,
   AnalysisMachiningEmergencyStock,
@@ -472,7 +474,9 @@ type VanningTableRow = {
 
 type VanningTableConfig = {
   columns: string[];
+  columnTitles?: string[];
   rows: VanningTableRow[];
+  values?: Array<Array<number | null>>;
 };
 
 const vanningConfigs: Record<
@@ -511,10 +515,16 @@ const vanningConfigs: Record<
       rows: [
         { label: "HC-Plan", type: "plan" },
         { label: "Finish", type: "detail" },
+        { label: "Remain", type: "detail" },
         { label: "HD-Plan", type: "plan" },
         { label: "Finish", type: "detail" },
+        { label: "Remain", type: "detail" },
         { label: "HE-Plan", type: "plan" },
         { label: "Finish", type: "detail" },
+        { label: "Remain", type: "detail" },
+        { label: "HF-Plan", type: "plan" },
+        { label: "Finish", type: "detail" },
+        { label: "Remain", type: "detail" },
         { label: "Total [Plan]", type: "total" },
       ],
     },
@@ -529,6 +539,7 @@ const vanningConfigs: Record<
         { label: "Remain", type: "detail" },
         { label: "K8-Plan", type: "plan" },
         { label: "Finish", type: "detail" },
+        { label: "Remain", type: "detail" },
         { label: "Total [Plan]", type: "total" },
       ],
     },
@@ -572,21 +583,21 @@ const vanningConfigs: Record<
   },
 };
 
-function VanningTable({ columns, rows }: VanningTableConfig) {
+function VanningTable({ columns, columnTitles, rows, values }: VanningTableConfig) {
   const isSingleDateKamigo = columns[0] === "Kamigo" && columns.length === 2;
   const [expandedPlans, setExpandedPlans] = useState<Set<string>>(
     () => new Set(rows.filter((row) => row.type === "plan").map((row) => row.label)),
   );
-  const visibleRows: VanningTableRow[] = [];
+  const visibleRows: Array<{ row: VanningTableRow; index: number }> = [];
   let currentPlanLabel: string | undefined;
 
-  for (const row of rows) {
+  for (const [index, row] of rows.entries()) {
     if (row.type === "plan") {
       currentPlanLabel = row.label;
-      visibleRows.push(row);
+      visibleRows.push({ row, index });
     } else if (row.type === "detail") {
       if (currentPlanLabel && expandedPlans.has(currentPlanLabel)) {
-        visibleRows.push(row);
+        visibleRows.push({ row, index });
       }
     }
   }
@@ -628,6 +639,7 @@ function VanningTable({ columns, rows }: VanningTableConfig) {
               {columns.map((column, index) => (
                 <th
                   key={column}
+                  title={columnTitles?.[index]}
                   className={`px-1 py-1.5 font-semibold ${
                     isSingleDateKamigo && index === 1 ? "relative -translate-x-6" : ""
                   }`}
@@ -638,9 +650,9 @@ function VanningTable({ columns, rows }: VanningTableConfig) {
             </tr>
           </thead>
           <tbody className="text-[#667085] dark:text-[#b7c2d8]">
-            {visibleRows.map((row, index) => (
+            {visibleRows.map(({ row, index: rowIndex }) => (
               <tr
-                key={`${row.label}-${index}`}
+                key={`${row.label}-${rowIndex}`}
                 className={`border-b border-[#eaecf0] dark:border-[#2f4059] ${
                   row.type === "plan"
                     ? "cursor-pointer bg-[#f9fafb] hover:bg-[#f2f4f7] dark:bg-[#18243a] dark:hover:bg-[#22314d]"
@@ -677,14 +689,14 @@ function VanningTable({ columns, rows }: VanningTableConfig) {
                     row.label
                   )}
                 </td>
-                {columns.slice(1).map((column) => (
+                {columns.slice(1).map((column, columnIndex) => (
                   <td
                     key={column}
                     className={`px-1 py-1 text-center ${
                       isSingleDateKamigo ? "relative -translate-x-6" : ""
                     }`}
                   >
-                    -
+                    {values?.[rowIndex]?.[columnIndex] ?? "-"}
                   </td>
                 ))}
               </tr>
@@ -697,14 +709,14 @@ function VanningTable({ columns, rows }: VanningTableConfig) {
                   <span className="block">Total</span>
                   <span className="block">[Plan]</span>
                 </td>
-                {columns.slice(1).map((column) => (
+                {columns.slice(1).map((column, columnIndex) => (
                   <td
                     key={column}
                     className={`px-1 py-1 text-center ${
                       isSingleDateKamigo ? "relative -translate-x-6" : ""
                     }`}
                   >
-                    -
+                    {values?.[rows.indexOf(totalRow)]?.[columnIndex] ?? "-"}
                   </td>
                 ))}
               </tr>
@@ -716,7 +728,78 @@ function VanningTable({ columns, rows }: VanningTableConfig) {
   );
 }
 
-function VanningModule({ lineKey }: { lineKey: AnalysisChartLine["key"] }) {
+function formatVanningDateTitle(date: string) {
+  const [, month, day] = date.split("-");
+  const monthLabel = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(month) - 1];
+  return `${day} ${monthLabel}`;
+}
+
+function buildDynamicVanningTable(config: VanningTableConfig, destination: AnalysisShipmentVanningDestination): VanningTableConfig {
+  let moduleCode = "";
+  const values = config.rows.map((row) => {
+    if (row.type === "total") return destination.totalPlan.map((value) => value || null);
+    if (row.type === "plan") moduleCode = row.label.split("-", 1)[0];
+    const metrics = destination.modules[moduleCode] ?? [];
+    const field = row.type === "plan" ? "plan" : row.label.toLowerCase() as "finish" | "remain";
+    return metrics.map((value) => value[field] || null);
+  });
+
+  return {
+    ...config,
+    columns: [config.columns[0], ...destination.dates.map((date) => date.slice(-2))],
+    columnTitles: [config.columns[0], ...destination.dates.map(formatVanningDateTitle)],
+    values,
+  };
+}
+
+function buildShipmentVanningConfig(
+  lineKey: Exclude<AnalysisChartLine["key"], "assyline">,
+  vanning: AnalysisAsakaiShipmentVanning,
+) {
+  const config = vanningConfigs[lineKey];
+  const lineVanning = vanning[lineKey];
+  return {
+    kamigo: config.kamigo && lineVanning.kamigo ? buildDynamicVanningTable(config.kamigo, lineVanning.kamigo) : config.kamigo,
+    stm: lineVanning.stm ? buildDynamicVanningTable(config.stm, lineVanning.stm) : config.stm,
+  };
+}
+
+function getVanningSummary(
+  vanning: AnalysisAsakaiShipmentVanning | undefined,
+  lineKey: Exclude<AnalysisChartLine["key"], "assyline">,
+  selectedDate: string | undefined,
+) {
+  if (!selectedDate) return null;
+  let planning = 0;
+  let remaining = 0;
+  let hasVanning = false;
+
+  for (const destination of Object.values(vanning?.[lineKey] ?? {})) {
+    if (!destination) continue;
+    const index = destination.dates.indexOf(selectedDate);
+    if (index === -1) continue;
+    hasVanning = true;
+    planning += destination.totalPlan[index] ?? 0;
+    remaining += Object.values(destination.modules).reduce(
+      (total, metrics) => total + (metrics[index]?.remain ?? 0),
+      0,
+    );
+  }
+
+  return { planning, remaining, hasVanning };
+}
+
+function formatTodayVanning(date: string | undefined) {
+  if (!date) return "-";
+  const [, month, day] = date.split("-").map(Number);
+  return Number.isFinite(month) && Number.isFinite(day) ? `${day}/${month}` : "-";
+}
+
+function VanningModule({ lineKey, shipmentVanning, selectedDate }: {
+  lineKey: AnalysisChartLine["key"];
+  shipmentVanning?: AnalysisAsakaiShipmentVanning;
+  selectedDate?: string;
+}) {
   if (lineKey === "assyline") {
     return (
       <div className="h-[375px]">
@@ -727,16 +810,22 @@ function VanningModule({ lineKey }: { lineKey: AnalysisChartLine["key"] }) {
     );
   }
 
-  const config = vanningConfigs[lineKey];
+  const config = shipmentVanning ? buildShipmentVanningConfig(lineKey, shipmentVanning) : vanningConfigs[lineKey];
+  const summary = getVanningSummary(shipmentVanning, lineKey, selectedDate);
+  const summaryCards = [
+    ["Today Vanning", formatTodayVanning(selectedDate)],
+    ["Planning", summary?.hasVanning ? summary.planning : "-"],
+    ["Remaining", summary?.hasVanning ? summary.remaining : "-"],
+  ];
 
   return (
     <section className="h-[375px]">
       <h3 className="px-1 text-sm font-semibold text-[#101828] dark:text-[#f8fafc]">Vanning [Module]</h3>
       <div className="mt-2 grid grid-cols-[1fr_0.8fr_1fr] gap-2">
-        {["Today Vanning", "Planning", "Remaining"].map((label) => (
+        {summaryCards.map(([label, value]) => (
           <article key={label} className="min-w-0 rounded-xl border border-[#e4e7ec] bg-white p-2 text-center shadow-sm dark:border-[#2f4059] dark:bg-[#111827]">
             <p className="text-xs font-medium leading-tight text-[#667085] dark:text-[#b7c2d8]">{label}</p>
-            <p className="mt-1 text-sm font-semibold text-[#101828] dark:text-[#f8fafc]">-</p>
+            <p className="mt-1 text-sm font-semibold text-[#101828] dark:text-[#f8fafc]">{value}</p>
           </article>
         ))}
       </div>
@@ -777,6 +866,8 @@ export function OeeLineChart({
   machiningModuleExportStock,
   machiningAdvancedStock,
   machiningBalanceStock,
+  shipmentVanning,
+  selectedDate,
   portraitDisplay,
 }: {
   series: SeriesRow[];
@@ -791,6 +882,8 @@ export function OeeLineChart({
   machiningModuleExportStock?: AnalysisMachiningModuleExportStock;
   machiningAdvancedStock?: AnalysisMachiningAdvancedStock;
   machiningBalanceStock?: AnalysisMachiningBalanceStock;
+  shipmentVanning?: AnalysisAsakaiShipmentVanning;
+  selectedDate?: string;
   portraitDisplay?: boolean;
 }) {
   const monthLabel = formatMonthLabel(series);
@@ -943,9 +1036,7 @@ export function OeeLineChart({
                 monthLabel={monthLabel}
               />
 
-              <VanningModule
-                lineKey={line.key}
-              />
+              <VanningModule lineKey={line.key} shipmentVanning={shipmentVanning} selectedDate={selectedDate} />
 
               <section>
                 <h3 className="px-1 text-sm font-semibold text-[#101828]">Balance Stock</h3>

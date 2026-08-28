@@ -1,5 +1,6 @@
 import type {
   AnalysisGapSeriesRow,
+  AnalysisAsakaiShipmentVanning,
   AnalysisLine,
   AnalysisOeeCard,
   AnalysisOeeSeriesRow,
@@ -15,6 +16,7 @@ import {
   getMachiningEmergencyStock,
   getMachiningModuleExportStock,
 } from "@/features/asakai-stock/server/asakai-stock";
+import { getAsakaiShipmentVanning } from "@/features/asakai-shipment/server/asakai-shipment";
 
 export const analysisLines: AnalysisLine[] = [
   {
@@ -440,7 +442,7 @@ function buildDailyGap(line: AnalysisLine, rows: RawAnalysisOeeRow[]) {
 export async function getAnalysisOee(dateParam: string | null) {
   const range = parseDate(dateParam);
   const days = getRangeDays(range.year, range.month, range.dayCount);
-  const [entries, machiningEmergencyStock, machiningModuleExportStock, machiningAdvancedStock, machiningBalanceStock] = await Promise.all([
+  const [entries, machiningEmergencyStock, machiningModuleExportStock, machiningAdvancedStock, machiningBalanceStock, shipmentVanning] = await Promise.all([
     Promise.all(
     analysisLines.map(async (line) => {
       const [rows, problemRows] = await Promise.all([
@@ -455,6 +457,7 @@ export async function getAnalysisOee(dateParam: string | null) {
     getMachiningModuleExportStock(range.date),
     getMachiningAdvancedStock(range.date),
     getMachiningBalanceStock(range.date),
+    getAsakaiShipmentVanning(range.date),
   ]);
   const cards = entries.map((entry) =>
     buildCard(entry.line, entry.rows, entry.problemRows, range.date),
@@ -608,6 +611,7 @@ export async function getAnalysisOee(dateParam: string | null) {
     machiningModuleExportStock,
     machiningAdvancedStock,
     machiningBalanceStock,
+    shipmentVanning: shipmentVanning as AnalysisAsakaiShipmentVanning,
     lines: analysisLines.map(({ key, label, shiftMode, displayShiftLabel }) => ({
       key,
       label,

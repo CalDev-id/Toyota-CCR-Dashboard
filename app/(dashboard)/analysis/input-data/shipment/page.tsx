@@ -1,8 +1,8 @@
 import { requirePageAccess } from "@/lib/authorization";
-import InputDataPlaceholderClient from "@/features/analysis/components/InputDataPlaceholderClient";
+import AsakaiShipmentPageClient from "@/features/asakai-shipment/components/AsakaiShipmentPageClient";
 
 export default async function InputShipmentPage() {
   await requirePageAccess("/analysis/input-data/shipment");
 
-  return <InputDataPlaceholderClient dataLabel="Shipment" />;
+  return <AsakaiShipmentPageClient />;
 }

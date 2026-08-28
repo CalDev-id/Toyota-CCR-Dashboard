@@ -59,7 +59,7 @@ const columns: Array<{ key: keyof AsakaiStockRow; label: string }> = [
   { key: "targetDay", label: "Target Day" },
   { key: "targetModule", label: "Target Module" },
   { key: "actModule", label: "Act Module" },
-  { key: "actualStockUnitEsPackcompNew", label: "Actual Stock Unit ES PackComp New" },
+  { key: "actualStockUnitEsPackcompNew", label: "Actual Unit ES" },
   { key: "actLocal", label: "Act Local" },
   { key: "actualStockUnitAdv", label: "Actual [Unit]" },
   { key: "balanceStockAdvNew", label: "Balance [Unit]" },

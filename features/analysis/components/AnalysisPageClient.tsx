@@ -108,6 +108,11 @@ export default function AnalysisPage() {
         }),
       );
       setData(body.data as AnalysisResponse);
+      void fetch("/api/asakai-shipment/reconcile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: date.slice(0, 7) }),
+      });
     } catch (loadError) {
       if (!silent) {
         setError(
@@ -269,6 +274,8 @@ export default function AnalysisPage() {
               machiningModuleExportStock={data?.machiningModuleExportStock}
               machiningAdvancedStock={data?.machiningAdvancedStock}
               machiningBalanceStock={data?.machiningBalanceStock}
+              shipmentVanning={data?.shipmentVanning}
+              selectedDate={data?.date}
               portraitDisplay={isCompactDisplay}
             />
           </section>
