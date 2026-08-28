@@ -292,7 +292,11 @@ async function getLineCard(
     label: line.label,
     imageSrc: line.imageSrc,
     totalPacking: completeCases.length,
-    plan: Math.floor(Math.max(0, linePlanTotal - assyPlanTotal) / line.unitsPerCase),
+    plan: Math.floor(
+      Math.max(0, linePlanTotal - assyPlanTotal) /
+        line.workUnitsPerPair /
+        line.unitsPerCase,
+    ),
     good,
     defect,
     partBreakdown,

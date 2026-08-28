@@ -32,6 +32,8 @@ function formatWeekday(value: string) {
 }
 
 function PackomCardView({ card }: { card: PackomCard }) {
+  const planDenominator =
+    card.key === "camshaft" ? "2 × kapasitas per modul" : "Kapasitas per modul";
   const partColumnCount = Math.min(3, Math.max(1, card.partBreakdown.length));
   const partColumns = Array.from({ length: partColumnCount }, () => [] as typeof card.partBreakdown);
   const partGridClass = partColumnCount === 1 ? "grid-cols-1" : partColumnCount === 2 ? "grid-cols-2" : "grid-cols-3";
@@ -56,7 +58,7 @@ function PackomCardView({ card }: { card: PackomCard }) {
         <MetricTile
           label="Plan"
           value={formatNumber(card.plan)}
-          tooltip={<div className="flex items-center gap-2"><span>Plan =</span><div className="text-center"><p>Plan machining − Plan assy</p><p className="mt-1 border-t border-[#98a2b3] pt-1">Kapasitas per modul</p></div></div>}
+          tooltip={<div className="flex items-center gap-2"><span>Plan =</span><div className="text-center"><p>Plan machining − Plan assy</p><p className="mt-1 border-t border-[#98a2b3] pt-1">{planDenominator}</p></div></div>}
           valueClassName="text-[#465fff] dark:text-[#8da2ff]"
           valueSizeClassName="text-3xl"
         />
