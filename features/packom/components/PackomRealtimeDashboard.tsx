@@ -32,8 +32,12 @@ function formatWeekday(value: string) {
 }
 
 function PackomCardView({ card }: { card: PackomCard }) {
-  const planDenominator =
-    card.key === "camshaft" ? "2 × kapasitas per modul" : "Kapasitas per modul";
+  const planLineLabel: Record<PackomCard["key"], string> = {
+    cylblock: "Plan Block",
+    cylhead: "Plan Head",
+    crankshaft: "Plan Crank",
+    camshaft: "Plan Cam",
+  };
   const partColumnCount = Math.min(3, Math.max(1, card.partBreakdown.length));
   const partColumns = Array.from({ length: partColumnCount }, () => [] as typeof card.partBreakdown);
   const partGridClass = partColumnCount === 1 ? "grid-cols-1" : partColumnCount === 2 ? "grid-cols-2" : "grid-cols-3";
@@ -58,11 +62,18 @@ function PackomCardView({ card }: { card: PackomCard }) {
         <MetricTile
           label="Plan"
           value={formatNumber(card.plan)}
-          tooltip={<div className="flex items-center gap-2"><span>Plan =</span><div className="text-center"><p>Plan machining − Plan assy</p><p className="mt-1 border-t border-[#98a2b3] pt-1">{planDenominator}</p></div></div>}
+          tooltip={<div className="flex items-center gap-1 whitespace-nowrap"><span className="shrink-0">Plan =</span><div className="text-center"><p>{planLineLabel[card.key]} ({formatNumber(card.planLineTotal)}) − Plan Assy ({formatNumber(card.planAssyTotal)})</p><p className="mt-0.5 border-t border-[#98a2b3] pt-0.5">Kapasitas per modul ({formatNumber(card.unitsPerModule)})</p></div></div>}
+          tooltipClassName="w-fit max-w-[calc(100vw-2rem)] text-[11px] leading-4"
           valueClassName="text-[#465fff] dark:text-[#8da2ff]"
           valueSizeClassName="text-3xl"
         />
-        <MetricTile label="Act Modul" value={formatNumber(card.totalPacking)} valueSizeClassName="text-3xl" />
+        <MetricTile
+          label="Act Modul"
+          value={formatNumber(card.totalPacking)}
+          tooltip={<div className="space-y-1.5"><div className="flex items-center justify-between gap-6"><span>Act Prod</span><span className="font-semibold tabular-nums">{formatNumber(card.realtimeProduction)}</span></div>{card.key === "camshaft" ? null : <><div className="flex items-center justify-between gap-6 text-[#d0d5dd]"><span>1TR</span><span className="tabular-nums">{formatNumber(card.realtimeProductionByVariant.oneTr)}</span></div><div className="flex items-center justify-between gap-6 text-[#d0d5dd]"><span>2TR</span><span className="tabular-nums">{formatNumber(card.realtimeProductionByVariant.twoTr)}</span></div></>}</div>}
+          tooltipClassName="w-44"
+          valueSizeClassName="text-3xl"
+        />
       </div>
       <div className="order-2 mt-3">
         {card.partBreakdown.length ? (
@@ -108,13 +119,13 @@ function PackomCardView({ card }: { card: PackomCard }) {
   );
 }
 
-function MetricTile({ label, value, detail, tooltip, valueClassName = "text-[#101828] dark:text-[#f8fafc]", valueSizeClassName = "text-xl" }: { label: string; value: string; detail?: string; tooltip?: ReactNode; valueClassName?: string; valueSizeClassName?: string }) {
+function MetricTile({ label, value, detail, tooltip, tooltipClassName = "w-max min-w-72", valueClassName = "text-[#101828] dark:text-[#f8fafc]", valueSizeClassName = "text-xl" }: { label: string; value: string; detail?: string; tooltip?: ReactNode; tooltipClassName?: string; valueClassName?: string; valueSizeClassName?: string }) {
   return (
     <div className={`group relative flex min-h-[76px] flex-col justify-between rounded-lg bg-[#f9fafb] px-3 py-2.5 dark:bg-[#162033] ${tooltip ? "cursor-help" : ""}`} tabIndex={tooltip ? 0 : undefined}>
       <p className="text-xs font-semibold text-[#667085] dark:text-[#a7b0c0]">{label}</p>
       <p className={`mt-1 text-right font-semibold leading-none tabular-nums ${valueSizeClassName} ${valueClassName}`}>{value}</p>
       {detail ? <p className="mt-1 text-right text-xs font-semibold text-[#667085] dark:text-[#a7b0c0]">{detail}</p> : null}
-      {tooltip ? <div className="pointer-events-none invisible absolute bottom-full left-1/2 z-30 mb-2 w-56 -translate-x-1/2 rounded-lg bg-[#101828] px-3 py-2 text-xs font-medium leading-5 text-white opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus-visible:visible group-focus-visible:opacity-100">{tooltip}</div> : null}
+      {tooltip ? <div className={`pointer-events-none invisible absolute bottom-full left-1/2 z-30 mb-2 -translate-x-1/2 rounded-lg bg-[#101828] px-3 py-2 text-xs font-medium leading-5 text-white opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus-visible:visible group-focus-visible:opacity-100 ${tooltipClassName}`}>{tooltip}</div> : null}
     </div>
   );
 }

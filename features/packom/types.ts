@@ -12,7 +12,15 @@ export type PackomCard = {
   label: string;
   imageSrc: string;
   totalPacking: number;
+  realtimeProduction: number;
+  realtimeProductionByVariant: {
+    oneTr: number;
+    twoTr: number;
+  };
   plan: number;
+  planLineTotal: number;
+  planAssyTotal: number;
+  unitsPerModule: number;
   good: number;
   defect: number;
   partBreakdown: Array<{

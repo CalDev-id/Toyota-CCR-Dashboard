@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { PackomCard, PackomDashboard, PackomLineKey, PackomProblem } from "@/features/packom/types";
+import { prisma } from "@/lib/prisma";
 import { getReportPrisma } from "@/lib/report-prisma";
 
 type PackomLineConfig = {
@@ -8,12 +9,12 @@ type PackomLineConfig = {
   label: string;
   imageSrc: string;
   view: string;
+  summaryView: string;
   workExpression: string;
   goodWorkCountExpression: string;
   caseUnitCountExpression: string;
   workUnitsPerPair: number;
   unitsPerCase: number;
-  planningTable: string;
   detailProblemView: string;
 };
 
@@ -47,27 +48,33 @@ type PartCodeConfig = {
 };
 
 const packomLines: PackomLineConfig[] = [
-  { key: "cylblock", label: "Cylinder Block", imageSrc: "/images/block2.png", view: "v_cylblock_packom", workExpression: "no_work", goodWorkCountExpression: "COUNT(DISTINCT CASE WHEN {condition} THEN no_work END)", caseUnitCountExpression: "COUNT(DISTINCT no_work)", workUnitsPerPair: 1, unitsPerCase: 18, planningTable: "t_plan_daily_production_cylblock", detailProblemView: "v_cylblock_detail_problem" },
-  { key: "cylhead", label: "Cylinder Head", imageSrc: "/images/ch.png", view: "v_cylhead_packom", workExpression: "no_work", goodWorkCountExpression: "COUNT(DISTINCT CASE WHEN {condition} THEN no_work END)", caseUnitCountExpression: "COUNT(DISTINCT no_work)", workUnitsPerPair: 1, unitsPerCase: 24, planningTable: "t_plan_daily_production_cylhead", detailProblemView: "v_cylhead_detail_problem" },
-  { key: "crankshaft", label: "Crankshaft", imageSrc: "/images/crank.png", view: "v_crankshaft_packom", workExpression: "no_work", goodWorkCountExpression: "COUNT(DISTINCT CASE WHEN {condition} THEN no_work END)", caseUnitCountExpression: "COUNT(DISTINCT no_work)", workUnitsPerPair: 1, unitsPerCase: 48, planningTable: "t_plan_daily_production_crankshaft", detailProblemView: "v_crankshaft_detail_problem" },
+  { key: "cylblock", label: "Cylinder Block", imageSrc: "/images/block2.png", view: "v_cylblock_packom", summaryView: "v_cylblock_summary", workExpression: "no_work", goodWorkCountExpression: "COUNT(DISTINCT CASE WHEN {condition} THEN no_work END)", caseUnitCountExpression: "COUNT(DISTINCT no_work)", workUnitsPerPair: 1, unitsPerCase: 18, detailProblemView: "v_cylblock_detail_problem" },
+  { key: "cylhead", label: "Cylinder Head", imageSrc: "/images/ch.png", view: "v_cylhead_packom", summaryView: "v_cylhead_summary", workExpression: "no_work", goodWorkCountExpression: "COUNT(DISTINCT CASE WHEN {condition} THEN no_work END)", caseUnitCountExpression: "COUNT(DISTINCT no_work)", workUnitsPerPair: 1, unitsPerCase: 24, detailProblemView: "v_cylhead_detail_problem" },
+  { key: "crankshaft", label: "Crankshaft", imageSrc: "/images/crank.png", view: "v_crankshaft_packom", summaryView: "v_crankshaft_summary", workExpression: "no_work", goodWorkCountExpression: "COUNT(DISTINCT CASE WHEN {condition} THEN no_work END)", caseUnitCountExpression: "COUNT(DISTINCT no_work)", workUnitsPerPair: 1, unitsPerCase: 48, detailProblemView: "v_crankshaft_detail_problem" },
   {
     key: "camshaft",
     label: "Camshaft",
     imageSrc: "/images/cam.png",
     view: "v_camshaft_packom",
+    summaryView: "v_camshaft_summary",
     workExpression: "COALESCE(NULLIF(TRIM(no_work_in), ''), NULLIF(TRIM(no_work_ex), ''))",
     goodWorkCountExpression: "COUNT(DISTINCT CASE WHEN {condition} THEN NULLIF(TRIM(no_work_in), '') END) + COUNT(DISTINCT CASE WHEN {condition} THEN NULLIF(TRIM(no_work_ex), '') END)",
     caseUnitCountExpression: "COUNT(DISTINCT NULLIF(TRIM(no_work_in), '')) + COUNT(DISTINCT NULLIF(TRIM(no_work_ex), ''))",
     workUnitsPerPair: 2,
     unitsPerCase: 96,
-    planningTable: "t_plan_daily_production_camshaft",
     detailProblemView: "v_camshaft_detail_problem",
   },
 ];
 
-const assyPlanningTable = "t_plan_daily_production_assy";
+type DailyPlanningTotalRow = {
+  lineKey: string;
+  totalPlan: string | number | null;
+};
 
-type MonthlyPlanRow = { totalPlan: string | number | null };
+type RealtimeProductionRow = {
+  variant: string | null;
+  total: string | number | null;
+};
 
 const partCodes: Record<PackomLineKey, PartCodeConfig[]> = {
   cylblock: [
@@ -134,10 +141,6 @@ function getActiveShift() {
   return { productionDate: getDateKey(now), shift, shiftValue: isDay ? "1" : "2" } as const;
 }
 
-function shiftAliases(shift: string) {
-  return shift === "DAY" ? ["1", "Day", "DAY", "day"] : ["2", "Night", "NIGHT", "night"];
-}
-
 function previousProductionShift(productionDate: string, shift: "DAY" | "NIGHT") {
   if (shift === "NIGHT") {
     return { productionDate, shiftValue: "1" } as const;
@@ -177,19 +180,59 @@ function getCaseStatusRows(line: PackomLineConfig, productionDate: string, shift
   );
 }
 
-async function getMonthlyPlanTotal(table: string, productionDate: string, shift: string) {
-  const shifts = shiftAliases(shift);
-  const rows = await getReportPrisma().$queryRawUnsafe<MonthlyPlanRow[]>(
-    `SELECT COALESCE(f1tr, 0) + COALESCE(f2tr, 0) AS totalPlan
-     FROM ${quoteIdentifier(table)}
-     WHERE DATE(fdate) = ?
-       AND TRIM(fshift) IN (${shifts.map(() => "?").join(",")})
-     ORDER BY TRIM(fgroup) ASC
-     LIMIT 1`,
+function getRealtimeProductionTotal(line: PackomLineConfig, productionDate: string, shift: "DAY" | "NIGHT") {
+  return getReportPrisma().$queryRawUnsafe<RealtimeProductionRow[]>(
+    `SELECT
+       TRIM(COALESCE(Variant, '')) AS variant,
+       COALESCE(SUM(Prod_realtime), 0) AS total
+     FROM ${quoteIdentifier(line.summaryView)}
+     WHERE \`DATE\` = ? AND SHIFT2 = ?
+     GROUP BY TRIM(COALESCE(Variant, ''))`,
     productionDate,
-    ...shifts,
+    shift,
   );
-  return toNumber(rows[0]?.totalPlan);
+}
+
+function isOneTrVariant(line: PackomLineConfig, variant: string) {
+  return variant === "1TR" || (line.key === "camshaft" && ["01", "IN"].includes(variant));
+}
+
+function isTwoTrVariant(line: PackomLineConfig, variant: string) {
+  return variant === "2TR" || (line.key === "camshaft" && ["02", "EX"].includes(variant));
+}
+
+async function getDailyPlanningTotals(productionDate: string, shiftValue: string) {
+  const lineKeys = ["assy", ...packomLines.map((line) => line.key)];
+  const rows = await prisma.$queryRawUnsafe<DailyPlanningTotalRow[]>(
+    `SELECT
+       plan.line_key AS lineKey,
+       COALESCE(SUM(slot.total_target), 0) AS totalPlan
+     FROM t_daily_production_plan plan
+     INNER JOIN t_daily_production_plan_slot slot ON slot.daily_plan_id = plan.id
+     WHERE plan.fdate = ?
+       AND plan.fshift = ?
+       AND plan.is_deleted = 0
+       AND slot.is_hidden = 0
+       AND slot.prod_minutes > 0
+       AND plan.line_key IN (${lineKeys.map(() => "?").join(",")})
+       AND (
+         plan.fgroup = 'all'
+         OR NOT EXISTS (
+           SELECT 1
+           FROM t_daily_production_plan all_plan
+           WHERE all_plan.line_key = plan.line_key
+             AND all_plan.fdate = plan.fdate
+             AND all_plan.fshift = plan.fshift
+             AND all_plan.fgroup = 'all'
+         )
+       )
+     GROUP BY plan.line_key`,
+    productionDate,
+    shiftValue,
+    ...lineKeys,
+  );
+
+  return new Map(rows.map((row) => [row.lineKey, toNumber(row.totalPlan)]));
 }
 
 async function getLineCard(
@@ -197,7 +240,7 @@ async function getLineCard(
   productionDate: string,
   shiftValue: string,
   shift: "DAY" | "NIGHT",
-  assyPlanTotal: number,
+  dailyPlanningTotals: Map<string, number>,
 ): Promise<PackomCard> {
   const hasWork = `TRIM(COALESCE(${line.workExpression}, '')) <> ''`;
   const isGood = "TRIM(COALESCE(defect_type, '')) IN ('', '-') OR UPPER(TRIM(defect_type)) IN ('NO DEFECT', 'NO DEFFECT')";
@@ -220,6 +263,7 @@ async function getLineCard(
   const previousShift = previousProductionShift(productionDate, shift);
   const caseStatusRowsPromise = getCaseStatusRows(line, productionDate, shiftValue);
   const previousCaseStatusRowsPromise = getCaseStatusRows(line, previousShift.productionDate, previousShift.shiftValue);
+  const realtimeProductionPromise = getRealtimeProductionTotal(line, productionDate, shift);
   const problemRowsPromise = reportPrisma.$queryRawUnsafe<PackomProblemRow[]>(
     `SELECT
        Problem_AV AS problemAv,
@@ -235,14 +279,33 @@ async function getLineCard(
     productionDate,
     shift,
   );
-  const [rows, caseStatusRows, previousCaseStatusRows, problemRows] = await Promise.all([
+  const [rows, caseStatusRows, previousCaseStatusRows, realtimeProductionRows, problemRows] = await Promise.all([
     rowsPromise,
     caseStatusRowsPromise,
     previousCaseStatusRowsPromise,
+    realtimeProductionPromise,
     problemRowsPromise,
   ]);
   const row = rows[0];
-  const linePlanTotal = await getMonthlyPlanTotal(line.planningTable, productionDate, shift);
+  const realtimeProductionTotal = realtimeProductionRows.reduce(
+    (total, item) => total + toNumber(item.total),
+    0,
+  );
+  const realtimeProductionByVariant = realtimeProductionRows.reduce(
+    (totals, item) => {
+      const variant = String(item.variant ?? "").trim().toUpperCase();
+      const total = toNumber(item.total);
+
+      if (isOneTrVariant(line, variant)) totals.oneTr += total;
+      if (isTwoTrVariant(line, variant)) totals.twoTr += total;
+
+      return totals;
+    },
+    { oneTr: 0, twoTr: 0 },
+  );
+  const realtimeProduction = realtimeProductionTotal / line.workUnitsPerPair;
+  const linePlanTotal = dailyPlanningTotals.get(line.key) ?? 0;
+  const assyPlanTotal = dailyPlanningTotals.get("assy") ?? 0;
   const good = toNumber(row?.good);
   const defect = toNumber(row?.defect);
   const completeCases = caseStatusRows.filter((item) => toNumber(item.units) === line.unitsPerCase);
@@ -292,11 +355,14 @@ async function getLineCard(
     label: line.label,
     imageSrc: line.imageSrc,
     totalPacking: completeCases.length,
+    realtimeProduction,
+    realtimeProductionByVariant,
     plan: Math.floor(
-      Math.max(0, linePlanTotal - assyPlanTotal) /
-        line.workUnitsPerPair /
-        line.unitsPerCase,
+      Math.max(0, linePlanTotal - assyPlanTotal) / line.unitsPerCase,
     ),
+    planLineTotal: linePlanTotal,
+    planAssyTotal: assyPlanTotal,
+    unitsPerModule: line.unitsPerCase,
     good,
     defect,
     partBreakdown,
@@ -332,9 +398,9 @@ export async function getPackomDashboard(filters?: {
   const productionDate = normalizeDate(filters?.date, activeShift.productionDate);
   const shift = normalizeShift(filters?.shift, activeShift.shift);
   const shiftValue = shift === "DAY" ? "1" : "2";
-  const assyPlanTotal = await getMonthlyPlanTotal(assyPlanningTable, productionDate, shift);
+  const dailyPlanningTotals = await getDailyPlanningTotals(productionDate, shiftValue);
   const cards = await Promise.all(
-    packomLines.map((line) => getLineCard(line, productionDate, shiftValue, shift, assyPlanTotal)),
+    packomLines.map((line) => getLineCard(line, productionDate, shiftValue, shift, dailyPlanningTotals)),
   );
 
   return {
