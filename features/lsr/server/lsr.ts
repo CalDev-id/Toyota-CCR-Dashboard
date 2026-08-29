@@ -176,7 +176,7 @@ export async function importLsr(file: File, month: string, confirmChanges: boole
       if (!existing) { await db.$executeRawUnsafe("INSERT INTO lsr_targets (date, shop, target_daily, target_cumm) VALUES (?, ?, ?, ?)", row.date, row.shop, row.targetDaily, row.targetCumm); inserted++; }
       else if (targetChanged(existing, row)) { await db.$executeRawUnsafe("UPDATE lsr_targets SET target_daily=?, target_cumm=? WHERE id=?", row.targetDaily, row.targetCumm, existing.id); updated++; } else skipped++;
     }
-  });
+  }, { maxWait: 10_000, timeout: 60_000 });
   return { inserted, updated, skipped };
 }
 
