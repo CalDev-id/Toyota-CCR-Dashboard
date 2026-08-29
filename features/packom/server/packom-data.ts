@@ -357,7 +357,7 @@ async function getLineCard(
     totalPacking: completeCases.length,
     realtimeProduction,
     realtimeProductionByVariant,
-    plan: Math.floor(
+    plan: Math.round(
       Math.max(0, linePlanTotal - assyPlanTotal) / line.unitsPerCase,
     ),
     planLineTotal: linePlanTotal,

@@ -7,6 +7,7 @@ import type {
   AnalysisMachiningEmergencyStock,
   AnalysisMachiningModuleExportStock,
   AnalysisEmergencyStockMetrics,
+  AnalysisResponse,
   AnalysisOeeCard as OeeCard,
   AnalysisOeeSeriesRow as SeriesRow,
   AnalysisShiftSeriesRow as ShiftSeriesRow,
@@ -22,7 +23,7 @@ import {
   getPrimaryShiftLabel,
   isSingleShiftLine,
 } from "@/features/analysis/components/analysisChartUtils";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 function ProblemBadge({ type }: { type: "AV" | "PE" }) {
   const className =
@@ -165,27 +166,43 @@ function formatLsrAmount(value: number) {
   return `${value.toFixed(value >= 10 ? 0 : 1)}M`;
 }
 
-function LsrAmountBaseChart({ config }: { config: LsrDummyConfig }) {
-  const width = 320;
+function formatLsrAllowance(value: number) {
+  const absolute = Math.abs(value);
+  if (absolute >= 1_000_000) return `${Math.trunc(value / 1_000_000)}M`;
+  if (absolute >= 1_000) return `${Math.trunc(value / 1_000)}K`;
+  return String(Math.trunc(value));
+}
+
+function LsrAmountBaseChart({ config, amountBase, selectedDate }: { config: LsrDummyConfig; amountBase?: AnalysisResponse["lsrAmountBase"]["CB"]; selectedDate?: string }) {
+  const chartScrollRef = useRef<HTMLDivElement>(null);
+  const amountCount = amountBase?.daily.length ?? 0;
+  const width = Math.max(320, amountCount * 22 + 36);
   const height = 144;
   const padding = { top: 18, right: 8, bottom: 24, left: 28 };
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
-  const amountCount = config.amountBase.length;
-  const barWidth = Math.max(5, (plotWidth / amountCount) * 0.62);
-  const max = config.chartMax;
-  const targetY = padding.top + plotHeight - (config.target / max) * plotHeight;
+  const amounts = amountBase?.daily ?? [];
+  const barWidth = amountCount ? Math.max(5, (plotWidth / amountCount) * 0.6) : 0;
+  const max = amountBase?.chartMax ?? 20;
+  const target = amountBase?.targetDaily ?? 0;
+  const targetY = padding.top + plotHeight - (target / max) * plotHeight;
   const gridValues = [max, max / 2, 0];
+
+  useEffect(() => {
+    const container = chartScrollRef.current;
+    if (container) container.scrollLeft = container.scrollWidth;
+  }, [amountCount, selectedDate]);
 
   return (
     <article className="min-w-0 rounded-2xl border border-[#e4e7ec] bg-white p-3 shadow-sm dark:border-[#2f4059] dark:bg-[#111827]">
       <h3 className="text-xs font-semibold text-[#101828] dark:text-[#f8fafc]">LSR Amount Base</h3>
-      <div className="mt-1 overflow-x-auto rounded-xl bg-[#f9fafb] px-2 pb-0 pt-2 dark:bg-[#162033]">
+      <div ref={chartScrollRef} className="mt-1 overflow-x-auto rounded-xl bg-[#f9fafb] px-2 pb-0 pt-2 dark:bg-[#162033]">
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="block h-[144px] min-w-[280px] w-full"
+          className="block h-[144px]"
+          style={{ width }}
           role="img"
-          aria-label={`Dummy LSR Amount Base chart for ${config.partName}`}
+          aria-label={`LSR Amount Base chart for ${config.partName}`}
         >
           {gridValues.map((value) => {
             const y = padding.top + plotHeight - (value / max) * plotHeight;
@@ -196,49 +213,60 @@ function LsrAmountBaseChart({ config }: { config: LsrDummyConfig }) {
               </g>
             );
           })}
-          <line x1={padding.left} x2={width - padding.right} y1={targetY} y2={targetY} stroke="var(--error-text)" strokeDasharray="5 4" strokeWidth="1.5" />
-          <text x={padding.left + 2} y={targetY - 4} fill="var(--error-text)" fontSize="10" fontWeight="700">{formatLsrAmount(config.target)}</text>
-          {config.amountBase.map((amount, index) => {
+          {amountBase?.targetDaily != null && (
+            <>
+              <line x1={padding.left} x2={width - padding.right} y1={targetY} y2={targetY} stroke="var(--error-text)" strokeDasharray="5 4" strokeWidth="1.5" />
+              <text x={padding.left + 2} y={targetY - 4} fill="var(--error-text)" fontSize="10" fontWeight="700">{formatLsrAmount(target)}</text>
+            </>
+          )}
+          {amounts.map(({ amount, date }, index) => {
             const x = padding.left + ((index + 0.5) / amountCount) * plotWidth;
             const barHeight = (amount / max) * plotHeight;
             const y = padding.top + plotHeight - barHeight;
             const labelY = Math.max(padding.top + 8, y - 3);
 
             return (
-              <g key={`${config.partName}-${index}`}>
+              <g key={`${config.partName}-${date}`}>
                 <rect x={x - barWidth / 2} y={y} width={barWidth} height={barHeight} rx="1" fill="var(--brand-500)" />
-                <text x={x} y={labelY} textAnchor="middle" fill="var(--foreground)" fontSize="9" fontWeight="700">{formatLsrAmount(amount)}</text>
-                <text x={x} y={height - 5} textAnchor="middle" fill="var(--text-muted)" fontSize="9">{index + 1}</text>
+                {amount > 0 && <text x={x} y={labelY} textAnchor="middle" fill="var(--foreground)" fontSize="9" fontWeight="700">{formatLsrAmount(amount)}</text>}
+                <text x={x} y={height - 5} textAnchor="middle" fill="var(--text-muted)" fontSize="9">{Number(date.slice(-2)) || index + 1}</text>
               </g>
             );
           })}
         </svg>
       </div>
       <p className="mt-1 text-center text-[11px] font-medium leading-none text-[#667085] dark:text-[#a7b0c0]">
-        August
+        {selectedDate ? new Intl.DateTimeFormat("en-US", { month: "long" }).format(new Date(`${selectedDate.slice(0, 7)}-01T00:00:00`)) : ""}
       </p>
     </article>
   );
 }
 
-function LsrWeeklyTable({ config }: { config: LsrDummyConfig }) {
+function weeklyRange(month: string | undefined, index: number) {
+  if (!month) return "";
+  const [year, monthNumber] = month.slice(0, 7).split("-").map(Number); const firstWeekday = new Date(year, monthNumber - 1, 1).getDay(); const lastDay = new Date(year, monthNumber, 0).getDate();
+  const start = index === 0 ? 1 : 8 - firstWeekday + (index - 1) * 7; const end = Math.min(lastDay, index === 0 ? 7 - firstWeekday : start + 6);
+  return `${String(start).padStart(2, "0")}/${String(monthNumber).padStart(2, "0")}/${year} – ${String(end).padStart(2, "0")}/${String(monthNumber).padStart(2, "0")}/${year}`;
+}
+function LsrWeeklyTable({ config, weekly, selectedDate }: { config: LsrDummyConfig; weekly?: { weekly: number[]; total: number }; selectedDate?: string }) {
+  const values = weekly?.weekly ?? config.weekly; const total = weekly?.total ?? config.weeklyTotal;
   return (
     <article className="min-w-0 rounded-2xl border border-[#e4e7ec] bg-white p-3 shadow-sm dark:border-[#2f4059] dark:bg-[#111827]">
       <h3 className="text-xs font-semibold text-[#101828] dark:text-[#f8fafc]">LSR Unit Base (Weekly)</h3>
-      <div className="mt-1 overflow-hidden rounded-xl border border-[#e4e7ec] dark:border-[#2f4059]">
+      <div className="mt-1 overflow-visible rounded-xl border border-[#e4e7ec] dark:border-[#2f4059]">
         <table className="w-full table-fixed text-center text-[11px]">
           <thead className="bg-[#f9fafb] text-[#667085] dark:bg-[#18243a] dark:text-[#b7c2d8]">
             <tr>
               <th className="px-1 py-1.5 text-left font-bold leading-tight">PART<br />NAME</th>
-              {[1, 2, 3, 4].map((week) => <th key={week} className="px-1 py-1.5 font-bold">{week}</th>)}
+              {values.map((_, index) => <th key={index} className="group relative cursor-help px-1 py-1.5 font-bold"><span>{index + 1}</span><span role="tooltip" className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-1 hidden w-max max-w-40 -translate-x-1/2 rounded-md bg-[#101828] px-2 py-1 text-[10px] font-medium normal-case text-white shadow-lg group-hover:block dark:bg-[#f8fafc] dark:text-[#101828]">{weeklyRange(selectedDate, index)}</span></th>)}
               <th className="px-1 py-1.5 font-bold">Total</th>
             </tr>
           </thead>
           <tbody>
             <tr className="bg-[#ecf3ff] text-[#344054] dark:bg-[#14245a] dark:text-[#e4e7ec]">
               <td className="px-1 py-1.5 text-left font-semibold">{config.partName}</td>
-              {config.weekly.map((value, index) => <td key={`${config.partName}-${index}`} className="px-1 py-1.5 font-semibold">{value}</td>)}
-              <td className="bg-[#f9fafb] px-1 py-1.5 font-bold text-[#344054] dark:bg-[#18243a] dark:text-[#f8fafc]">{config.weeklyTotal}</td>
+              {values.map((value, index) => <td key={`${config.partName}-${index}`} className="px-1 py-1.5 font-semibold">{value}</td>)}
+              <td className="bg-[#f9fafb] px-1 py-1.5 font-bold text-[#344054] dark:bg-[#18243a] dark:text-[#f8fafc]">{total}</td>
             </tr>
           </tbody>
         </table>
@@ -247,11 +275,12 @@ function LsrWeeklyTable({ config }: { config: LsrDummyConfig }) {
   );
 }
 
-function LsrMachiningCard({ config }: { config: LsrDummyConfig }) {
+function LsrMachiningCard({ config, weekly, kpi, amountBase, selectedDate }: { config: LsrDummyConfig; weekly?: { weekly: number[]; total: number }; kpi?: AnalysisResponse["lsrKpi"]["CB"]; amountBase?: AnalysisResponse["lsrAmountBase"]["CB"]; selectedDate?: string }) {
+  const displayKpi = kpi ?? { r: 0, w: 0, totalDMinusOne: 0, monthTotal: 0, allowance: null };
   const kpis = [
-    ["R", config.kpi.r],
-    ["W", config.kpi.w],
-    ["Total (D-1)", config.kpi.totalDMinusOne],
+    ["R", displayKpi.r],
+    ["W", displayKpi.w],
+    ["Total (D-2)", displayKpi.totalDMinusOne],
   ] as const;
 
   return (
@@ -269,13 +298,13 @@ function LsrMachiningCard({ config }: { config: LsrDummyConfig }) {
         <div className="mt-2">
           <p className="text-center text-xs font-medium text-[#667085] dark:text-[#a7b0c0]">Month</p>
           <div className="mt-1 grid grid-cols-2 gap-2 text-center text-xs font-medium text-[#667085] dark:text-[#a7b0c0]">
-            <div className="rounded-xl border border-[#e4e7ec] bg-white p-2 shadow-sm dark:border-[#2f4059] dark:bg-[#111827]"><p>Total</p><p className="mt-0.5 text-sm font-bold text-[#101828] dark:text-[#f8fafc]">{formatLsrAmount(config.kpi.monthTotal)}</p></div>
-            <div className="rounded-xl border border-[#e4e7ec] bg-white p-2 shadow-sm dark:border-[#2f4059] dark:bg-[#111827]"><p>Allowance</p><p className="mt-0.5 text-sm font-bold text-[#101828] dark:text-[#f8fafc]">{formatLsrAmount(config.kpi.allowance)}</p></div>
+            <div className="rounded-xl border border-[#e4e7ec] bg-white p-2 shadow-sm dark:border-[#2f4059] dark:bg-[#111827]"><p>Total</p><p className="mt-0.5 text-sm font-bold text-[#101828] dark:text-[#f8fafc]">{formatLsrAmount(displayKpi.monthTotal)}</p></div>
+            <div className="rounded-xl border border-[#e4e7ec] bg-white p-2 shadow-sm dark:border-[#2f4059] dark:bg-[#111827]"><p>Allowance</p><p className="mt-0.5 text-sm font-bold text-[#101828] dark:text-[#f8fafc]">{displayKpi.allowance === null ? "-" : formatLsrAllowance(displayKpi.allowance)}</p></div>
           </div>
         </div>
       </div>
-      <LsrAmountBaseChart config={config} />
-      <LsrWeeklyTable config={config} />
+      <LsrAmountBaseChart config={config} amountBase={amountBase} selectedDate={selectedDate} />
+      <LsrWeeklyTable config={config} weekly={weekly} selectedDate={selectedDate} />
     </section>
   );
 }
@@ -869,6 +898,9 @@ export function OeeLineChart({
   shipmentVanning,
   selectedDate,
   portraitDisplay,
+  lsrWeekly,
+  lsrKpi,
+  lsrAmountBase,
 }: {
   series: SeriesRow[];
   shiftSeries: ShiftSeriesRow[];
@@ -885,6 +917,9 @@ export function OeeLineChart({
   shipmentVanning?: AnalysisAsakaiShipmentVanning;
   selectedDate?: string;
   portraitDisplay?: boolean;
+  lsrWeekly?: AnalysisResponse["lsrWeekly"];
+  lsrKpi?: AnalysisResponse["lsrKpi"];
+  lsrAmountBase?: AnalysisResponse["lsrAmountBase"];
 }) {
   const monthLabel = formatMonthLabel(series);
 
@@ -1154,9 +1189,10 @@ export function OeeLineChart({
         <article className="grid min-h-[420px] place-items-center rounded-2xl border border-[#e4e7ec] bg-white p-4 text-center text-sm font-semibold text-[#98a2b3] shadow-sm dark:border-[#2f4059] dark:bg-[#111827]">
           Under Development
         </article>
-        {lsrDummyConfigs.map((config) => (
-          <LsrMachiningCard key={config.partName} config={config} />
-        ))}
+        {lsrDummyConfigs.map((config) => {
+          const line = config.partName as "CB" | "CH" | "CR" | "CA";
+          return <LsrMachiningCard key={config.partName} config={config} weekly={lsrWeekly?.[line]} kpi={lsrKpi?.[line]} amountBase={lsrAmountBase?.[line]} selectedDate={selectedDate} />;
+        })}
       </section>
     </div>
   );

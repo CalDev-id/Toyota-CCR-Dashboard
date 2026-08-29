@@ -275,6 +275,9 @@ export default function AnalysisPage() {
               machiningAdvancedStock={data?.machiningAdvancedStock}
               machiningBalanceStock={data?.machiningBalanceStock}
               shipmentVanning={data?.shipmentVanning}
+              lsrWeekly={data?.lsrWeekly}
+              lsrKpi={data?.lsrKpi}
+              lsrAmountBase={data?.lsrAmountBase}
               selectedDate={data?.date}
               portraitDisplay={isCompactDisplay}
             />

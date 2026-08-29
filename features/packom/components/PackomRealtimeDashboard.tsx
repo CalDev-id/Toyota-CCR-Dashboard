@@ -10,6 +10,10 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
 }
 
+function formatPlanFormulaResult(value: number) {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 }).format(value);
+}
+
 function isSpdCase(caseNumber: string) {
   return caseNumber.trim().toUpperCase().startsWith("SPD");
 }
@@ -38,6 +42,7 @@ function PackomCardView({ card }: { card: PackomCard }) {
     crankshaft: "Plan Crank",
     camshaft: "Plan Cam",
   };
+  const rawPlan = Math.max(0, card.planLineTotal - card.planAssyTotal) / card.unitsPerModule;
   const partColumnCount = Math.min(3, Math.max(1, card.partBreakdown.length));
   const partColumns = Array.from({ length: partColumnCount }, () => [] as typeof card.partBreakdown);
   const partGridClass = partColumnCount === 1 ? "grid-cols-1" : partColumnCount === 2 ? "grid-cols-2" : "grid-cols-3";
@@ -62,7 +67,7 @@ function PackomCardView({ card }: { card: PackomCard }) {
         <MetricTile
           label="Plan"
           value={formatNumber(card.plan)}
-          tooltip={<div className="flex items-center gap-1 whitespace-nowrap"><span className="shrink-0">Plan =</span><div className="text-center"><p>{planLineLabel[card.key]} ({formatNumber(card.planLineTotal)}) − Plan Assy ({formatNumber(card.planAssyTotal)})</p><p className="mt-0.5 border-t border-[#98a2b3] pt-0.5">Kapasitas per modul ({formatNumber(card.unitsPerModule)})</p></div></div>}
+          tooltip={<div className="flex items-center gap-1 whitespace-nowrap"><span className="shrink-0">Plan =</span><div className="text-center"><p>{planLineLabel[card.key]} ({formatNumber(card.planLineTotal)}) − Plan Assy ({formatNumber(card.planAssyTotal)})</p><p className="mt-0.5 border-t border-[#98a2b3] pt-0.5">Kapasitas per modul ({formatNumber(card.unitsPerModule)})</p></div><span className="shrink-0">= {formatPlanFormulaResult(rawPlan)}</span></div>}
           tooltipClassName="w-fit max-w-[calc(100vw-2rem)] text-[11px] leading-4"
           valueClassName="text-[#465fff] dark:text-[#8da2ff]"
           valueSizeClassName="text-3xl"

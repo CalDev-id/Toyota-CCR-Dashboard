@@ -145,6 +145,9 @@ export type AnalysisResponse = {
   machiningAdvancedStock: AnalysisMachiningAdvancedStock;
   machiningBalanceStock: AnalysisMachiningBalanceStock;
   shipmentVanning: AnalysisAsakaiShipmentVanning;
+  lsrWeekly: Record<"CB" | "CH" | "CR" | "CA", { weekly: number[]; total: number }>;
+  lsrKpi: Record<"CB" | "CH" | "CR" | "CA", { r: number; w: number; totalDMinusOne: number; monthTotal: number; allowance: number | null }>;
+  lsrAmountBase: Record<"CB" | "CH" | "CR" | "CA", { daily: Array<{ date: string; amount: number }>; targetDaily: number | null; chartMax: number }>;
   lines: Array<{
     key: AnalysisLineKey;
     label: string;

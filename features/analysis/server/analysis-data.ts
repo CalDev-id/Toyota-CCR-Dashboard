@@ -17,6 +17,7 @@ import {
   getMachiningModuleExportStock,
 } from "@/features/asakai-stock/server/asakai-stock";
 import { getAsakaiShipmentVanning } from "@/features/asakai-shipment/server/asakai-shipment";
+import { getLsrAmountBaseData, getLsrAsakaiKpiData, getLsrWeeklyData } from "@/features/lsr/server/lsr";
 
 export const analysisLines: AnalysisLine[] = [
   {
@@ -593,6 +594,11 @@ export async function getAnalysisOee(dateParam: string | null) {
     return row;
   });
 
+  const [lsrWeekly, lsrKpi, lsrAmountBase] = await Promise.all([
+    getLsrWeeklyData(range.date.slice(0, 7)),
+    getLsrAsakaiKpiData(range.date),
+    getLsrAmountBaseData(range.date),
+  ]);
   return {
     date: range.date,
     start: range.start,
@@ -612,6 +618,9 @@ export async function getAnalysisOee(dateParam: string | null) {
     machiningAdvancedStock,
     machiningBalanceStock,
     shipmentVanning: shipmentVanning as AnalysisAsakaiShipmentVanning,
+    lsrWeekly,
+    lsrKpi,
+    lsrAmountBase,
     lines: analysisLines.map(({ key, label, shiftMode, displayShiftLabel }) => ({
       key,
       label,
