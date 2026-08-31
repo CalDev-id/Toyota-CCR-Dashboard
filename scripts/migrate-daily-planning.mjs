@@ -30,6 +30,7 @@ const migrations = [
   "../database/migrations/20260831_linestop_db.sql",
   "../database/migrations/20260831_drop_linestop_active.sql",
   "../database/migrations/20260831_linestop_master_followup.sql",
+  "../database/migrations/20260831_linestop_uncategorized_2.sql",
 ];
 const connection = await mariadb.createConnection({ host: url.hostname, port: Number(url.port || 3306), user: decodeURIComponent(url.username), password: decodeURIComponent(url.password), database: url.pathname.slice(1), multipleStatements: true });
 

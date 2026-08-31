@@ -1,0 +1,14 @@
+INSERT IGNORE INTO linestop_db (line_key, machine_name, normalized_name) VALUES
+  ('assy', 'IAM 015', 'IAM015'),
+  ('cylblock', 'IWB 026', 'IWB026'), ('cylblock', 'ITP 004', 'ITP004'), ('cylblock', 'ISP 079', 'ISP079'), ('cylblock', 'ISPS 030', 'ISPS030'), ('cylblock', 'IDR 055', 'IDR055'), ('cylblock', 'IDR 058', 'IDR058'), ('cylblock', 'IMI 035', 'IMI035'), ('cylblock', 'IDR 046', 'IDR046'), ('cylblock', 'ISP 080', 'ISP080'), ('cylblock', 'IDR 062', 'IDR062'), ('cylblock', 'IBR 022', 'IBR022'), ('cylblock', 'IDR 044', 'IDR044'), ('cylblock', 'ITP 005', 'ITP005'), ('cylblock', 'IMI 034', 'IMI034'), ('cylblock', 'IDR 054', 'IDR054'), ('cylblock', 'IAT 034', 'IAT034'), ('cylblock', 'ISP 098', 'ISP098'), ('cylblock', 'IWB 033', 'IWB033'), ('cylblock', 'IDR 045', 'IDR045'), ('cylblock', 'IMI 039', 'IMI039'), ('cylblock', 'IDR 065', 'IDR065'), ('cylblock', 'ISP 084', 'ISP084'), ('cylblock', 'ISP 095', 'ISP095'), ('cylblock', 'ISPS 086', 'ISPS086'),
+  ('cylhead', 'IDR 040', 'IDR040'), ('cylhead', 'ISPS 025', 'ISPS025'), ('cylhead', 'ISP 033', 'ISP033'), ('cylhead', 'ISPS 021', 'ISPS021'), ('cylhead', 'ISPS 011', 'ISPS011'), ('cylhead', 'IAT 002', 'IAT002'), ('cylhead', 'ISP 052', 'ISP052'), ('cylhead', 'ISP 093', 'ISP093'), ('cylhead', 'ISP 090', 'ISP090'), ('cylhead', 'ISPS 012', 'ISPS012'), ('cylhead', 'ISPS 020', 'ISPS020'), ('cylhead', 'ISP 032', 'ISP032'), ('cylhead', 'ISP 049', 'ISP049'), ('cylhead', 'ISPS 010', 'ISPS010'), ('cylhead', 'ISP 094', 'ISP094'), ('cylhead', 'ISPS 006', 'ISPS006'), ('cylhead', 'ISP 041', 'ISP041'), ('cylhead', 'ISP 042', 'ISP042'),
+  ('crankshaft', 'IZK 033', 'IZK033'), ('crankshaft', 'ISP 068', 'ISP068'), ('crankshaft', 'ISP 055', 'ISP055'), ('crankshaft', 'IMI 044', 'IMI044'), ('crankshaft', 'IWB 029', 'IWB029'),
+  ('camshaft', 'IWB 030', 'IWB030'), ('camshaft', 'IGR 034', 'IGR034'), ('camshaft', 'ISP 073', 'ISP073'), ('camshaft', 'ISP 072', 'ISP072'), ('camshaft', 'IGR 044', 'IGR044');
+
+UPDATE linestop_db SET machine_name = 'HOIST', normalized_name = 'HOIST' WHERE line_key = 'assy' AND machine_name = 'HOIST LESS POS 04 STOP';
+UPDATE linestop_db SET machine_name = 'AUTO TRANSFER', normalized_name = 'AUTOTRANSFER' WHERE line_key = 'assy' AND machine_name = 'AUTO TRANSFER CB TIDAK PROSES';
+UPDATE linestop_db SET machine_name = 'FIPG', normalized_name = 'FIPG' WHERE line_key = 'assy' AND machine_name = 'MC FIPG CHAIN CASE RATIO NG';
+UPDATE linestop_db SET machine_name = 'SUPPLY', normalized_name = 'SUPPLY' WHERE line_key = 'cylhead' AND machine_name = 'SUPPLY PARALEL DELAY EX KOMA SLIPPER WAI KURANG';
+UPDATE linestop_db SET machine_name = 'COBOT', normalized_name = 'COBOT' WHERE line_key = 'crankshaft' AND machine_name = 'COBOT BARITORI';
+UPDATE linestop_db SET machine_name = 'MEASURING', normalized_name = 'MEASURING' WHERE line_key = 'crankshaft' AND machine_name = 'AUTO MEASURING';
+DELETE FROM linestop_db WHERE line_key = 'crankshaft' AND machine_name = 'MC COBOT';

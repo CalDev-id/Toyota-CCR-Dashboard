@@ -21,8 +21,14 @@ type ProblemRow = { problemAv: unknown; lsAvMin: unknown; problemPe: unknown; ls
 
 export function normalizeMachineName(value: string) {
   const uppercase = value.toUpperCase();
-  const machineCode = uppercase.match(/\b([A-Z]{2,5})[\s._/-]*(\d{1,3})(?!\d)/);
-  return machineCode ? `${machineCode[1]}${machineCode[2].padStart(3, "0")}` : uppercase.replace(/[^A-Z0-9]+/g, "");
+  const machineCode = uppercase.match(/\b([A-Z]{2,5})[\s._/-]*([0-9O]{1,3})(?!\d)/);
+  return machineCode ? normalizeMachineCode(machineCode[1], machineCode[2]) : uppercase.replaceAll("LASSER", "LASER").replace(/[^A-Z0-9]+/g, "");
+}
+
+function normalizeMachineCode(prefix: string, digits: string) {
+  const normalizedDigits = digits.replaceAll("O", "0");
+  const normalizedPrefix = prefix === "GR" ? "IGR" : prefix === "SP" && normalizedDigits.length >= 2 ? "ISP" : prefix;
+  return `${normalizedPrefix}${normalizedDigits.padStart(3, "0")}`;
 }
 function toMinutes(value: unknown) { const parsed = Number(String(value ?? "").replace(",", ".")); return Number.isFinite(parsed) ? parsed : 0; }
 function monthBounds(month: string) {
@@ -46,15 +52,15 @@ function findMachine(problem: unknown, machines: DatabaseMachineRow[]) {
     const normalized = normalizeMachineName(machine.machineName);
     if (/^[A-Z]{2,5}\d{3}$/.test(normalized)) codes.set(normalized, [...(codes.get(normalized) ?? []), machine]);
     else {
-      const compactProblem = text.replace(/[^A-Z0-9]+/g, "");
+      const compactProblem = text.replaceAll("LASSER", "LASER").replace(/[^A-Z0-9]+/g, "");
       const index = compactProblem.indexOf(normalized);
       if (index >= 0) candidates.push({ row: machine, index });
     }
   }
 
-  const codePattern = /\b([A-Z]{2,5})[\s._/-]*(\d{1,3})(?!\d)/g;
+  const codePattern = /\b([A-Z]{2,5})[\s._/-]*([0-9O]{1,3})(?!\d)/g;
   for (const match of text.matchAll(codePattern)) {
-    const normalized = `${match[1]}${match[2].padStart(3, "0")}`;
+    const normalized = normalizeMachineCode(match[1], match[2]);
     for (const machine of codes.get(normalized) ?? []) candidates.push({ row: machine, index: match.index ?? 0 });
   }
 
