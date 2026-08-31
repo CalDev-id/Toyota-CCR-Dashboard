@@ -21,8 +21,8 @@ type ProblemRow = { problemAv: unknown; lsAvMin: unknown; problemPe: unknown; ls
 
 export function normalizeMachineName(value: string) {
   const uppercase = value.toUpperCase();
-  const machineCode = uppercase.match(/\b([A-Z]{2,5})\s*[-._/]?\s*(\d{3})\b/);
-  return machineCode ? `${machineCode[1]}${machineCode[2]}` : uppercase.replace(/[^A-Z0-9]+/g, "");
+  const machineCode = uppercase.match(/\b([A-Z]{2,5})[\s._/-]*(\d{1,3})(?!\d)/);
+  return machineCode ? `${machineCode[1]}${machineCode[2].padStart(3, "0")}` : uppercase.replace(/[^A-Z0-9]+/g, "");
 }
 function toMinutes(value: unknown) { const parsed = Number(String(value ?? "").replace(",", ".")); return Number.isFinite(parsed) ? parsed : 0; }
 function monthBounds(month: string) {
@@ -37,15 +37,28 @@ export async function getLinestopMachines() {
 }
 
 function findMachine(problem: unknown, machines: DatabaseMachineRow[]) {
-  const normalizedProblem = normalizeMachineName(String(problem ?? ""));
-  if (!normalizedProblem) return null;
-  return machines.reduce<{ row: DatabaseMachineRow; index: number } | null>((best, row) => {
-    const normalizedName = normalizeMachineName(row.machineName);
-    const index = normalizedProblem.indexOf(normalizedName);
-    if (index < 0) return best;
-    if (!best || index < best.index || (index === best.index && normalizedName.length > normalizeMachineName(best.row.machineName).length)) return { row, index };
-    return best;
-  }, null)?.row ?? null;
+  const text = String(problem ?? "").toUpperCase();
+  if (!text.trim()) return null;
+
+  const candidates: Array<{ row: DatabaseMachineRow; index: number }> = [];
+  const codes = new Map<string, DatabaseMachineRow[]>();
+  for (const machine of machines) {
+    const normalized = normalizeMachineName(machine.machineName);
+    if (/^[A-Z]{2,5}\d{3}$/.test(normalized)) codes.set(normalized, [...(codes.get(normalized) ?? []), machine]);
+    else {
+      const compactProblem = text.replace(/[^A-Z0-9]+/g, "");
+      const index = compactProblem.indexOf(normalized);
+      if (index >= 0) candidates.push({ row: machine, index });
+    }
+  }
+
+  const codePattern = /\b([A-Z]{2,5})[\s._/-]*(\d{1,3})(?!\d)/g;
+  for (const match of text.matchAll(codePattern)) {
+    const normalized = `${match[1]}${match[2].padStart(3, "0")}`;
+    for (const machine of codes.get(normalized) ?? []) candidates.push({ row: machine, index: match.index ?? 0 });
+  }
+
+  return candidates.sort((first, second) => first.index - second.index || second.row.machineName.length - first.row.machineName.length)[0]?.row ?? null;
 }
 
 export async function getLinestopReport(month: string): Promise<LinestopLineSummary[]> {
