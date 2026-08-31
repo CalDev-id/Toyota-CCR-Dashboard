@@ -268,18 +268,20 @@ function WorkHoursTooltip({
   planMinutes: number;
   actualHours: number | null;
 }) {
+  const workHoursAdjustment = 0.4;
+
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-4">
         <span className="text-[#d0d5dd]">Work Hours Plan</span>
         <span className="font-bold tabular-nums text-white">
-          {formatHours(planMinutes / 60)}
+          {formatHours(planMinutes / 60 + (planMinutes > 0 ? workHoursAdjustment : 0))}
         </span>
       </div>
       <div className="flex items-center justify-between gap-4">
         <span className="text-[#d0d5dd]">Work Hours Actual</span>
         <span className="font-bold tabular-nums text-white">
-          {actualHours === null ? "-" : formatHours(actualHours)}
+          {actualHours === null ? "-" : formatHours(actualHours + (actualHours > 0 ? workHoursAdjustment : 0))}
         </span>
       </div>
     </div>

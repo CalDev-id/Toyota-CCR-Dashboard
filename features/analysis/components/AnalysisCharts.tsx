@@ -851,12 +851,15 @@ function VanningModule({ lineKey, shipmentVanning, selectedDate }: {
     <section className="h-[375px]">
       <h3 className="px-1 text-sm font-semibold text-[#101828] dark:text-[#f8fafc]">Vanning [Module]</h3>
       <div className="mt-2 grid grid-cols-[1fr_0.8fr_1fr] gap-2">
-        {summaryCards.map(([label, value]) => (
-          <article key={label} className="min-w-0 rounded-xl border border-[#e4e7ec] bg-white p-2 text-center shadow-sm dark:border-[#2f4059] dark:bg-[#111827]">
-            <p className="text-xs font-medium leading-tight text-[#667085] dark:text-[#b7c2d8]">{label}</p>
-            <p className="mt-1 text-sm font-semibold text-[#101828] dark:text-[#f8fafc]">{value}</p>
-          </article>
-        ))}
+        {summaryCards.map(([label, value]) => {
+          const hasRemaining = label === "Remaining" && typeof value === "number" && value > 0;
+          return (
+            <article key={label} className="min-w-0 rounded-xl border border-[#e4e7ec] bg-white p-2 text-center shadow-sm dark:border-[#2f4059] dark:bg-[#111827]">
+              <p className="text-xs font-medium leading-tight text-[#667085] dark:text-[#b7c2d8]">{label}</p>
+              <p className={`mt-1 text-sm font-semibold ${hasRemaining ? "text-[#b42318] dark:text-[#ff6b6b]" : "text-[#101828] dark:text-[#f8fafc]"}`}>{value}</p>
+            </article>
+          );
+        })}
       </div>
       {config.kamigo ? (
         <div className="mt-2 grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-2">
@@ -1021,13 +1024,11 @@ export function OeeLineChart({
                       { shiftLabel: "Night", problem: card?.note.night },
                     ].map(({ shiftLabel, problem }) => (
                       <div key={shiftLabel} className="grid min-w-0 grid-cols-[48px_32px_minmax(0,1fr)] items-center gap-2">
-                        <p
-                          className={`w-fit rounded px-1.5 py-0.5 text-xs font-semibold ${
-                            shiftLabel === "Night"
-                              ? "bg-[#eef4ff] text-[#344054] dark:bg-[#1f3478] dark:text-[#d6e4ff]"
-                              : "text-[#344054]"
-                          }`}
-                        >
+                        <p className={`w-fit rounded px-1.5 py-0.5 text-xs font-semibold ${
+                          shiftLabel === "Day"
+                            ? "bg-[#fef0c7] text-[#b54708] dark:bg-[#5f4300] dark:text-[#fedf89]"
+                            : "bg-[#eef4ff] text-[#344054] dark:bg-[#1f3478] dark:text-[#d6e4ff]"
+                        }`}>
                           {shiftLabel}
                         </p>
                         {problem ? (

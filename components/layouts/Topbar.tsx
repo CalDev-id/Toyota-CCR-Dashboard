@@ -23,6 +23,11 @@ const pageHeaders = [
     subtitle: "Monthly production planning by part, period, shift, and group",
   },
   {
+    href: "/production-achievement/linestop-report",
+    title: "Linestop Report",
+    subtitle: "Monthly linestop Pareto and problem summary by machining line",
+  },
+  {
     href: "/production-achievement",
     title: "Prod Acv Machining",
     subtitle: "Production achievement overview for machining",
