@@ -23,7 +23,6 @@ const migrations = [
   "../database/migrations/20260828_asakai_shipment_source_sheet.sql",
   "../database/migrations/20260829_lsr_import.sql",
   "../database/migrations/20260830_lsr_asakai_filter.sql",
-  "../database/migrations/20260831_actual_work_hours.sql",
   "../database/migrations/20260807_daily_monthly_signature.sql",
   "../database/migrations/20260721_production_realtime_status.sql",
   "../database/migrations/20260724_line_stop_decisions.sql",
