@@ -216,7 +216,8 @@ async function getProductionAchievementSummaryRows(
       RQ AS rq,
       Balance AS balance,
       OEE AS oee,
-      OT_act AS otAct
+      OT_act AS otAct,
+      actual_work_hours AS actualWorkHours
     FROM ${quoteIdentifier(summaryView)}
     ${where}
     ORDER BY SHIFT ASC, SHOP ASC, Variant ASC`;
@@ -430,6 +431,7 @@ type DailyPlanningPlanOverride = {
   tt: number;
   otPlan: number;
   workHoursMinutes: number;
+  totalWorkHoursMinutes: number;
   workSchedule: Array<{ start: string; end: string }>;
 };
 
@@ -699,6 +701,7 @@ async function getDailyPlanningPlanOverrides(
       tt: toNumber(row.tt),
       otPlan: 0,
       workHoursMinutes: 0,
+      totalWorkHoursMinutes: 0,
       workSchedule: [],
     };
     const oneTr = toNumber(row.oneTr);
@@ -734,6 +737,10 @@ async function getDailyPlanningPlanOverrides(
     const current = overrides.get(firstRow.lineKey);
     if (current) {
       current.workHoursMinutes += getPlanningWorkHoursMinutes(date, sortedRows, now);
+      current.totalWorkHoursMinutes += sortedRows.reduce(
+        (total, row) => total + toNumber(row.prodMinutes),
+        0,
+      );
       current.workSchedule = sortedRows
         .filter((row) => toNumber(row.prodMinutes) > 0 && row.startTime !== row.endTime)
         .map((row) => ({
@@ -908,6 +915,18 @@ function buildLineCard(
     ? summaryRows.reduce((total, row) => total + toNumber(row.otAct), 0) /
       summaryRows.length
     : 0;
+  const actualWorkHours = summaryRows.reduce<number | null>((highest, row) => {
+    if (
+      row.actualWorkHours === null ||
+      row.actualWorkHours === undefined ||
+      String(row.actualWorkHours).trim() === ""
+    ) {
+      return highest;
+    }
+
+    const value = toNumber(row.actualWorkHours);
+    return highest === null || value > highest ? value : highest;
+  }, null);
   const effectiveTt =
     planOverride?.tt ||
     toNumber(monthlyParameters.tt) ||
@@ -941,6 +960,8 @@ function buildLineCard(
     oeeTarget: monthlyParameters.oeeTarget || (line.key === "camshaft" ? 93 : 90),
     otAct,
     otPlan: planOverride?.otPlan ?? monthlyParameters.otPlan,
+    workHoursPlanMinutes: planOverride?.totalWorkHoursMinutes ?? 0,
+    actualWorkHours,
     balance: prodAct - prodPlan,
     hasData: summaryRows.length > 0,
     isAutoNoProduction,

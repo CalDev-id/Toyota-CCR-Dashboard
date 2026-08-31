@@ -132,6 +132,34 @@ function sameNumber(a: unknown, b: unknown) {
 function recordChanged(existing: LsrRecord, incoming: IncomingRecord) { return existing.partName !== incoming.partName || !sameNumber(existing.qty, incoming.qty) || !sameNumber(existing.pricePerUnit, incoming.pricePerUnit) || !sameNumber(existing.totalPrice, incoming.totalPrice); }
 function targetChanged(existing: LsrTarget, incoming: IncomingTarget) { return !sameNumber(existing.targetDaily, incoming.targetDaily) || !sameNumber(existing.targetCumm, incoming.targetCumm); }
 
+function chunkRows<T>(rows: T[], size = 200) {
+  return Array.from({ length: Math.ceil(rows.length / size) }, (_, index) => rows.slice(index * size, (index + 1) * size));
+}
+
+function upsertLsrRecords(rows: IncomingRecord[]) {
+  return chunkRows(rows).map((chunk) => prisma.$executeRawUnsafe(
+    `INSERT INTO lsr_records (date, shift, shift2, shop, part_no, reason, part_name, qty, price_per_unit, total_price)
+     VALUES ${chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ")}
+     ON DUPLICATE KEY UPDATE
+       part_name = VALUES(part_name),
+       qty = VALUES(qty),
+       price_per_unit = VALUES(price_per_unit),
+       total_price = VALUES(total_price)`,
+    ...chunk.flatMap((row) => [row.date, row.shift, row.shift2, row.shop, row.partNo, row.reason, row.partName, row.qty, row.pricePerUnit, row.totalPrice]),
+  ));
+}
+
+function upsertLsrTargets(rows: IncomingTarget[]) {
+  return chunkRows(rows).map((chunk) => prisma.$executeRawUnsafe(
+    `INSERT INTO lsr_targets (date, shop, target_daily, target_cumm)
+     VALUES ${chunk.map(() => "(?, ?, ?, ?)").join(", ")}
+     ON DUPLICATE KEY UPDATE
+       target_daily = VALUES(target_daily),
+       target_cumm = VALUES(target_cumm)`,
+    ...chunk.flatMap((row) => [row.date, row.shop, row.targetDaily, row.targetCumm]),
+  ));
+}
+
 function bounds(month: string) {
   if (!/^\d{4}-\d{2}$/.test(month)) throw new Error("Pilih bulan yang valid");
   const [year, monthNumber] = month.split("-").map(Number);
@@ -152,10 +180,10 @@ export async function getLsrData(date: string, targetMonth: string) {
 }
 
 export async function importLsr(file: File, month: string, confirmChanges: boolean) {
-  bounds(month);
+  const { start, end } = bounds(month);
   const { records, targets } = await parseWorkbook(file, month);
   const [existingRecords, existingTargets] = await Promise.all([
-    prisma.$queryRawUnsafe<LsrRecord[]>("SELECT CAST(id AS DOUBLE) AS id, DATE_FORMAT(date, '%Y-%m-%d') AS date, shift, shift2, shop, part_no AS partNo, reason, part_name AS partName, qty, price_per_unit AS pricePerUnit, total_price AS totalPrice FROM lsr_records"),
+    prisma.$queryRawUnsafe<LsrRecord[]>("SELECT CAST(id AS DOUBLE) AS id, DATE_FORMAT(date, '%Y-%m-%d') AS date, shift, shift2, shop, part_no AS partNo, reason, part_name AS partName, qty, price_per_unit AS pricePerUnit, total_price AS totalPrice FROM lsr_records WHERE date >= ? AND date < ?", start, end),
     prisma.$queryRawUnsafe<LsrTarget[]>("SELECT CAST(id AS DOUBLE) AS id, DATE_FORMAT(date, '%Y-%m-%d') AS date, shop, target_daily AS targetDaily, target_cumm AS targetCumm FROM lsr_targets"),
   ]);
   const recordMap = new Map(existingRecords.map((row) => [recordKey(row), row])); const targetMap = new Map(existingTargets.map((row) => [targetKey(row), row]));
@@ -164,19 +192,18 @@ export async function importLsr(file: File, month: string, confirmChanges: boole
     ...targets.filter((row) => { const existing = targetMap.get(targetKey(row)); return existing && targetChanged(existing, row); }).map((row) => ({ type: "Target" as const, date: row.date, label: row.shop })),
   ];
   if (conflicts.length && !confirmChanges) return { conflicts, changed: conflicts.length };
-  let inserted = 0; let updated = 0; let skipped = 0;
-  await prisma.$transaction(async (db) => {
-    for (const row of records) {
-      const existing = recordMap.get(recordKey(row));
-      if (!existing) { await db.$executeRawUnsafe("INSERT INTO lsr_records (date, shift, shift2, shop, part_no, reason, part_name, qty, price_per_unit, total_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", row.date, row.shift, row.shift2, row.shop, row.partNo, row.reason, row.partName, row.qty, row.pricePerUnit, row.totalPrice); inserted++; }
-      else if (recordChanged(existing, row)) { await db.$executeRawUnsafe("UPDATE lsr_records SET part_name=?, qty=?, price_per_unit=?, total_price=? WHERE id=?", row.partName, row.qty, row.pricePerUnit, row.totalPrice, existing.id); updated++; } else skipped++;
-    }
-    for (const row of targets) {
-      const existing = targetMap.get(targetKey(row));
-      if (!existing) { await db.$executeRawUnsafe("INSERT INTO lsr_targets (date, shop, target_daily, target_cumm) VALUES (?, ?, ?, ?)", row.date, row.shop, row.targetDaily, row.targetCumm); inserted++; }
-      else if (targetChanged(existing, row)) { await db.$executeRawUnsafe("UPDATE lsr_targets SET target_daily=?, target_cumm=? WHERE id=?", row.targetDaily, row.targetCumm, existing.id); updated++; } else skipped++;
-    }
-  }, { maxWait: 10_000, timeout: 60_000 });
+  const newRecords = records.filter((row) => !recordMap.has(recordKey(row)));
+  const changedRecords = records.filter((row) => { const existing = recordMap.get(recordKey(row)); return existing && recordChanged(existing, row); });
+  const newTargets = targets.filter((row) => !targetMap.has(targetKey(row)));
+  const changedTargets = targets.filter((row) => { const existing = targetMap.get(targetKey(row)); return existing && targetChanged(existing, row); });
+  const inserted = newRecords.length + newTargets.length;
+  const updated = changedRecords.length + changedTargets.length;
+  const skipped = records.length + targets.length - inserted - updated;
+  const operations = [
+    ...upsertLsrRecords([...newRecords, ...changedRecords]),
+    ...upsertLsrTargets([...newTargets, ...changedTargets]),
+  ];
+  if (operations.length) await prisma.$transaction(operations);
   return { inserted, updated, skipped };
 }
 

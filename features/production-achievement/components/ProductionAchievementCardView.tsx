@@ -40,6 +40,10 @@ function formatProblemMinutes(value: number) {
   return `${formatNumberAuto(value)} min`;
 }
 
+function formatHours(value: number) {
+  return `${formatNumberAuto(value)} jam`;
+}
+
 function formatLastUpdated(value: string | null) {
   if (!value) {
     return "-";
@@ -257,6 +261,31 @@ function OvertimeMetricValue({ actual, plan }: { actual: number; plan: number })
   );
 }
 
+function WorkHoursTooltip({
+  planMinutes,
+  actualHours,
+}: {
+  planMinutes: number;
+  actualHours: number | null;
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-[#d0d5dd]">Work Hours Plan</span>
+        <span className="font-bold tabular-nums text-white">
+          {formatHours(planMinutes / 60)}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-[#d0d5dd]">Work Hours Actual</span>
+        <span className="font-bold tabular-nums text-white">
+          {actualHours === null ? "-" : formatHours(actualHours)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function ProblemTypeBadge({ type }: { type?: "AV" | "PE" | "RQ" }) {
   if (!type) {
     return null;
@@ -424,6 +453,14 @@ export default function ProductionAchievementCardView({
           <MetricTile
             label="Overtime"
             value={<OvertimeMetricValue actual={card.otAct} plan={card.otPlan} />}
+            tooltip={
+              card.key === "assy" ? undefined : (
+                <WorkHoursTooltip
+                  planMinutes={card.workHoursPlanMinutes}
+                  actualHours={card.actualWorkHours}
+                />
+              )
+            }
             valueClassName={getOvertimeClass(card.otAct, card.otPlan)}
             valueSizeClassName="text-xl"
           />

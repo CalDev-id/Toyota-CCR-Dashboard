@@ -27,6 +27,7 @@ export type RawProductionAchievementSummaryRow = {
   balance: string | number | null;
   oee: string | number | null;
   otAct: string | number | null;
+  actualWorkHours: string | number | null;
 };
 
 export type RawProductionAchievementProblemRow = {
@@ -74,6 +75,8 @@ export type ProductionAchievementCard = {
   oeeTarget: number | null;
   otAct: number;
   otPlan: number;
+  workHoursPlanMinutes: number;
+  actualWorkHours: number | null;
   balance: number;
   hasData: boolean;
   isAutoNoProduction: boolean;
