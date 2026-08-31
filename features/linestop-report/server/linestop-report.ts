@@ -4,20 +4,21 @@ import { prisma } from "@/lib/prisma";
 import { getReportPrisma } from "@/lib/report-prisma";
 import type { ProductionAchievementLineKey } from "@/features/production-achievement/types";
 
-export const LINESTOP_LINES: Array<{ key: ProductionAchievementLineKey; label: string; view: string }> = [
-  { key: "assy", label: "Assy", view: "v_assy_detail_problem" },
-  { key: "cylblock", label: "Cylinder Block", view: "v_cylblock_detail_problem" },
-  { key: "cylhead", label: "Cylinder Head", view: "v_cylhead_detail_problem" },
-  { key: "crankshaft", label: "Crankshaft", view: "v_crankshaft_detail_problem" },
-  { key: "camshaft", label: "Camshaft", view: "v_camshaft_detail_problem" },
+export const LINESTOP_LINES: Array<{ key: ProductionAchievementLineKey; label: string; view: string; planningTable: string }> = [
+  { key: "assy", label: "Assy", view: "v_assy_detail_problem", planningTable: "t_plan_daily_production_assy" },
+  { key: "cylblock", label: "Cylinder Block", view: "v_cylblock_detail_problem", planningTable: "t_plan_daily_production_cylblock" },
+  { key: "cylhead", label: "Cylinder Head", view: "v_cylhead_detail_problem", planningTable: "t_plan_daily_production_cylhead" },
+  { key: "crankshaft", label: "Crankshaft", view: "v_crankshaft_detail_problem", planningTable: "t_plan_daily_production_crankshaft" },
+  { key: "camshaft", label: "Camshaft", view: "v_camshaft_detail_problem", planningTable: "t_plan_daily_production_camshaft" },
 ];
 
 export type LinestopMachine = { id: number; lineKey: ProductionAchievementLineKey; machineName: string };
 export type LinestopSummaryRow = { machineName: string; minutes: number };
-export type LinestopLineSummary = { key: ProductionAchievementLineKey; label: string; rows: LinestopSummaryRow[]; unmappedMinutes: number; unmappedRows: LinestopSummaryRow[] };
+export type LinestopLineSummary = { key: ProductionAchievementLineKey; label: string; taktTime: number | null; rows: LinestopSummaryRow[]; unmappedMinutes: number; unmappedRows: LinestopSummaryRow[] };
 
 type DatabaseMachineRow = { id: number; lineKey: ProductionAchievementLineKey; machineName: string; normalizedName: string };
 type ProblemRow = { problemAv: unknown; lsAvMin: unknown; problemPe: unknown; lsPeMin: unknown };
+type PlanningRow = { taktTime: unknown };
 
 export function normalizeMachineName(value: string) {
   const uppercase = value.toUpperCase();
@@ -72,7 +73,13 @@ export async function getLinestopReport(month: string): Promise<LinestopLineSumm
   const masterRows = await prisma.$queryRawUnsafe<DatabaseMachineRow[]>("SELECT id, line_key AS lineKey, machine_name AS machineName, normalized_name AS normalizedName FROM linestop_db");
   return Promise.all(LINESTOP_LINES.map(async (line) => {
     const machines = masterRows.filter((row) => row.lineKey === line.key);
-    const rows = await getReportPrisma().$queryRawUnsafe<ProblemRow[]>(`SELECT Problem_AV AS problemAv, LS_AV_min AS lsAvMin, Problem_PE AS problemPe, LS_PE_min AS lsPeMin FROM \`${line.view}\` WHERE \`DATE\` >= ? AND \`DATE\` < ?`, start, end);
+    const reportDb = getReportPrisma();
+    const [rows, planningRows] = await Promise.all([
+      reportDb.$queryRawUnsafe<ProblemRow[]>(`SELECT Problem_AV AS problemAv, LS_AV_min AS lsAvMin, Problem_PE AS problemPe, LS_PE_min AS lsPeMin FROM \`${line.view}\` WHERE \`DATE\` >= ? AND \`DATE\` < ?`, start, end),
+      reportDb.$queryRawUnsafe<PlanningRow[]>(`SELECT ftt AS taktTime FROM \`${line.planningTable}\` WHERE fdate >= ? AND fdate < ? ORDER BY fdate DESC, TRIM(fshift) DESC, TRIM(fgroup) DESC LIMIT 1`, start, end),
+    ]);
+    const rawTaktTime = toMinutes(planningRows[0]?.taktTime);
+    const taktTime = rawTaktTime > 0 ? rawTaktTime : null;
     const totals = new Map<string, number>(); const unmapped = new Map<string, number>(); let unmappedMinutes = 0;
     for (const row of rows) for (const [problem, minutes] of [[row.problemAv, row.lsAvMin], [row.problemPe, row.lsPeMin]] as const) {
       const value = toMinutes(minutes); if (!String(problem ?? "").trim() || value <= 0) continue;
@@ -80,7 +87,7 @@ export async function getLinestopReport(month: string): Promise<LinestopLineSumm
       if (!machine) { const text = String(problem).trim(); unmappedMinutes += value; unmapped.set(text, (unmapped.get(text) ?? 0) + value); }
       else totals.set(machine.machineName, (totals.get(machine.machineName) ?? 0) + value);
     }
-    return { key: line.key, label: line.label, unmappedMinutes, rows: [...totals].map(([machineName, minutes]) => ({ machineName, minutes })).sort((a, b) => b.minutes - a.minutes || a.machineName.localeCompare(b.machineName)), unmappedRows: [...unmapped].map(([machineName, minutes]) => ({ machineName, minutes })).sort((a, b) => b.minutes - a.minutes || a.machineName.localeCompare(b.machineName)) };
+    return { key: line.key, label: line.label, taktTime, unmappedMinutes, rows: [...totals].map(([machineName, minutes]) => ({ machineName, minutes })).sort((a, b) => b.minutes - a.minutes || a.machineName.localeCompare(b.machineName)), unmappedRows: [...unmapped].map(([machineName, minutes]) => ({ machineName, minutes })).sort((a, b) => b.minutes - a.minutes || a.machineName.localeCompare(b.machineName)) };
   }));
 }
 
