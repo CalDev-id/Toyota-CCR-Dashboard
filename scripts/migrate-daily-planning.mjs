@@ -27,6 +27,8 @@ const migrations = [
   "../database/migrations/20260721_production_realtime_status.sql",
   "../database/migrations/20260724_line_stop_decisions.sql",
   "../database/migrations/20260727_add_no_production_line_stop_decision.sql",
+  "../database/migrations/20260831_linestop_db.sql",
+  "../database/migrations/20260831_drop_linestop_active.sql",
 ];
 const connection = await mariadb.createConnection({ host: url.hostname, port: Number(url.port || 3306), user: decodeURIComponent(url.username), password: decodeURIComponent(url.password), database: url.pathname.slice(1), multipleStatements: true });
 

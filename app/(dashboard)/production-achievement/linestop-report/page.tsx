@@ -1,7 +1,8 @@
 import { requirePageAccess } from "@/lib/authorization";
+import LinestopReportPageClient from "@/features/linestop-report/components/LinestopReportPageClient";
 
 export default async function LinestopReportPage() {
-  await requirePageAccess("/production-achievement/linestop-report");
+  const role = await requirePageAccess("/production-achievement/linestop-report");
 
-  return null;
+  return <LinestopReportPageClient viewerRole={role} />;
 }
