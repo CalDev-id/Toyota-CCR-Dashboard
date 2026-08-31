@@ -27,6 +27,7 @@ export type RawProductionAchievementSummaryRow = {
   balance: string | number | null;
   oee: string | number | null;
   otAct: string | number | null;
+  actualWorkHours: string | number | null;
 };
 
 export type RawProductionAchievementProblemRow = {

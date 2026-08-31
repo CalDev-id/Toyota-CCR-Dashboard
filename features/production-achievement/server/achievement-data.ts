@@ -99,7 +99,12 @@ const problemRowsCache = new Map<
   string,
   TimedCacheEntry<RawProductionAchievementProblemRow[]>
 >();
+const monthlyPlanningParametersCache = new Map<
+  string,
+  TimedCacheEntry<MonthlyPlanningParameters>
+>();
 const PROBLEM_ROWS_CACHE_MS = 5 * 60 * 1000;
+const MONTHLY_PLANNING_PARAMETERS_CACHE_MS = 60 * 1000;
 const STATIC_DATA_CACHE_MAX_ENTRIES = 30;
 
 function setLimitedCacheValue<T>(cache: Map<string, T>, key: string, value: T) {
@@ -168,7 +173,14 @@ async function getMonthlyPlanningParameters(
   line: ProductionAchievementLineConfig,
   date: string,
   shift: string,
+  refreshStaticData = false,
 ): Promise<MonthlyPlanningParameters> {
+  const cacheKey = `${line.key}:${date}:${shift}`;
+  const cached = monthlyPlanningParametersCache.get(cacheKey);
+  if (cached && !refreshStaticData && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
   const shifts = shiftAliases(shift);
   const rows = await getReportPrisma().$queryRawUnsafe<
     Array<{ tt: unknown; oeeTarget: unknown; otPlan: unknown; oneTr: unknown; twoTr: unknown }>
@@ -190,6 +202,10 @@ async function getMonthlyPlanningParameters(
     totalPlan: toNumber(rows[0]?.oneTr) + toNumber(rows[0]?.twoTr),
   };
 
+  setLimitedCacheValue(monthlyPlanningParametersCache, cacheKey, {
+    value: parameters,
+    expiresAt: Date.now() + MONTHLY_PLANNING_PARAMETERS_CACHE_MS,
+  });
   return parameters;
 }
 
@@ -202,7 +218,8 @@ async function getProductionAchievementSummaryRows(
   const actExpression = productionAchievementActExpression(line);
   const prodScanExpression =
     line.key === "assy" ? "NULL" : quoteIdentifier("Prod_realtime");
-  const summaryView = summaryViewName(line.summaryView);
+  const actualWorkHoursExpression = quoteIdentifier("actual_work_hours");
+  const summaryView = line.key === "assy" ? summaryViewName(line.summaryView) : line.summaryView;
   const sql = `SELECT
       SHOP AS shop,
       Variant AS variant,
@@ -216,7 +233,8 @@ async function getProductionAchievementSummaryRows(
       RQ AS rq,
       Balance AS balance,
       OEE AS oee,
-      OT_act AS otAct
+      OT_act AS otAct,
+      ${actualWorkHoursExpression} AS actualWorkHours
     FROM ${quoteIdentifier(summaryView)}
     ${where}
     ORDER BY SHIFT ASC, SHOP ASC, Variant ASC`;
@@ -225,41 +243,6 @@ async function getProductionAchievementSummaryRows(
     sql,
     ...values,
   );
-}
-
-async function getActualWorkHours(
-  line: ProductionAchievementLineConfig,
-  date: string,
-  shift: string,
-) {
-  if (line.key === "assy") {
-    return null;
-  }
-
-  const { where, values } = buildDateShiftWhere(date, shift);
-  const summaryView = line.summaryView;
-
-  try {
-    const rows = await getReportPrisma().$queryRawUnsafe<
-      Array<{ actualWorkHours: unknown }>
-    >(
-      `SELECT actual_work_hours AS actualWorkHours
-       FROM ${quoteIdentifier(summaryView)}
-       ${where}`,
-      ...values,
-    );
-
-    return rows.reduce<number | null>((highest, row) => {
-      if (row.actualWorkHours === null || row.actualWorkHours === undefined || String(row.actualWorkHours).trim() === "") {
-        return highest;
-      }
-
-      const value = toNumber(row.actualWorkHours);
-      return highest === null || value > highest ? value : highest;
-    }, null);
-  } catch {
-    return null;
-  }
 }
 
 const backflushSummaryMaterials = [
@@ -920,7 +903,6 @@ function buildLineCard(
   problemRows: RawProductionAchievementProblemRow[],
   monthlyParameters: { tt: string; oeeTarget: number; otPlan: number },
   planOverride?: DailyPlanningPlanOverride,
-  actualWorkHours: number | null = null,
   lastUpdatedAt: string | null = null,
   isAutoNoProduction = false,
   includeAllProblems = true,
@@ -950,6 +932,18 @@ function buildLineCard(
     ? summaryRows.reduce((total, row) => total + toNumber(row.otAct), 0) /
       summaryRows.length
     : 0;
+  const actualWorkHours = summaryRows.reduce<number | null>((highest, row) => {
+      if (
+        row.actualWorkHours === null ||
+        row.actualWorkHours === undefined ||
+        String(row.actualWorkHours).trim() === ""
+      ) {
+        return highest;
+      }
+
+      const value = toNumber(row.actualWorkHours);
+      return highest === null || value > highest ? value : highest;
+    }, null);
   const effectiveTt =
     planOverride?.tt ||
     toNumber(monthlyParameters.tt) ||
@@ -1011,14 +1005,13 @@ export async function getProductionAchievementDashboard(filters?: {
   const planOverrides = await getDailyPlanningPlanOverrides(date, shift, refreshStaticData);
   const lineData = await Promise.all(
     productionAchievementLineConfigs.map(async (line) => {
-      const [summaryRows, problemRows, monthlyParameters, actualWorkHours] = await Promise.all([
+      const [summaryRows, problemRows, monthlyParameters] = await Promise.all([
         getProductionAchievementSummaryRows(line, date, shift),
         getProductionAchievementProblemRows(line, date, shift, refreshStaticData),
-        getMonthlyPlanningParameters(line, date, shift),
-        getActualWorkHours(line, date, shift),
+        getMonthlyPlanningParameters(line, date, shift, refreshStaticData),
       ]);
 
-      return { line, summaryRows, problemRows, monthlyParameters, actualWorkHours };
+      return { line, summaryRows, problemRows, monthlyParameters };
     }),
   );
   const isActiveProductionShift = date === getActiveProductionDateKey() && shift === getActiveShiftLabel();
@@ -1061,14 +1054,13 @@ export async function getProductionAchievementDashboard(filters?: {
   }
 
   const lineCards = lineData.map(
-    ({ line, summaryRows, problemRows, monthlyParameters, actualWorkHours }) =>
+    ({ line, summaryRows, problemRows, monthlyParameters }) =>
       buildLineCard(
         line,
         summaryRows,
         problemRows,
         monthlyParameters,
         planOverrides.get(line.key),
-        actualWorkHours,
         realtimeStatuses[line.key] ?? null,
         automaticDecisions.has(line.key),
         options?.includeAllProblems,

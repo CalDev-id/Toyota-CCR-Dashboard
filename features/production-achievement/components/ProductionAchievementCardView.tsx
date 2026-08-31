@@ -454,12 +454,10 @@ export default function ProductionAchievementCardView({
             label="Overtime"
             value={<OvertimeMetricValue actual={card.otAct} plan={card.otPlan} />}
             tooltip={
-              card.key === "assy" ? undefined : (
-                <WorkHoursTooltip
-                  planMinutes={card.workHoursPlanMinutes}
-                  actualHours={card.actualWorkHours}
-                />
-              )
+              <WorkHoursTooltip
+                planMinutes={card.workHoursPlanMinutes}
+                actualHours={card.actualWorkHours}
+              />
             }
             valueClassName={getOvertimeClass(card.otAct, card.otPlan)}
             valueSizeClassName="text-xl"
