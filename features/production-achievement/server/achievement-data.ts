@@ -106,6 +106,8 @@ const monthlyPlanningParametersCache = new Map<
 const PROBLEM_ROWS_CACHE_MS = 5 * 60 * 1000;
 const MONTHLY_PLANNING_PARAMETERS_CACHE_MS = 60 * 1000;
 const STATIC_DATA_CACHE_MAX_ENTRIES = 30;
+const monthlyOtAdjustmentThresholdHours = 5;
+const productionAchievementOtAdjustmentHours = 8;
 
 function setLimitedCacheValue<T>(cache: Map<string, T>, key: string, value: T) {
   cache.delete(key);
@@ -928,7 +930,7 @@ function buildLineCard(
   const av = toNumber(summaryMetricRow?.av);
   const pe = toNumber(summaryMetricRow?.pe);
   const rq = toNumber(summaryMetricRow?.rq);
-  const otAct = summaryRows.length
+  const rawOtAct = summaryRows.length
     ? summaryRows.reduce((total, row) => total + toNumber(row.otAct), 0) /
       summaryRows.length
     : 0;
@@ -957,6 +959,10 @@ function buildLineCard(
     actualTtValue > 0 && workHoursMinutes > 0
       ? (prodAct * actualTtValue * 100) / workHoursMinutes
       : null;
+  const otAct = rawOtAct +
+    (monthlyParameters.otPlan > monthlyOtAdjustmentThresholdHours
+      ? productionAchievementOtAdjustmentHours
+      : 0);
 
   return {
     key: line.key,
@@ -976,7 +982,12 @@ function buildLineCard(
     ttPlan: effectiveTt ? toPlainString(effectiveTt) : "",
     oeeTarget: monthlyParameters.oeeTarget || (line.key === "camshaft" ? 93 : 90),
     otAct,
-    otPlan: planOverride?.otPlan ?? monthlyParameters.otPlan,
+    otPlan: planOverride
+      ? planOverride.otPlan +
+        (monthlyParameters.otPlan > monthlyOtAdjustmentThresholdHours
+          ? productionAchievementOtAdjustmentHours
+          : 0)
+      : monthlyParameters.otPlan,
     workHoursPlanMinutes: planOverride?.totalWorkHoursMinutes ?? 0,
     actualWorkHours,
     balance: prodAct - prodPlan,

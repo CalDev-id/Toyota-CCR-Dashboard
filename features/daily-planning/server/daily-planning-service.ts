@@ -17,6 +17,8 @@ export type RamadanSchedule = RamadanScheduleInput & { isActive: boolean };
 type BreakSchedule = { label: string; start: string; end: string };
 
 const parts = new Set(["assy", "cylblock", "cylhead", "camshaft", "crankshaft"]);
+const dailyOtReductionThresholdMinutes = 5 * 60;
+const dailyOtReductionMinutes = 8 * 60;
 const maghribBreak = { start: "18:00", end: "18:15" };
 const daySlots: SlotTemplate[] = [
   { order: 1, start: "07:20", end: "08:20", minutes: 60, type: "normal" }, { order: 2, start: "08:20", end: "09:30", minutes: 70, type: "normal" }, { order: 3, start: "09:40", end: "10:40", minutes: 60, type: "normal" }, { order: 4, start: "10:40", end: "11:45", minutes: 65, type: "normal" }, { order: 5, start: "12:30", end: "14:00", minutes: 90, type: "normal" }, { order: 6, start: "14:10", end: "15:10", minutes: 60, type: "normal" }, { order: 7, start: "15:10", end: "16:00", minutes: 50, type: "normal" }, { order: 8, start: "16:30", end: "18:30", minutes: 120, type: "ot" },
@@ -69,6 +71,7 @@ function dayOtSlots(order: number, startTime: string, productiveMinutes: number)
   ];
 }
 function targetFor(minutes: number, tt: number, oee: number) { return tt > 0 ? Math.round(minutes / tt * oee / 100) : 0; }
+function dailyOtMinutesFromMonthly(monthlyOtMinutes: number) { return monthlyOtMinutes > dailyOtReductionThresholdMinutes ? Math.max(0, monthlyOtMinutes - dailyOtReductionMinutes) : monthlyOtMinutes; }
 function targetsForSlots(part: string, shift: string, slots: Array<{ key: number; minutes: number; oee: number }>, tt: number) { if (part !== "assy" || shift !== "1" || tt <= 0) return new Map(slots.map((slot) => [slot.key, targetFor(slot.minutes, tt, slot.oee)])); let accumulatedTarget = 0; let roundedTarget = 0; return new Map(slots.map((slot) => { accumulatedTarget += slot.minutes / tt * slot.oee / 100; const nextRoundedTarget = Math.round(accumulatedTarget); const target = nextRoundedTarget - roundedTarget; roundedTarget = nextRoundedTarget; return [slot.key, target] as const; })); }
 function tableFor(part: string) { if (!parts.has(part)) throw new Error("Invalid planning line"); return `t_plan_daily_production_${part}`; }
 function toNullableNumber(value: unknown) { if (value === null || value === undefined || value === "") return null; const numeric = Number(value); return Number.isFinite(numeric) ? numeric : null; }
@@ -183,7 +186,8 @@ async function getPlanContext(part: string, date: string, shift: string) {
   const monthlyTt = toNullableNumber(source[0]?.ftt);
   const monthlyRatio = part === "camshaft" ? "" : sourceRatio;
   const monthlyOee = toNullableNumber(source[0]?.foee);
-  const otMinutes = Math.max(0, Math.round(Number(source[0]?.fot ?? 0) * 60));
+  const monthlyOtMinutes = Math.max(0, Math.round(Number(source[0]?.fot ?? 0) * 60));
+  const otMinutes = dailyOtMinutesFromMonthly(monthlyOtMinutes);
   const monthlySignature = createHash("sha256")
     .update(JSON.stringify(source.map((row) => Object.values(row).map((value) => String(value ?? "")))))
     .digest("hex");
@@ -194,7 +198,7 @@ async function getPlanContext(part: string, date: string, shift: string) {
   const monthlyChanged = Boolean(plan.is_manual_plan) || plan.source_signature !== monthlySignature;
 
   if (monthlyChanged) {
-    await db.$executeRawUnsafe("UPDATE t_daily_production_plan SET is_manual_plan=0,override_tt=NULL,override_ratio=NULL,source_tt=?,source_oee=?,source_ratio=?,source_ot_minutes=?,source_signature=? WHERE id=?", monthlyTt, monthlyOee,monthlyRatio,otMinutes,monthlySignature,plan.id);
+    await db.$executeRawUnsafe("UPDATE t_daily_production_plan SET is_manual_plan=0,override_tt=NULL,override_ratio=NULL,source_tt=?,source_oee=?,source_ratio=?,source_ot_minutes=?,source_signature=? WHERE id=?", monthlyTt, monthlyOee,monthlyRatio,monthlyOtMinutes,monthlySignature,plan.id);
     await db.$executeRawUnsafe("DELETE FROM t_daily_production_plan_slot WHERE daily_plan_id=?", plan.id);
     plan.override_tt = null; plan.override_ratio = null;
   }
