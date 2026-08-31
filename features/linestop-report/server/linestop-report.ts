@@ -14,7 +14,7 @@ export const LINESTOP_LINES: Array<{ key: ProductionAchievementLineKey; label: s
 
 export type LinestopMachine = { id: number; lineKey: ProductionAchievementLineKey; machineName: string };
 export type LinestopSummaryRow = { machineName: string; minutes: number };
-export type LinestopLineSummary = { key: ProductionAchievementLineKey; label: string; rows: LinestopSummaryRow[]; unmappedMinutes: number };
+export type LinestopLineSummary = { key: ProductionAchievementLineKey; label: string; rows: LinestopSummaryRow[]; unmappedMinutes: number; unmappedRows: LinestopSummaryRow[] };
 
 type DatabaseMachineRow = { id: number; lineKey: ProductionAchievementLineKey; machineName: string; normalizedName: string };
 type ProblemRow = { problemAv: unknown; lsAvMin: unknown; problemPe: unknown; lsPeMin: unknown };
@@ -54,13 +54,14 @@ export async function getLinestopReport(month: string): Promise<LinestopLineSumm
   return Promise.all(LINESTOP_LINES.map(async (line) => {
     const machines = masterRows.filter((row) => row.lineKey === line.key);
     const rows = await getReportPrisma().$queryRawUnsafe<ProblemRow[]>(`SELECT Problem_AV AS problemAv, LS_AV_min AS lsAvMin, Problem_PE AS problemPe, LS_PE_min AS lsPeMin FROM \`${line.view}\` WHERE \`DATE\` >= ? AND \`DATE\` < ?`, start, end);
-    const totals = new Map<string, number>(); let unmappedMinutes = 0;
+    const totals = new Map<string, number>(); const unmapped = new Map<string, number>(); let unmappedMinutes = 0;
     for (const row of rows) for (const [problem, minutes] of [[row.problemAv, row.lsAvMin], [row.problemPe, row.lsPeMin]] as const) {
       const value = toMinutes(minutes); if (!String(problem ?? "").trim() || value <= 0) continue;
       const machine = findMachine(problem, machines);
-      if (!machine) unmappedMinutes += value; else totals.set(machine.machineName, (totals.get(machine.machineName) ?? 0) + value);
+      if (!machine) { const text = String(problem).trim(); unmappedMinutes += value; unmapped.set(text, (unmapped.get(text) ?? 0) + value); }
+      else totals.set(machine.machineName, (totals.get(machine.machineName) ?? 0) + value);
     }
-    return { key: line.key, label: line.label, unmappedMinutes, rows: [...totals].map(([machineName, minutes]) => ({ machineName, minutes })).sort((a, b) => b.minutes - a.minutes || a.machineName.localeCompare(b.machineName)) };
+    return { key: line.key, label: line.label, unmappedMinutes, rows: [...totals].map(([machineName, minutes]) => ({ machineName, minutes })).sort((a, b) => b.minutes - a.minutes || a.machineName.localeCompare(b.machineName)), unmappedRows: [...unmapped].map(([machineName, minutes]) => ({ machineName, minutes })).sort((a, b) => b.minutes - a.minutes || a.machineName.localeCompare(b.machineName)) };
   }));
 }
 
