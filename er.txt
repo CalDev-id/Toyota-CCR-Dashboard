@@ -1,1 +1,43 @@
-docker compose --progress=plain build app
+#14 19.30 Type error: File '/app/app/api/linestop-report/export/route.ts' is not
+ a module.
+#14 19.30
+#14 19.35 Next.js build worker exited with code: 1 and signal: null
+#14 ERROR: process "/bin/sh -c npm run build" did not complete successfully: exi
+t code: 1
+------
+ > [builder 3/3] RUN npm run build:
+1.629   · serverActions
+1.629
+1.677   Creating an optimized production build ...
+9.111 ✓ Compiled successfully in 7.1s
+9.130   Running TypeScript ...
+19.30 Failed to type check.
+19.30
+19.30 Type error: File '/app/app/api/linestop-report/export/route.ts' is not a m
+odule.
+19.30
+19.35 Next.js build worker exited with code: 1 and signal: null
+------
+Dockerfile:14
+
+--------------------
+
+  12 |     ENV DATABASE_URL="mysql://root:password@localhost:3306/toyota_ccr"
+
+  13 |     RUN npm run prisma:generate
+
+  14 | >>> RUN npm run build
+
+  15 |
+
+  16 |     FROM base AS migration-deps
+
+--------------------
+
+failed to solve: process "/bin/sh -c npm run build" did not complete successfull
+y: exit code: 1
+
+
+What's next:
+    Debug this Compose error with Gordon → docker ai "help me fix this compose e
+rror"

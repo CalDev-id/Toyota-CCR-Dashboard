@@ -1,0 +1,14 @@
+MARIADB_ROOT_PASSWORD="root"
+MARIADB_DATABASE="toyota_ccr"
+MARIADB_PORT=3307
+DATABASE_URL="mysql://root:root@localhost:3307/toyota_ccr"
+
+APP_PORT=3001
+AUTH_SECRET="SfG3zroCgh7iq2qeB3uznlXkLj8FyFHxD1_j-zLC8Ek"
+REPORT_DATABASE_URL="mysql://ccr:ccr@10.1.1.2:3306/db_tmmin_trace_regrinding"
+
+SEED_USER_NAME="Admin CCR"
+SEED_USER_EMAIL="admin@toyota.co.id"
+SEED_USER_PASSWORD="admin123"
+
+REPORT_SUMMARY_VIEW_SUFFIX="_new"
