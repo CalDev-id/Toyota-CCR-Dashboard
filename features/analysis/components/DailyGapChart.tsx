@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AnalysisGapSeriesRow as GapSeriesRow, AnalysisLineKey as LineKey } from "@/features/analysis/types";
 import { formatDayLabel, formatNumber, getChartMinWidth } from "@/features/analysis/components/analysisChartUtils";
 
@@ -12,6 +12,7 @@ export default function DailyGapChart({
   singleShift?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; date: string; shift: string; otPlan: number; otAct: number } | null>(null);
   const chartRows = series.filter(
     (row) =>
       singleShift ? row[`${lineKey}R`] !== null : row[`${lineKey}R`] !== null || row[`${lineKey}W`] !== null,
@@ -75,13 +76,18 @@ export default function DailyGapChart({
                         const height = Math.min((Math.abs(bar.value) / maxValue) * 50, 50);
                         const isPositive = bar.value >= 0;
                         const visibleHeight = Math.max(height, bar.value === 0 ? 0 : 5);
+                        const detail = row.gapDetails[`${lineKey}${bar.key.toUpperCase()}` as `${LineKey}R` | `${LineKey}W`];
 
                         return (
                           <div
                             key={bar.key}
-                            className={`absolute left-1/2 -translate-x-1/2 ${
+                            className={`absolute left-1/2 cursor-help -translate-x-1/2 ${
                               bar.key === "w" ? "ring-1 ring-inset ring-[#d0d5dd] dark:ring-0" : ""
                             }`}
+                            onMouseEnter={(event) => {
+                              if (detail) setTooltip({ x: event.clientX, y: event.clientY, date: row.date, shift: singleShift ? "N" : bar.key.toUpperCase(), ...detail });
+                            }}
+                            onMouseLeave={() => setTooltip(null)}
                             style={{
                               backgroundColor: bar.color,
                               height: `${visibleHeight}%`,
@@ -142,6 +148,13 @@ export default function DailyGapChart({
           </div>
         </div>
       </div>
+      {tooltip ? (
+        <div role="tooltip" className="pointer-events-none fixed z-[100] min-w-36 rounded-lg bg-[#101828] px-3 py-2 text-xs text-white shadow-xl dark:bg-[#f8fafc] dark:text-[#101828]" style={{ left: tooltip.x, top: tooltip.y - 8, transform: "translate(-50%, -100%)" }}>
+          <p className="font-semibold">{formatDayLabel(tooltip.date)} · Shift {tooltip.shift}</p>
+          <p className="mt-1">OT Plan: <span className="font-semibold">{formatNumber(tooltip.otPlan, 1)} jam</span></p>
+          <p>OT Act: <span className="font-semibold">{formatNumber(tooltip.otAct, 1)} jam</span></p>
+        </div>
+      ) : null}
     </div>
   );
 }

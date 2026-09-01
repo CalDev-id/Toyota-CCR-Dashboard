@@ -22,6 +22,7 @@ export type RawAnalysisOeeRow = {
   otPlan: string | number | null;
   otAct: string | number | null;
   otDiff: string | number | null;
+  actualWorkHours: string | number | null;
 };
 
 export type RawAnalysisProblemRow = {
@@ -50,8 +51,8 @@ export type AnalysisOeeCard = {
   w: number | null;
   ave: number | null;
   monthly: number | null;
-  balance: number;
-  balanceMonthly: number;
+  balance: number | null;
+  balanceMonthly: number | null;
   otDay: number;
   otNight: number;
   cumR: number;
@@ -71,6 +72,7 @@ export type AnalysisShiftSeriesRow = {
 
 export type AnalysisGapSeriesRow = {
   date: string;
+  gapDetails: Partial<Record<`${AnalysisLineKey}R` | `${AnalysisLineKey}W`, { otPlan: number; otAct: number }>>;
 } & Record<`${AnalysisLineKey}R` | `${AnalysisLineKey}W`, number | null>;
 
 export type AnalysisEmergencyStockMetrics = {

@@ -958,13 +958,13 @@ export function OeeLineChart({
                 </h3>
                 <div className="mt-3 grid grid-cols-2 gap-3">
                   {[
-                    ["Balance(Unit)", card?.balance ?? 0],
-                    ["Balance Monthly", card?.balanceMonthly ?? 0],
+                    ["Balance(Unit)", card?.balance ?? null],
+                    ["Balance Monthly", card?.balanceMonthly ?? null],
                   ].map(([label, value]) => (
                     <article key={label} className="min-w-0 rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm">
                       <p className="text-[10px] font-medium text-[#667085]">{label}</p>
                       <p className="mt-1 text-lg font-semibold text-[#101828]">
-                        {formatUnit(value as number)}
+                        {value === null ? "-" : formatUnit(value as number)}
                       </p>
                     </article>
                   ))}

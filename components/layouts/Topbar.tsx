@@ -18,6 +18,11 @@ const themeChangeEvent = "toyota-ccr-theme-change";
 
 const pageHeaders = [
   {
+    href: "/analysis/manual",
+    title: "Asakai Board Manual",
+    subtitle: "PPIC performance, material readiness, and inventory trends",
+  },
+  {
     href: "/planning",
     title: "Monthly Planning",
     subtitle: "Monthly production planning by part, period, shift, and group",

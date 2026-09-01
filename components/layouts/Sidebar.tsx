@@ -62,8 +62,12 @@ const menuItems: MenuItem[] = [
     ),
     children: [
       {
-        label: "Asakai Board",
+        label: "Asakai Board Realtime",
         href: "/analysis",
+      },
+      {
+        label: "Asakai Board Manual",
+        href: "/analysis/manual",
       },
       {
         label: "Input Data",

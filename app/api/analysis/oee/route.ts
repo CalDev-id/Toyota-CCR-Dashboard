@@ -10,7 +10,11 @@ export async function GET(request: Request) {
     }
 
     const url = new URL(request.url);
-    const data = await getAnalysisOee(url.searchParams.get("date"));
+    const date = url.searchParams.get("date");
+    const data = await getAnalysisOee(
+      date,
+      url.searchParams.get("mode") === "realtime" ? "realtime" : "manual",
+    );
 
     return Response.json({ data });
   } catch (error) {

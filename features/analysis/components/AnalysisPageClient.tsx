@@ -68,7 +68,7 @@ async function readResponse(response: Response) {
   return body;
 }
 
-export default function AnalysisPage() {
+export default function AnalysisPage({ mode = "realtime" }: { mode?: "manual" | "realtime" }) {
   const { isPortraitDisplay, enterPortraitDisplay, exitPortraitDisplay } = useAsakaiDisplayMode();
   const [date, setDate] = useState(todayKey);
   const [data, setData] = useState<AnalysisResponse | null>(null);
@@ -101,7 +101,7 @@ export default function AnalysisPage() {
     }
 
     try {
-      const params = new URLSearchParams({ date });
+      const params = new URLSearchParams({ date, mode });
       const body = await readResponse(
         await fetch(`/api/analysis/oee?${params.toString()}`, {
           cache: "no-store",
@@ -127,7 +127,7 @@ export default function AnalysisPage() {
         setIsLoading(false);
       }
     }
-  }, [date]);
+  }, [date, mode]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -161,14 +161,18 @@ export default function AnalysisPage() {
   }, [isCompactDisplay]);
 
   useEffect(() => {
+    if (mode === "realtime" && date !== todayKey()) {
+      return;
+    }
+
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible") {
         void loadData({ showLoading: false, silent: true });
       }
-    }, 60000);
+    }, mode === "realtime" ? 30000 : 60000);
 
     return () => window.clearInterval(interval);
-  }, [loadData]);
+  }, [date, loadData, mode]);
 
   const lines = useMemo(
     () =>
@@ -196,7 +200,7 @@ export default function AnalysisPage() {
         isCompactDisplay ? "items-center justify-between px-8 py-6" : "items-center justify-between p-3 sm:p-4"
       }`}>
         <div className="min-w-0">
-          <h2 className={`font-semibold text-[#101828] ${isCompactDisplay ? "text-3xl" : "text-lg"}`}>Asakai Board</h2>
+          <h2 className={`font-semibold text-[#101828] ${isCompactDisplay ? "text-3xl" : "text-lg"}`}>Asakai Board {mode === "realtime" ? "Realtime" : "Manual"}</h2>
           <p className={`mt-1 text-[#667085] ${isCompactDisplay ? "text-lg" : "text-sm"}`}>
             Line comparison from the first day of the month to selected date
           </p>

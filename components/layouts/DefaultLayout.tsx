@@ -70,7 +70,7 @@ export default function DefaultLayout({
   );
   const pathname = usePathname();
   const isAnalysisPage = pathname.startsWith("/analysis");
-  const isAsakaiBoardPage = pathname === "/analysis";
+  const isAsakaiBoardPage = pathname === "/analysis" || pathname === "/analysis/manual";
   const isDisplayActive = isHydrated && isAsakaiBoardPage && savedPortraitDisplay;
 
   useEffect(() => {
