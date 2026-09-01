@@ -110,9 +110,9 @@ export default function DefaultLayout({
   }, []);
 
   return (
-    <div className="h-screen overflow-hidden bg-[#f9fafb] text-[#101828]">
+    <div className="h-screen overflow-hidden bg-[#f9fafb] text-[#101828] print:h-auto print:overflow-visible print:bg-white">
       <AsakaiDisplayModeContext.Provider value={{ isPortraitDisplay: isDisplayActive, enterPortraitDisplay, exitPortraitDisplay }}>
-        <div className="flex h-full overflow-hidden">
+        <div className="flex h-full overflow-hidden print:block print:h-auto print:overflow-visible">
           <Sidebar
             isCollapsed={isDisplayActive || isSidebarCollapsed}
             isMobileOpen={isMobileSidebarOpen}
@@ -122,7 +122,7 @@ export default function DefaultLayout({
             onToggleCollapsed={() => setIsSidebarCollapsed((current) => !current)}
           />
 
-          <div className="relative flex min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable]">
+          <div className="relative flex min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] print:h-auto print:overflow-visible">
             <div className={isDisplayActive ? "h-[22px] shrink-0 overflow-hidden" : undefined}>
               <div
                 style={isDisplayActive ? { width: "300%", transform: "scale(0.333333)", transformOrigin: "top left" } : undefined}
@@ -137,13 +137,13 @@ export default function DefaultLayout({
               </div>
             </div>
 
-            <main>
+            <main className="print:p-0">
               <div
                 className={isDisplayActive
-                  ? "mx-auto w-full max-w-none p-2"
+                  ? "mx-auto w-full max-w-none p-2 print:p-0 print:max-w-none"
                   : isAnalysisPage
-                  ? "mx-auto w-full max-w-none p-4"
-                  : "mx-auto w-full max-w-screen-2xl p-3 md:p-4 2xl:p-5"}
+                  ? "mx-auto w-full max-w-none p-4 print:p-0 print:max-w-none"
+                  : "mx-auto w-full max-w-screen-2xl p-3 md:p-4 2xl:p-5 print:p-0 print:max-w-none"}
               >
                 {children}
               </div>

@@ -276,3 +276,128 @@ html.dark svg [stroke="#f9fafb"] {
 html.dark svg [fill="#344054"] {
   fill: var(--text-muted);
 }
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 0;
+  }
+
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html,
+  html.dark,
+  body {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    color: #101828 !important;
+    color-scheme: light !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Custom padding for printable page to replace browser margins */
+  .print-page-wrapper {
+    padding: 10mm 12mm !important;
+  }
+
+  .print-card-wrapper {
+    padding-top: 10mm !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Layout wrappers: no height/overflow constraints */
+  .h-screen,
+  div[class*="overflow-"],
+  main {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background-color: transparent !important;
+  }
+
+  /* Override grey background colors to white in print mode */
+  :where(.bg-\[\#f9fafb\], .bg-\[\#f2f4f7\], .bg-\[\#162033\], .bg-\[\#111827\], .bg-gray-50, .bg-gray-100) {
+    background-color: #ffffff !important;
+  }
+
+  /* Ensure chart bars retain their blue color */
+  .bg-\[\#5487c2\],
+  .print\:bg-\[\#5487c2\] {
+    background-color: #5487c2 !important;
+  }
+
+  html.dark {
+    --background: #ffffff !important;
+    --foreground: #101828 !important;
+    --surface: #ffffff !important;
+    --surface-muted: #ffffff !important;
+    --surface-subtle: #ffffff !important;
+    --border: #e4e7ec !important;
+    --border-strong: #d0d5dd !important;
+    --text-muted: #667085 !important;
+    --text-subtle: #98a2b3 !important;
+    --gray-700: #344054 !important;
+    --gray-800: #1d2939 !important;
+    --gray-900: #101828 !important;
+    color-scheme: light !important;
+  }
+
+  html.dark :where(.bg-white) {
+    background-color: #ffffff !important;
+  }
+
+  html.dark :where(.bg-\[\#f9fafb\]) {
+    background-color: #ffffff !important;
+  }
+
+  html.dark :where(.bg-\[\#111827\], .dark\:bg-\[\#111827\]) {
+    background-color: #ffffff !important;
+  }
+
+  html.dark :where(.bg-\[\#162033\], .dark\:bg-\[\#162033\]) {
+    background-color: #ffffff !important;
+  }
+
+  html.dark :where(.text-\[\#f8fafc\], .dark\:text-\[\#f8fafc\]) {
+    color: #101828 !important;
+  }
+
+  html.dark :where(.text-\[\#d4dae5\], .dark\:text-\[\#d4dae5\]) {
+    color: #344054 !important;
+  }
+
+  html.dark :where(.text-\[\#a7b0c0\], .dark\:text-\[\#a7b0c0\]) {
+    color: #667085 !important;
+  }
+
+  html.dark :where(.border-\[\#273449\], .dark\:border-\[\#273449\], .divide-\[\#273449\] > :not([hidden]) ~ :not([hidden]), .dark\:divide-\[\#273449\] > :not([hidden]) ~ :not([hidden])) {
+    border-color: #e4e7ec !important;
+  }
+
+  html.dark :where(.border-\[\#384860\], .dark\:border-\[\#384860\]) {
+    border-color: #d0d5dd !important;
+  }
+
+  /* Hide navigation, sidebar, topbar, buttons, modals during print */
+  aside,
+  header,
+  nav,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Ensure cards that start at the top of a new page have breathing room */
+  .print\:pt-5 {
+    padding-top: 16pt !important;
+  }
+}

@@ -158,8 +158,6 @@ export default function DailyGapChart({
       {tooltip ? (
         <div role="tooltip" className="pointer-events-none fixed z-[100] min-w-36 rounded-lg bg-[#101828] px-3 py-2 text-xs text-white shadow-xl dark:bg-[#f8fafc] dark:text-[#101828]" style={{ left: tooltip.x, top: tooltip.y - 8, transform: "translate(-50%, -100%)" }}>
           <p className="font-semibold">{formatDayLabel(tooltip.date)} · Shift {tooltip.shift}</p>
-          <p className="mt-1">WH Plan: <span className="font-semibold">{formatNumber(tooltip.whPlan, 1)} jam</span></p>
-          <p>WH Act: <span className="font-semibold">{formatNumber(tooltip.whAct, 1)} jam</span></p>
           <p className="mt-1">OT Plan: <span className="font-semibold">{formatNumber(tooltip.otPlan, 1)} jam</span></p>
           <p>OT Act: <span className="font-semibold">{formatNumber(tooltip.otAct, 1)} jam</span></p>
         </div>

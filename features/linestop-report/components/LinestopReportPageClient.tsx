@@ -1,7 +1,7 @@
 "use client";
 
 import { createLinestopMachineAction, deleteLinestopMachineAction, loadLinestopMachinesAction, loadLinestopReportAction, updateLinestopMachineAction } from "@/features/linestop-report/actions";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type LineKey = "assy" | "cylblock" | "cylhead" | "crankshaft" | "camshaft";
 type Machine = { id: number; lineKey: LineKey; machineName: string };
@@ -10,6 +10,14 @@ const lines: Array<{ key: LineKey; label: string }> = [{ key: "assy", label: "As
 function currentMonth() { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`; }
 function formatMinutes(value: number) { return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 }).format(value); }
 function formatOneDecimal(value: number) { return new Intl.NumberFormat("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value); }
+
+function formatMonthLabel(monthStr: string) {
+  if (!monthStr) return "";
+  const [year, monthNum] = monthStr.split("-");
+  const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+  const idx = parseInt(monthNum, 10) - 1;
+  return `${monthNames[idx] ?? monthNum} ${year}`;
+}
 
 const chartLineLabels: Record<LineKey, string> = { assy: "ASSY", cylblock: "CYL BLOCK", cylhead: "CYL HEAD", crankshaft: "CRANKSHAFT", camshaft: "CAMSHAFT" };
 
@@ -25,6 +33,13 @@ function getChartScale(maximum: number) {
   return { maximum: axisMaximum, ticks: Array.from({ length: tickCount + 1 }, (_, index) => axisMaximum - index * step) };
 }
 
+function formatPrintDateTime() {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+  const timeStr = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }).replace(".", ":");
+  return `${dateStr}, ${timeStr}`;
+}
+
 export default function LinestopReportPageClient({ viewerRole }: { viewerRole: string }) {
   const canManage = viewerRole === "ADMIN" || viewerRole === "CCR_GROUP_LEADER";
   const [month, setMonth] = useState(currentMonth);
@@ -36,6 +51,40 @@ export default function LinestopReportPageClient({ viewerRole }: { viewerRole: s
   const [unmappedLine, setUnmappedLine] = useState<Summary | null>(null);
   const [allRowsLine, setAllRowsLine] = useState<Summary | null>(null);
   const [saving, setSaving] = useState(false);
+  const [downloadingExcel, setDownloadingExcel] = useState(false);
+  const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
+  const [printedAt, setPrintedAt] = useState(formatPrintDateTime);
+  const downloadMenuRef = useRef<HTMLDivElement>(null);
+
+  const handleDownloadPdf = () => {
+    const originalTitle = document.title;
+    const formattedMonth = formatMonthLabel(month).replace(/\s+/g, "_");
+    document.title = `Linestop_Report_${formattedMonth}`;
+    setPrintedAt(formatPrintDateTime());
+    window.print();
+    window.setTimeout(() => {
+      document.title = originalTitle;
+    }, 1000);
+  };
+
+  const handleDownloadExcel = async () => {
+    setDownloadingExcel(true); setError(null);
+    try {
+      const response = await fetch(`/api/production-achievement/linestop-report/export?${new URLSearchParams({ month }).toString()}`, { cache: "no-store" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error ?? "Gagal mengunduh Excel report.");
+      }
+      const blob = await response.blob();
+      const filename = response.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] ?? `linestop-report_${month}.xlsx`;
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url; anchor.download = filename;
+      document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Gagal mengunduh Excel report."); }
+    finally { setDownloadingExcel(false); }
+  };
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -46,6 +95,13 @@ export default function LinestopReportPageClient({ viewerRole }: { viewerRole: s
     finally { setLoading(false); }
   }, [month]);
   useEffect(() => { const timeout = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timeout); }, [load]);
+  useEffect(() => {
+    if (!isDownloadMenuOpen) return;
+    const closeMenu = (event: MouseEvent) => { if (!downloadMenuRef.current?.contains(event.target as Node)) setIsDownloadMenuOpen(false); };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setIsDownloadMenuOpen(false); };
+    document.addEventListener("mousedown", closeMenu); document.addEventListener("keydown", closeOnEscape);
+    return () => { document.removeEventListener("mousedown", closeMenu); document.removeEventListener("keydown", closeOnEscape); };
+  }, [isDownloadMenuOpen]);
 
   async function saveMachine(values: { lineKey: LineKey; machineName: string }) {
     setSaving(true);
@@ -72,15 +128,44 @@ export default function LinestopReportPageClient({ viewerRole }: { viewerRole: s
     finally { setSaving(false); }
   }
 
-  return <div className="space-y-5">
-    <section className="rounded-xl border border-[#e4e7ec] bg-white p-5 shadow-sm dark:border-[#273449] dark:bg-[#111827]">
+  return <div className="space-y-5 print:space-y-0 print-page-wrapper">
+    {/* Printable Report Header - visible only when printing/saving PDF */}
+    <div className="hidden print:block border-b-2 border-[#101828] pb-4">
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-[#101828]">LINESTOP REPORT</h1>
+          <p className="mt-1 text-sm font-medium text-[#475467]">Summary AV dan PE per mesin untuk seluruh shift dalam satu bulan</p>
+        </div>
+        <div className="flex flex-col items-end text-right">
+          <p className="text-sm font-bold text-[#101828]">Toyota CCR Dashboard</p>
+          <p className="mt-0.5 text-sm font-semibold text-[#101828]">Periode: {formatMonthLabel(month)}</p>
+          <p className="mt-0.5 text-xs text-[#667085]">Waktu Cetak: {printedAt || formatPrintDateTime()}</p>
+        </div>
+      </div>
+    </div>
+
+    <section className="rounded-xl border border-[#e4e7ec] bg-white p-5 shadow-sm dark:border-[#273449] dark:bg-[#111827] print:hidden">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div><h1 className="text-lg font-semibold text-[#101828] dark:text-[#f8fafc]">Linestop Report</h1><p className="mt-1 text-sm text-[#667085] dark:text-[#a7b0c0]">Summary AV dan PE per mesin untuk seluruh shift dalam satu bulan.</p></div>
-        <div className="flex gap-2"><input aria-label="Bulan report" type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="h-10 rounded-lg border border-[#d0d5dd] bg-white px-3 text-sm dark:border-[#384860] dark:bg-[#162033] dark:text-[#d4dae5]" />{canManage ? <button type="button" onClick={() => setEditor("manage")} className="h-10 rounded-lg bg-[#465fff] px-4 text-sm font-semibold text-white hover:bg-[#3641f5]">Kelola master</button> : null}</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input aria-label="Bulan report" type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="h-10 rounded-lg border border-[#d0d5dd] bg-white px-3 text-sm dark:border-[#384860] dark:bg-[#162033] dark:text-[#d4dae5]" />
+          <div ref={downloadMenuRef} className="relative">
+            <button type="button" onClick={() => setIsDownloadMenuOpen((current) => !current)} disabled={loading || downloadingExcel} className="flex h-10 items-center justify-center gap-2 rounded-lg border border-[#d0d5dd] bg-white px-3 text-sm font-semibold text-[#344054] shadow-sm transition hover:border-[#98a2b3] hover:bg-[#f9fafb] focus:outline-none focus:ring-2 focus:ring-[#ecf3ff] disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#384860] dark:bg-[#111827] dark:text-[#d4dae5] dark:hover:bg-[#162033] dark:focus:ring-[#14245a]" aria-expanded={isDownloadMenuOpen} aria-haspopup="menu">
+              {downloadingExcel ? <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5 animate-spin" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.3" strokeWidth="3" /><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" strokeLinecap="round" strokeWidth="3" /></svg> : <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4 text-[#039855]" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg>}
+              <span>{downloadingExcel ? "Menyiapkan Excel..." : "Download"}</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+            </button>
+            {isDownloadMenuOpen ? <div className="absolute right-0 z-20 mt-2 w-44 overflow-hidden rounded-lg border border-[#d0d5dd] bg-white py-1 shadow-lg dark:border-[#384860] dark:bg-[#111827]" role="menu">
+              <button type="button" role="menuitem" onClick={() => { setIsDownloadMenuOpen(false); handleDownloadPdf(); }} className="w-full px-3 py-2 text-left text-sm font-semibold text-[#344054] hover:bg-[#f9fafb] dark:text-[#d4dae5] dark:hover:bg-[#162033]">Download PDF</button>
+              <button type="button" role="menuitem" onClick={() => { setIsDownloadMenuOpen(false); void handleDownloadExcel(); }} className="w-full px-3 py-2 text-left text-sm font-semibold text-[#344054] hover:bg-[#f9fafb] dark:text-[#d4dae5] dark:hover:bg-[#162033]">Download Excel</button>
+            </div> : null}
+          </div>
+          {canManage ? <button type="button" onClick={() => setEditor("manage")} className="h-10 rounded-lg bg-[#465fff] px-4 text-sm font-semibold text-white hover:bg-[#3641f5]">Kelola master</button> : null}
+        </div>
       </div>
       {error ? <p role="alert" className="mt-4 rounded-lg bg-[#fef3f2] px-3 py-2 text-sm text-[#b42318]">{error}</p> : null}
     </section>
-    {loading ? <section className="rounded-xl border border-[#e4e7ec] bg-white px-5 py-12 text-center text-sm text-[#667085] shadow-sm dark:border-[#273449] dark:bg-[#111827]">Memuat linestop report...</section> : <div className="space-y-5">{summary.map((line) => <ParetoCard key={line.key} line={line} onShowAll={() => setAllRowsLine(line)} onShowUnmapped={() => setUnmappedLine(line)} />)}</div>}
+    {loading ? <section className="rounded-xl border border-[#e4e7ec] bg-white px-5 py-12 text-center text-sm text-[#667085] shadow-sm dark:border-[#273449] dark:bg-[#111827] print:border-[#d0d5dd] print:bg-white print:text-[#667085]">Memuat linestop report...</section> : <div className="space-y-5 print:space-y-0">{summary.map((line) => <div key={line.key} className="print-card-wrapper"><ParetoCard line={line} onShowAll={() => setAllRowsLine(line)} onShowUnmapped={() => setUnmappedLine(line)} /></div>)}</div>}
     {editor ? <MachineModal editor={editor} machines={machines} saving={saving} onClose={() => setEditor(null)} onSave={saveMachine} onUpdate={updateMachine} onDelete={deleteMachine} onNew={() => setEditor("new")} /> : null}
     {unmappedLine ? <UnmappedModal line={unmappedLine} onClose={() => setUnmappedLine(null)} /> : null}
     {allRowsLine ? <AllRowsModal line={allRowsLine} onClose={() => setAllRowsLine(null)} /> : null}
@@ -92,7 +177,7 @@ function ParetoCard({ line, onShowAll, onShowUnmapped }: { line: Summary; onShow
   const total = line.rows.reduce((sum, row) => sum + row.minutes, 0);
   const units = line.taktTime ? Math.round(total / line.taktTime) : null;
   const scale = getChartScale(topRows[0]?.minutes ?? 0);
-  return <section className="overflow-hidden rounded-xl border border-[#e4e7ec] bg-white shadow-sm dark:border-[#273449] dark:bg-[#111827]"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e4e7ec] px-5 py-4 dark:border-[#273449]"><div><h2 className="font-semibold text-[#101828] dark:text-[#f8fafc]">{line.label}</h2><p className="mt-0.5 text-xs text-[#667085] dark:text-[#a7b0c0]">Top 10 dari {line.rows.length} mesin</p></div><div className="flex gap-2">{line.unmappedRows.length ? <button type="button" onClick={onShowUnmapped} className="h-8 rounded-lg border border-[#fecdca] px-3 text-xs font-semibold text-[#b42318] hover:bg-[#fef3f2]">{line.unmappedRows.length} Belum terkategori</button> : null}{line.rows.length > 10 ? <button type="button" onClick={onShowAll} className="h-8 rounded-lg border border-[#b2c0ff] px-3 text-xs font-semibold text-[#465fff] hover:bg-[#eef4ff] dark:hover:bg-[#253264]">Lihat semua</button> : null}</div></header>{topRows.length ? <div className="grid lg:grid-cols-[minmax(20rem,0.74fr)_minmax(0,1.63fr)]"><div className="border-b border-[#e4e7ec] lg:border-b-0 lg:border-r dark:border-[#273449]"><div className="overflow-x-auto"><table className="min-w-full text-left text-[13px]"><thead className="bg-[#f9fafb] text-xs uppercase tracking-wide text-[#667085] dark:bg-[#162033]"><tr><th className="w-12 px-3 py-2.5 text-right font-semibold">No.</th><th className="px-3 py-2.5 font-semibold">Problem</th><th className="px-3 py-2.5 text-right font-semibold">Waktu</th></tr></thead><tbody className="divide-y divide-[#eaecf0] dark:divide-[#273449]">{topRows.map((row, index) => <tr key={row.machineName} className="text-[#344054] dark:text-[#d4dae5]"><td className="px-3 py-2 text-right text-[#98a2b3]">{index + 1}</td><td className="px-3 py-2 font-medium">{row.machineName}</td><td className="whitespace-nowrap px-3 py-2 text-right font-semibold">{formatMinutes(row.minutes)}</td></tr>)}</tbody></table></div><div className="border-t border-[#d0d5dd] text-[13px] dark:border-[#384860]"><div className="grid grid-cols-[1fr_auto] border-b border-x border-[#d0d5dd] dark:border-[#384860]"><span className="px-3 py-2 text-right">Grand Total (minute)</span><strong className="min-w-20 border-l border-[#d0d5dd] px-3 py-2 text-right dark:border-[#384860]">{formatMinutes(total)}</strong></div><div className="grid grid-cols-[1fr_auto] border-b border-x border-[#d0d5dd] dark:border-[#384860]"><span className="px-3 py-2 text-right">(hour)</span><strong className="min-w-20 border-l border-[#d0d5dd] px-3 py-2 text-right dark:border-[#384860]">{formatOneDecimal(total / 60)}</strong></div><div className="grid grid-cols-[1fr_auto] border-b border-x border-[#d0d5dd] dark:border-[#384860]"><span className="px-3 py-2 text-right">(units)</span><strong className="min-w-20 border-l border-[#d0d5dd] px-3 py-2 text-right dark:border-[#384860]">{units === null ? "-" : new Intl.NumberFormat("id-ID").format(units)}</strong></div></div></div><div className="flex min-w-0 flex-col p-5"><h3 className="mb-5 text-center text-base font-bold uppercase text-[#101828] dark:text-[#f8fafc]">Pareto Problem Mach Line {chartLineLabels[line.key]}</h3><div className="grid min-h-72 flex-1 grid-cols-[3rem_minmax(0,1fr)]"><div className="relative h-full border-r border-[#98a2b3] text-[10px] text-[#667085] dark:text-[#a7b0c0]">{scale.ticks.map((tick, index) => <span key={tick} className="absolute right-2 -translate-y-1/2" style={{ top: `${(index / (scale.ticks.length - 1)) * 100}%` }}>{formatMinutes(tick)}</span>)}<span className="absolute -left-5 top-1/2 -rotate-90 text-[10px] font-semibold uppercase tracking-wide">Minutes</span></div><div className="relative h-full border-b border-[#98a2b3]"><div className="absolute inset-0">{scale.ticks.map((tick, index) => <span key={tick} className="absolute left-0 right-0 border-t border-[#e4e7ec] dark:border-[#273449]" style={{ top: `${(index / (scale.ticks.length - 1)) * 100}%` }} />)}</div><div className="absolute inset-0 flex items-end gap-2 px-3">{topRows.map((row) => <div key={row.machineName} className="flex h-full min-w-0 flex-1 flex-col justify-end"><div className="mb-1 text-center text-xs font-semibold text-[#475467] dark:text-[#d4dae5]">{formatMinutes(row.minutes)}</div><div className="relative mx-auto w-[72%] min-w-4 rounded-t bg-[#5487c2] transition-opacity hover:opacity-80" style={{ height: `${Math.max((row.minutes / scale.maximum) * 100, 2)}%` }} title={`${row.machineName}: ${formatMinutes(row.minutes)} min`} /></div>)}</div></div></div><div className="ml-12 flex gap-2 px-3 pt-2">{topRows.map((row) => <div key={row.machineName} title={row.machineName} className="min-w-0 flex-1 text-center text-[10px] font-medium leading-tight text-[#667085] dark:text-[#a7b0c0]"><span className="line-clamp-2">{row.machineName}</span></div>)}</div><p className="mt-4 text-center text-xs font-semibold uppercase tracking-wide text-[#667085]">Problem</p></div></div> : <p className="px-5 py-12 text-center text-sm text-[#667085]">Belum ada problem yang cocok.</p>}</section>;
+  return <section className="overflow-hidden rounded-xl border border-[#e4e7ec] bg-white shadow-sm dark:border-[#273449] dark:bg-[#111827] print:break-inside-avoid print:border-[#d0d5dd] print:bg-white print:shadow-none"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e4e7ec] px-5 py-4 dark:border-[#273449] print:border-[#d0d5dd] print:bg-[#f9fafb] print:py-2.5"><div><h2 className="font-semibold text-[#101828] dark:text-[#f8fafc] print:text-[#101828]">{line.label}</h2><p className="mt-0.5 text-xs text-[#667085] dark:text-[#a7b0c0] print:text-[#667085]">Top 10 dari {line.rows.length} mesin</p></div><div className="flex gap-2 print:hidden">{line.unmappedRows.length ? <button type="button" onClick={onShowUnmapped} className="h-8 rounded-lg border border-[#fecdca] px-3 text-xs font-semibold text-[#b42318] hover:bg-[#fef3f2]">{line.unmappedRows.length} Belum terkategori</button> : null}{line.rows.length > 10 ? <button type="button" onClick={onShowAll} className="h-8 rounded-lg border border-[#b2c0ff] px-3 text-xs font-semibold text-[#465fff] hover:bg-[#eef4ff] dark:hover:bg-[#253264]">Lihat semua</button> : null}</div></header>{topRows.length ? <div className="grid grid-cols-1 lg:grid-cols-[minmax(20rem,0.74fr)_minmax(0,1.63fr)] print:grid-cols-[20rem_minmax(0,1fr)]"><div className="border-b border-[#e4e7ec] lg:border-b-0 lg:border-r dark:border-[#273449] print:border-b-0 print:border-r print:border-[#d0d5dd]"><div className="overflow-x-auto print:overflow-visible"><table className="min-w-full text-left text-[13px]"><thead className="bg-[#f9fafb] text-xs uppercase tracking-wide text-[#667085] dark:bg-[#162033] print:bg-[#f2f4f7] print:text-[#344054]"><tr><th className="w-12 px-3 py-2.5 text-right font-semibold">No.</th><th className="px-3 py-2.5 font-semibold">Problem</th><th className="px-3 py-2.5 text-right font-semibold">Waktu</th></tr></thead><tbody className="divide-y divide-[#eaecf0] dark:divide-[#273449] print:divide-[#e4e7ec]">{topRows.map((row, index) => <tr key={row.machineName} className="text-[#344054] dark:text-[#d4dae5] print:text-[#101828]"><td className="px-3 py-2 text-right text-[#98a2b3] print:text-[#667085]">{index + 1}</td><td className="px-3 py-2 font-medium">{row.machineName}</td><td className="whitespace-nowrap px-3 py-2 text-right font-semibold">{formatMinutes(row.minutes)}</td></tr>)}</tbody></table></div><div className="border-t border-[#d0d5dd] text-[13px] dark:border-[#384860] print:border-[#d0d5dd] print:text-[#101828]"><div className="grid grid-cols-[1fr_auto] border-b border-x border-[#d0d5dd] dark:border-[#384860] print:border-[#d0d5dd]"><span className="px-3 py-2 text-right">Grand Total (minute)</span><strong className="min-w-20 border-l border-[#d0d5dd] px-3 py-2 text-right dark:border-[#384860] print:border-[#d0d5dd]">{formatMinutes(total)}</strong></div><div className="grid grid-cols-[1fr_auto] border-b border-x border-[#d0d5dd] dark:border-[#384860] print:border-[#d0d5dd]"><span className="px-3 py-2 text-right">(hour)</span><strong className="min-w-20 border-l border-[#d0d5dd] px-3 py-2 text-right dark:border-[#384860] print:border-[#d0d5dd]">{formatOneDecimal(total / 60)}</strong></div><div className="grid grid-cols-[1fr_auto] border-b border-x border-[#d0d5dd] dark:border-[#384860] print:border-[#d0d5dd]"><span className="px-3 py-2 text-right">(units)</span><strong className="min-w-20 border-l border-[#d0d5dd] px-3 py-2 text-right dark:border-[#384860] print:border-[#d0d5dd]">{units === null ? "-" : new Intl.NumberFormat("id-ID").format(units)}</strong></div></div></div><div className="flex min-w-0 flex-col p-5 print:p-4"><h3 className="mb-5 text-center text-base font-bold uppercase text-[#101828] dark:text-[#f8fafc] print:text-[#101828] print:mb-3">Pareto Problem Mach Line {chartLineLabels[line.key]}</h3><div className="grid min-h-72 flex-1 grid-cols-[3rem_minmax(0,1fr)] print:min-h-56"><div className="relative h-full border-r border-[#98a2b3] text-[10px] text-[#667085] dark:text-[#a7b0c0] print:border-[#98a2b3] print:text-[#475467]">{scale.ticks.map((tick, index) => <span key={tick} className="absolute right-2 -translate-y-1/2" style={{ top: `${(index / (scale.ticks.length - 1)) * 100}%` }}>{formatMinutes(tick)}</span>)}<span className="absolute -left-5 top-1/2 -rotate-90 text-[10px] font-semibold uppercase tracking-wide">Minutes</span></div><div className="relative h-full border-b border-[#98a2b3] print:border-[#98a2b3]"><div className="absolute inset-0">{scale.ticks.map((tick, index) => <span key={tick} className="absolute left-0 right-0 border-t border-[#e4e7ec] dark:border-[#273449] print:border-[#e4e7ec]" style={{ top: `${(index / (scale.ticks.length - 1)) * 100}%` }} />)}</div><div className="absolute inset-0 flex items-end gap-2 px-3">{topRows.map((row) => <div key={row.machineName} className="flex h-full min-w-0 flex-1 flex-col justify-end"><div className="mb-1 text-center text-xs font-semibold text-[#475467] dark:text-[#d4dae5] print:text-[#101828]">{formatMinutes(row.minutes)}</div><div className="relative mx-auto w-[72%] min-w-4 rounded-t bg-[#5487c2] print:bg-[#5487c2] transition-opacity hover:opacity-80" style={{ height: `${Math.max((row.minutes / scale.maximum) * 100, 2)}%` }} title={`${row.machineName}: ${formatMinutes(row.minutes)} min`} /></div>)}</div></div></div><div className="ml-12 flex gap-2 px-3 pt-2">{topRows.map((row) => <div key={row.machineName} title={row.machineName} className="min-w-0 flex-1 text-center text-[10px] font-medium leading-tight text-[#667085] dark:text-[#a7b0c0] print:text-[#344054]"><span className="line-clamp-2">{row.machineName}</span></div>)}</div><p className="mt-4 text-center text-xs font-semibold uppercase tracking-wide text-[#667085] print:mt-2 print:text-[#667085]">Problem</p></div></div> : <p className="px-5 py-12 text-center text-sm text-[#667085]">Belum ada problem yang cocok.</p>}</section>;
 }
 
 function AllRowsModal({ line, onClose }: { line: Summary; onClose: () => void }) {

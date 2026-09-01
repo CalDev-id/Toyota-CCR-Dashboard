@@ -1016,9 +1016,9 @@ export function OeeLineChart({
                         ) : (
                           <>
                             <span className="block">Monthly Planning OT ≥8 jam:</span>
-                            <span className="block">OT Act = WH Actual + 0,4</span>
+                            <span className="block">OT Act = WH Actual{line.key === "assyline" ? "" : " + 0,4"}</span>
                             <span className="mt-1 block">Monthly Planning OT &lt;8 jam:</span>
-                            <span className="block">OT Act = WH Actual + 0,4 − 8</span>
+                            <span className="block">OT Act = WH Actual{line.key === "assyline" ? "" : " + 0,4"} − 8</span>
                           </>
                         )}
                       </FormulaTooltip>
