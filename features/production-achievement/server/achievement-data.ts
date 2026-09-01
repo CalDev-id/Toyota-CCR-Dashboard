@@ -221,7 +221,7 @@ async function getProductionAchievementSummaryRows(
   const prodScanExpression =
     line.key === "assy" ? "NULL" : quoteIdentifier("Prod_realtime");
   const actualWorkHoursExpression = quoteIdentifier("actual_work_hours");
-  const summaryView = line.key === "assy" ? summaryViewName(line.summaryView) : line.summaryView;
+  const summaryView = summaryViewName(line.summaryView);
   const sql = `SELECT
       SHOP AS shop,
       Variant AS variant,
