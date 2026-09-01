@@ -65,8 +65,8 @@ const monthlyPlanningTables: Record<AnalysisLine["key"], string> = {
 };
 
 type PlanningOtRow = { lineKey: AnalysisLine["key"]; date: string; shift: string; groupName: string; otHours: string | number | null };
-type DailyPlanningOtRow = { lineKey: string; date: string; shift: string; otHours: string | number | null };
-type GapPlanningData = { monthlyOt: Map<string, number>; dailyOt: Map<string, number> };
+type DailyPlanningWorkHoursRow = { lineKey: string; date: string; shift: string; workHours: string | number | null };
+type GapPlanningData = { monthlyOt: Map<string, number>; dailyWorkHours: Map<string, number> };
 type RealtimeSummaryRow = {
   date: string | Date | null;
   shift: string | null;
@@ -82,9 +82,24 @@ type RealtimePlanningSlotRow = {
   startTime: string;
   endTime: string;
   prodMinutes: string | number | null;
-  totalTarget: string | number | null;
 };
-type RealtimeMetric = { oee: number | null; balance: number | null };
+type RealtimeMetric = { oee: number | null };
+type MonthlyProductionPlanRow = {
+  lineKey: AnalysisLine["key"];
+  date: string;
+  shift: string;
+  groupName: string;
+  oneTr: string | number | null;
+  twoTr: string | number | null;
+};
+type ProductionActualRow = {
+  date: string | Date | null;
+  shift: string | null;
+  shift2: string | null;
+  prodAct: string | number | null;
+  prodRealtime: string | number | null;
+};
+type ProductionBalance = { actual: number; target: number };
 
 function quoteIdentifier(value: string) {
   return `\`${value.replaceAll("`", "``")}\``;
@@ -186,38 +201,44 @@ async function getMonthlyPlanningOt(start: string, endExclusive: string) {
   return new Map(rows.map((row) => [planningKey(row.lineKey, row.date, row.shift, row.groupName), toNumber(row.otHours)]));
 }
 
-async function getDailyPlanningOt(start: string, endExclusive: string) {
-  const rows = await prisma.$queryRawUnsafe<DailyPlanningOtRow[]>(
+async function getDailyPlanningWorkHours(start: string, endExclusive: string) {
+  const rows = await prisma.$queryRawUnsafe<DailyPlanningWorkHoursRow[]>(
     `SELECT
-      line_key AS lineKey,
-      DATE_FORMAT(fdate, '%Y-%m-%d') AS date,
-      TRIM(fshift) AS shift,
-      COALESCE(SUM(CASE WHEN slot_type = 'ot' AND is_hidden = 0 THEN prod_minutes ELSE 0 END), 0) / 60 AS otHours
+      plan.line_key AS lineKey,
+      DATE_FORMAT(plan.fdate, '%Y-%m-%d') AS date,
+      TRIM(plan.fshift) AS shift,
+      COALESCE(SUM(slot.prod_minutes), 0) / 60 AS workHours
      FROM t_daily_production_plan plan
-     LEFT JOIN t_daily_production_plan_slot slot ON slot.daily_plan_id = plan.id
-     WHERE fdate >= ? AND fdate < ? AND fgroup = 'all' AND is_deleted = 0
-     GROUP BY line_key, DATE_FORMAT(fdate, '%Y-%m-%d'), TRIM(fshift)`,
+     INNER JOIN t_daily_production_plan_slot slot ON slot.daily_plan_id = plan.id
+     WHERE plan.fdate >= ? AND plan.fdate < ?
+       AND plan.fgroup = 'all'
+       AND plan.is_deleted = 0
+       AND slot.is_hidden = 0
+     GROUP BY plan.line_key, DATE_FORMAT(plan.fdate, '%Y-%m-%d'), TRIM(plan.fshift)`,
     start,
     endExclusive,
   );
-  return new Map(rows.map((row) => [planningKey(row.lineKey === "assy" ? "assyline" : row.lineKey as AnalysisLine["key"], row.date, row.shift), toNumber(row.otHours)]));
+
+  return new Map(rows.map((row) => [
+    planningKey(row.lineKey === "assy" ? "assyline" : row.lineKey as AnalysisLine["key"], row.date, row.shift),
+    toNumber(row.workHours),
+  ]));
 }
 
 function getOtGapMetrics(line: AnalysisLine, row: RawAnalysisOeeRow, planning: GapPlanningData) {
   const date = toDateKey(row.date);
   const planningShift = getDailyPlanningShift(line, row);
   const monthlyOt = planning.monthlyOt.get(planningKey(line.key, date, planningShift, getMonthlyPlanningGroup(line, row))) ?? 0;
-  const dailyOt = planning.dailyOt.get(planningKey(line.key, date, planningShift)) ?? 0;
   const rawActualWorkHours = toNumber(row.actualWorkHours);
-  const otPlan = monthlyOt >= 8 ? dailyOt + 8 : dailyOt;
+  const otPlan = monthlyOt;
+  const whPlan = planning.dailyWorkHours.get(planningKey(line.key, date, planningShift)) ?? 0;
+  const whAct = rawActualWorkHours > 0 ? rawActualWorkHours + 0.4 : 0;
 
   if (rawActualWorkHours <= 0) {
-    return { otPlan, otAct: 0 };
+    return { whPlan, whAct, otPlan, otAct: 0 };
   }
 
-  const actualWorkHours = rawActualWorkHours + 0.4;
-
-  return { otPlan, otAct: monthlyOt >= 8 ? actualWorkHours : actualWorkHours - 8 };
+  return { whPlan, whAct, otPlan, otAct: monthlyOt >= 8 ? whAct : whAct - 8 };
 }
 
 function getOtGap(line: AnalysisLine, row: RawAnalysisOeeRow, planning: GapPlanningData) {
@@ -424,6 +445,10 @@ function buildCard(
       balanceDivisor,
     balanceMonthly:
       rows.reduce((total, row) => total + toNumber(row.balance), 0) / balanceDivisor,
+    balanceActual: null,
+    balancePlan: null,
+    balanceMonthlyActual: null,
+    balanceMonthlyPlan: null,
     otDay: selectedDayRows.reduce((total, row) => total + getOtGapMetrics(line, row, planning).otAct, 0),
     otNight: selectedNightRows.reduce((total, row) => total + getOtGapMetrics(line, row, planning).otAct, 0),
     cumR: sumAverageByGroup(
@@ -509,7 +534,7 @@ function buildDailyShiftAverage(
 }
 
 function buildDailyGap(line: AnalysisLine, rows: RawAnalysisOeeRow[], planning: GapPlanningData) {
-  const grouped = new Map<string, { r: Array<{ gap: number; otPlan: number; otAct: number }>; w: Array<{ gap: number; otPlan: number; otAct: number }> }>();
+  const grouped = new Map<string, { r: Array<{ gap: number; whPlan: number; whAct: number; otPlan: number; otAct: number }>; w: Array<{ gap: number; whPlan: number; whAct: number; otPlan: number; otAct: number }> }>();
   const primaryShift = getPrimaryShift(line);
   const secondaryShift = getSecondaryShift(line);
 
@@ -539,11 +564,130 @@ function buildDailyGap(line: AnalysisLine, rows: RawAnalysisOeeRow[], planning: 
     Array.from(grouped.entries()).map(([date, value]) => [
       date,
       {
-        r: value.r.length ? { gap: average(value.r.map((item) => item.gap)) ?? 0, otPlan: average(value.r.map((item) => item.otPlan)) ?? 0, otAct: average(value.r.map((item) => item.otAct)) ?? 0 } : null,
-        w: value.w.length ? { gap: average(value.w.map((item) => item.gap)) ?? 0, otPlan: average(value.w.map((item) => item.otPlan)) ?? 0, otAct: average(value.w.map((item) => item.otAct)) ?? 0 } : null,
+        r: value.r.length ? { gap: average(value.r.map((item) => item.gap)) ?? 0, whPlan: average(value.r.map((item) => item.whPlan)) ?? 0, whAct: average(value.r.map((item) => item.whAct)) ?? 0, otPlan: average(value.r.map((item) => item.otPlan)) ?? 0, otAct: average(value.r.map((item) => item.otAct)) ?? 0 } : null,
+        w: value.w.length ? { gap: average(value.w.map((item) => item.gap)) ?? 0, whPlan: average(value.w.map((item) => item.whPlan)) ?? 0, whAct: average(value.w.map((item) => item.whAct)) ?? 0, otPlan: average(value.w.map((item) => item.otPlan)) ?? 0, otAct: average(value.w.map((item) => item.otAct)) ?? 0 } : null,
       },
     ]),
   );
+}
+
+function planningShiftName(value: string | null) {
+  const shift = normalizeShift(value);
+  return shift === "2" || shift === "NIGHT" ? "NIGHT" : "DAY";
+}
+
+function productionBalanceKey(lineKey: AnalysisLine["key"], date: string, groupName: string, shiftName: string) {
+  return `${lineKey}:${date}:${groupName}:${shiftName}`;
+}
+
+async function getMonthlyProductionBalances(
+  start: string,
+  endExclusive: string,
+  source: "manual" | "realtime",
+) {
+  const [plans, actualEntries] = await Promise.all([
+    (await Promise.all(analysisLines.map((line) => getReportPrisma().$queryRawUnsafe<MonthlyProductionPlanRow[]>(
+      `SELECT
+        ? AS lineKey,
+        DATE_FORMAT(fdate, '%Y-%m-%d') AS date,
+        TRIM(fshift) AS shift,
+        UPPER(TRIM(fgroup)) AS groupName,
+        SUM(COALESCE(f1tr, 0)) AS oneTr,
+        SUM(COALESCE(f2tr, 0)) AS twoTr
+       FROM ${quoteIdentifier(monthlyPlanningTables[line.key])}
+       WHERE fdate >= ? AND fdate < ?
+       GROUP BY DATE_FORMAT(fdate, '%Y-%m-%d'), TRIM(fshift), UPPER(TRIM(fgroup))`,
+      line.key,
+      start,
+      endExclusive,
+    )))).flat(),
+    Promise.all(analysisLines.map(async (line) => ({
+      line,
+      rows: await getReportPrisma().$queryRawUnsafe<ProductionActualRow[]>(
+        `SELECT
+          \`DATE\` AS date,
+          SHIFT AS shift,
+          SHIFT2 AS shift2,
+          Prod_act AS prodAct,
+          ${line.key === "assyline" ? "NULL" : "Prod_realtime"} AS prodRealtime
+         FROM ${quoteIdentifier(summaryViewName(line.tableName ?? ""))}
+         WHERE \`DATE\` >= ? AND \`DATE\` < ?`,
+        start,
+        endExclusive,
+      ),
+    }))),
+  ]);
+  const planByKey = new Map<string, number>();
+  const actualByKey = new Map<string, number>();
+
+  for (const plan of plans) {
+    const key = productionBalanceKey(
+      plan.lineKey,
+      plan.date,
+      normalizeShift(plan.groupName),
+      planningShiftName(plan.shift),
+    );
+    const target = toNumber(plan.oneTr) + toNumber(plan.twoTr);
+    planByKey.set(key, target);
+  }
+
+  for (const { line, rows } of actualEntries) {
+    for (const row of rows) {
+      const date = toDateKey(row.date);
+      if (!date) continue;
+      const groupName = line.key === "assyline" ? "N" : normalizeShift(row.shift);
+      const key = productionBalanceKey(line.key, date, groupName, planningShiftName(row.shift2));
+      const actual = source === "manual" || line.key === "assyline"
+        ? toNumber(row.prodAct)
+        : toNumber(row.prodRealtime);
+      actualByKey.set(key, (actualByKey.get(key) ?? 0) + actual);
+    }
+  }
+
+  const balances = new Map<string, ProductionBalance>();
+  for (const [key, target] of planByKey) {
+    const lineKey = key.split(":", 1)[0] as AnalysisLine["key"];
+    const actual = actualByKey.get(key) ?? 0;
+    const normalizedActual = lineKey === "camshaft" ? Math.round(actual / 2) : actual;
+    const normalizedTarget = lineKey === "camshaft" ? Math.round(target / 2) : target;
+    const [line, date] = key.split(":");
+    const dailyKey = `${line}:${date}`;
+    const current = balances.get(dailyKey) ?? { actual: 0, target: 0 };
+    balances.set(dailyKey, {
+      actual: current.actual + normalizedActual,
+      target: current.target + normalizedTarget,
+    });
+  }
+
+  return balances;
+}
+
+function applyMonthlyProductionBalances(
+  cards: AnalysisOeeCard[],
+  dates: string[],
+  selectedDate: string,
+  balances: Map<string, ProductionBalance>,
+) {
+  return cards.map((card) => {
+    const selected = balances.get(`${card.key}:${selectedDate}`);
+    const monthly = dates
+      .map((date) => balances.get(`${card.key}:${date}`))
+      .filter((value): value is ProductionBalance => value !== undefined);
+    const monthlyActual = monthly.reduce((total, value) => total + value.actual, 0);
+    const monthlyTarget = monthly.reduce((total, value) => total + value.target, 0);
+
+    return {
+      ...card,
+      balance: selected ? selected.actual - selected.target : null,
+      balanceMonthly: monthly.length
+        ? monthlyActual - monthlyTarget
+        : null,
+      balanceActual: selected?.actual ?? null,
+      balancePlan: selected?.target ?? null,
+      balanceMonthlyActual: monthly.length ? monthlyActual : null,
+      balanceMonthlyPlan: monthly.length ? monthlyTarget : null,
+    };
+  });
 }
 
 function getRealtimeSlotProgress(date: string, slot: RealtimePlanningSlotRow, now: Date) {
@@ -598,8 +742,7 @@ async function getRealtimeBoardMetrics(start: string, endExclusive: string) {
         TRIM(plan.fshift) AS shift,
         TIME_FORMAT(slot.start_time, '%H:%i') AS startTime,
         TIME_FORMAT(slot.end_time, '%H:%i') AS endTime,
-        slot.prod_minutes AS prodMinutes,
-        slot.total_target AS totalTarget
+        slot.prod_minutes AS prodMinutes
        FROM t_daily_production_plan_slot slot
        INNER JOIN t_daily_production_plan plan ON plan.id = slot.daily_plan_id
        WHERE plan.fdate >= ? AND plan.fdate < ?
@@ -615,7 +758,7 @@ async function getRealtimeBoardMetrics(start: string, endExclusive: string) {
     ),
   ]);
   const actuals = new Map<string, { production: number; tt: number | null; hasRows: boolean }>();
-  const plans = new Map<string, { workMinutes: number; target: number }>();
+  const plans = new Map<string, { workMinutes: number }>();
   const now = new Date();
 
   for (const { line, rows } of summaryEntries) {
@@ -638,10 +781,9 @@ async function getRealtimeBoardMetrics(start: string, endExclusive: string) {
     if (!analysisLines.some((line) => line.key === lineKey)) continue;
     const shift = slot.shift === "2" ? "W" : "R";
     const key = `${lineKey}:${slot.date}:${shift}`;
-    const current = plans.get(key) ?? { workMinutes: 0, target: 0 };
+    const current = plans.get(key) ?? { workMinutes: 0 };
     const progress = getRealtimeSlotProgress(slot.date, slot, now);
     current.workMinutes += toNumber(slot.prodMinutes) * progress;
-    current.target += toNumber(slot.totalTarget) * progress;
     plans.set(key, current);
   }
 
@@ -649,7 +791,7 @@ async function getRealtimeBoardMetrics(start: string, endExclusive: string) {
   for (const [key, actual] of actuals) {
     const plan = plans.get(key);
     if (!plan || actual.tt === null || plan.workMinutes <= 0) {
-      metrics.set(key, { oee: null, balance: null });
+      metrics.set(key, { oee: null });
       continue;
     }
 
@@ -657,7 +799,6 @@ async function getRealtimeBoardMetrics(start: string, endExclusive: string) {
     const production = lineKey === "camshaft" ? actual.production / 2 : actual.production;
     metrics.set(key, {
       oee: (production * actual.tt * 100) / plan.workMinutes,
-      balance: production - plan.target,
     });
   }
 
@@ -669,7 +810,10 @@ export async function getAnalysisOeeRealtime(dateParam: string | null) {
   const endExclusive = new Date(`${base.date}T12:00:00`);
   endExclusive.setDate(endExclusive.getDate() + 1);
   const rangeEnd = `${endExclusive.getFullYear()}-${String(endExclusive.getMonth() + 1).padStart(2, "0")}-${String(endExclusive.getDate()).padStart(2, "0")}`;
-  const realtimeMetrics = await getRealtimeBoardMetrics(base.start, rangeEnd);
+  const [realtimeMetrics, realtimeBalances] = await Promise.all([
+    getRealtimeBoardMetrics(base.start, rangeEnd),
+    getMonthlyProductionBalances(base.start, rangeEnd, "realtime"),
+  ]);
   const dailyByLine = new Map<string, Map<string, { r: RealtimeMetric | null; w: RealtimeMetric | null }>>();
 
   for (const line of analysisLines) {
@@ -694,17 +838,12 @@ export async function getAnalysisOeeRealtime(dateParam: string | null) {
         ? average([item.r?.oee, item.w?.oee].filter((value): value is number => value !== null && value !== undefined))
         : average([item.r?.oee, item.w?.oee].filter((value): value is number => value !== null && value !== undefined)),
     ).filter((value): value is number => value !== null);
-    const balances = [selected.r?.balance, selected.w?.balance].filter((value): value is number => value !== null && value !== undefined);
-    const monthlyBalances = Array.from(values?.values() ?? []).flatMap((item) => [item.r?.balance, item.w?.balance]).filter((value): value is number => value !== null && value !== undefined);
-
     return {
       ...card,
       r: card.key === "assyline" ? dailyOee : selected.r?.oee ?? null,
       w: card.key === "assyline" ? null : selected.w?.oee ?? null,
       ave: card.key === "assyline" ? dailyOee : average([selected.r?.oee, selected.w?.oee].filter((value): value is number => value !== null && value !== undefined)),
       monthly: average(monthlyDailyOee),
-      balance: balances.length ? balances.reduce((total, value) => total + value, 0) : null,
-      balanceMonthly: monthlyBalances.length ? monthlyBalances.reduce((total, value) => total + value, 0) : null,
     };
   });
 
@@ -723,13 +862,17 @@ export async function getAnalysisOeeRealtime(dateParam: string | null) {
     return next;
   });
 
-  return { ...base, cards, shiftSeries };
+  return {
+    ...base,
+    cards: applyMonthlyProductionBalances(cards, base.shiftSeries.map((row) => row.date), base.date, realtimeBalances),
+    shiftSeries,
+  };
 }
 
 async function getManualAnalysisOee(dateParam: string | null) {
   const range = parseDate(dateParam);
   const days = getRangeDays(range.year, range.month, range.dayCount);
-  const [entries, machiningEmergencyStock, machiningModuleExportStock, machiningAdvancedStock, machiningBalanceStock, shipmentVanning, monthlyOt, dailyOt] = await Promise.all([
+  const [entries, machiningEmergencyStock, machiningModuleExportStock, machiningAdvancedStock, machiningBalanceStock, shipmentVanning, monthlyOt, dailyWorkHours, monthlyProductionBalances] = await Promise.all([
     Promise.all(
     analysisLines.map(async (line) => {
       const [rows, problemRows] = await Promise.all([
@@ -746,12 +889,14 @@ async function getManualAnalysisOee(dateParam: string | null) {
     getMachiningBalanceStock(range.date),
     getAsakaiShipmentVanning(range.date),
     getMonthlyPlanningOt(range.start, range.endExclusive),
-    getDailyPlanningOt(range.start, range.endExclusive),
+    getDailyPlanningWorkHours(range.start, range.endExclusive),
+    getMonthlyProductionBalances(range.start, range.endExclusive, "manual"),
   ]);
-  const gapPlanning = { monthlyOt, dailyOt };
-  const cards = entries.map((entry) =>
+  const gapPlanning = { monthlyOt, dailyWorkHours };
+  const baseCards = entries.map((entry) =>
     buildCard(entry.line, entry.rows, entry.problemRows, range.date, gapPlanning),
   );
+  const cards = applyMonthlyProductionBalances(baseCards, days, range.date, monthlyProductionBalances);
   const dailyByLine = new Map(
     entries.map((entry) => [entry.line.key, buildDailyAverage(entry.rows, "oee")]),
   );
@@ -807,8 +952,8 @@ async function getManualAnalysisOee(dateParam: string | null) {
       const values = gapByLine.get(line.key)?.get(date);
       row[`${line.key}R`] = values?.r?.gap ?? null;
       row[`${line.key}W`] = values?.w?.gap ?? null;
-      if (values?.r) row.gapDetails[`${line.key}R`] = { otPlan: values.r.otPlan, otAct: values.r.otAct };
-      if (values?.w) row.gapDetails[`${line.key}W`] = { otPlan: values.w.otPlan, otAct: values.w.otAct };
+      if (values?.r) row.gapDetails[`${line.key}R`] = { whPlan: values.r.whPlan, whAct: values.r.whAct, otPlan: values.r.otPlan, otAct: values.r.otAct };
+      if (values?.w) row.gapDetails[`${line.key}W`] = { whPlan: values.w.whPlan, whAct: values.w.whAct, otPlan: values.w.otPlan, otAct: values.w.otAct };
     }
 
     return row;

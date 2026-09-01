@@ -12,7 +12,7 @@ export default function DailyGapChart({
   singleShift?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; date: string; shift: string; otPlan: number; otAct: number } | null>(null);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; date: string; shift: string; whPlan: number; whAct: number; otPlan: number; otAct: number } | null>(null);
   const chartRows = series.filter(
     (row) =>
       singleShift ? row[`${lineKey}R`] !== null : row[`${lineKey}R`] !== null || row[`${lineKey}W`] !== null,
@@ -73,9 +73,15 @@ export default function DailyGapChart({
                   >
                     <div className="relative h-full">
                       {bars.map((bar) => {
+                        const displayedValue = formatNumber(bar.value, 1);
+                        const isZero = displayedValue === "0" || displayedValue === "-0";
+                        if (isZero) {
+                          return null;
+                        }
+
                         const height = Math.min((Math.abs(bar.value) / maxValue) * 50, 50);
                         const isPositive = bar.value >= 0;
-                        const visibleHeight = Math.max(height, bar.value === 0 ? 0 : 5);
+                        const visibleHeight = Math.max(height, 5);
                         const detail = row.gapDetails[`${lineKey}${bar.key.toUpperCase()}` as `${LineKey}R` | `${LineKey}W`];
 
                         return (
@@ -99,7 +105,8 @@ export default function DailyGapChart({
                         );
                       })}
                       {bars.map((bar) => {
-                        if (bar.value === 0) {
+                        const displayedValue = formatNumber(bar.value, 1);
+                        if (displayedValue === "0" || displayedValue === "-0") {
                           return null;
                         }
 
@@ -121,7 +128,7 @@ export default function DailyGapChart({
                               WebkitTextStroke: "0.3px #ffffff",
                             }}
                           >
-                            {formatNumber(bar.value, 1)}
+                            {displayedValue}
                           </span>
                         );
                       })}
@@ -151,6 +158,8 @@ export default function DailyGapChart({
       {tooltip ? (
         <div role="tooltip" className="pointer-events-none fixed z-[100] min-w-36 rounded-lg bg-[#101828] px-3 py-2 text-xs text-white shadow-xl dark:bg-[#f8fafc] dark:text-[#101828]" style={{ left: tooltip.x, top: tooltip.y - 8, transform: "translate(-50%, -100%)" }}>
           <p className="font-semibold">{formatDayLabel(tooltip.date)} · Shift {tooltip.shift}</p>
+          <p className="mt-1">WH Plan: <span className="font-semibold">{formatNumber(tooltip.whPlan, 1)} jam</span></p>
+          <p>WH Act: <span className="font-semibold">{formatNumber(tooltip.whAct, 1)} jam</span></p>
           <p className="mt-1">OT Plan: <span className="font-semibold">{formatNumber(tooltip.otPlan, 1)} jam</span></p>
           <p>OT Act: <span className="font-semibold">{formatNumber(tooltip.otAct, 1)} jam</span></p>
         </div>

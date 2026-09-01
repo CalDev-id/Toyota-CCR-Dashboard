@@ -76,7 +76,6 @@ export default function AnalysisPage({ mode = "realtime" }: { mode?: "manual" | 
   const [isLoading, setIsLoading] = useState(true);
   const [isMobileDisplay, setIsMobileDisplay] = useState(false);
   const [portraitContentHeight, setPortraitContentHeight] = useState<number | null>(null);
-  const dateInputRef = useRef<HTMLInputElement>(null);
   const boardContentRef = useRef<HTMLDivElement>(null);
   const isRefreshingRef = useRef(false);
 
@@ -184,11 +183,6 @@ export default function AnalysisPage({ mode = "realtime" }: { mode?: "manual" | 
     [data?.lines],
   );
 
-  function openDatePicker() {
-    dateInputRef.current?.showPicker?.();
-    dateInputRef.current?.focus();
-  }
-
   return (
     <div style={isCompactDisplay && portraitContentHeight ? { height: portraitContentHeight } : undefined}>
       <div
@@ -208,11 +202,9 @@ export default function AnalysisPage({ mode = "realtime" }: { mode?: "manual" | 
         <div className={`flex shrink-0 items-end ${isCompactDisplay ? "gap-2" : "gap-1.5 sm:gap-2"}`}>
           <label
             className={`grid cursor-pointer gap-1.5 font-medium text-[#344054] ${isCompactDisplay ? "w-64 text-xl" : "w-32 text-xs sm:w-56 sm:text-sm"}`}
-            onClick={openDatePicker}
           >
             Tanggal
             <input
-              ref={dateInputRef}
               type="date"
               value={date}
               onChange={(event) => setDate(event.target.value)}
@@ -284,6 +276,7 @@ export default function AnalysisPage({ mode = "realtime" }: { mode?: "manual" | 
               lsrAmountBase={data?.lsrAmountBase}
               selectedDate={data?.date}
               portraitDisplay={isCompactDisplay}
+              mode={mode}
             />
           </section>
         </>

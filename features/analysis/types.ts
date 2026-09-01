@@ -53,6 +53,10 @@ export type AnalysisOeeCard = {
   monthly: number | null;
   balance: number | null;
   balanceMonthly: number | null;
+  balanceActual: number | null;
+  balancePlan: number | null;
+  balanceMonthlyActual: number | null;
+  balanceMonthlyPlan: number | null;
   otDay: number;
   otNight: number;
   cumR: number;
@@ -72,7 +76,7 @@ export type AnalysisShiftSeriesRow = {
 
 export type AnalysisGapSeriesRow = {
   date: string;
-  gapDetails: Partial<Record<`${AnalysisLineKey}R` | `${AnalysisLineKey}W`, { otPlan: number; otAct: number }>>;
+  gapDetails: Partial<Record<`${AnalysisLineKey}R` | `${AnalysisLineKey}W`, { whPlan: number; whAct: number; otPlan: number; otAct: number }>>;
 } & Record<`${AnalysisLineKey}R` | `${AnalysisLineKey}W`, number | null>;
 
 export type AnalysisEmergencyStockMetrics = {

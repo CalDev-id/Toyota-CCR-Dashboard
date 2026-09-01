@@ -173,6 +173,17 @@ function formatLsrAllowance(value: number) {
   return String(Math.trunc(value));
 }
 
+function FormulaTooltip({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      role="tooltip"
+      className="pointer-events-none absolute left-1/2 top-full z-40 mt-2 hidden w-max max-w-64 -translate-x-1/2 whitespace-normal rounded-lg bg-[#101828] px-3 py-2 text-left text-[11px] font-medium leading-relaxed text-white shadow-xl group-hover:block dark:bg-[#f8fafc] dark:text-[#101828]"
+    >
+      {children}
+    </span>
+  );
+}
+
 function LsrAmountBaseChart({ config, amountBase, selectedDate }: { config: LsrDummyConfig; amountBase?: AnalysisResponse["lsrAmountBase"]["CB"]; selectedDate?: string }) {
   const chartScrollRef = useRef<HTMLDivElement>(null);
   const amountCount = amountBase?.daily.length ?? 0;
@@ -901,6 +912,7 @@ export function OeeLineChart({
   shipmentVanning,
   selectedDate,
   portraitDisplay,
+  mode = "realtime",
   lsrWeekly,
   lsrKpi,
   lsrAmountBase,
@@ -920,6 +932,7 @@ export function OeeLineChart({
   shipmentVanning?: AnalysisAsakaiShipmentVanning;
   selectedDate?: string;
   portraitDisplay?: boolean;
+  mode?: "manual" | "realtime";
   lsrWeekly?: AnalysisResponse["lsrWeekly"];
   lsrKpi?: AnalysisResponse["lsrKpi"];
   lsrAmountBase?: AnalysisResponse["lsrAmountBase"];
@@ -958,14 +971,31 @@ export function OeeLineChart({
                 </h3>
                 <div className="mt-3 grid grid-cols-2 gap-3">
                   {[
-                    ["Balance(Unit)", card?.balance ?? null],
-                    ["Balance Monthly", card?.balanceMonthly ?? null],
-                  ].map(([label, value]) => (
-                    <article key={label} className="min-w-0 rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm">
+                    {
+                      label: "Balance(Unit)",
+                      value: card?.balance ?? null,
+                      actual: card?.balanceActual ?? null,
+                      plan: card?.balancePlan ?? null,
+                    },
+                    {
+                      label: "Balance Monthly",
+                      value: card?.balanceMonthly ?? null,
+                      actual: card?.balanceMonthlyActual ?? null,
+                      plan: card?.balanceMonthlyPlan ?? null,
+                    },
+                  ].map(({ label, value, actual, plan }) => (
+                    <article key={label} className="group relative min-w-0 cursor-help rounded-2xl border border-[#e4e7ec] bg-white p-4 shadow-sm">
                       <p className="text-[10px] font-medium text-[#667085]">{label}</p>
                       <p className="mt-1 text-lg font-semibold text-[#101828]">
                         {value === null ? "-" : formatUnit(value as number)}
                       </p>
+                      <FormulaTooltip>
+                        {actual !== null && plan !== null ? (
+                          <>{mode === "realtime" ? "Act Prod Scan" : "Act Prod Input"} ({formatNumber(actual)}) − Monthly Planning ({formatNumber(plan)})</>
+                        ) : (
+                          <>Data Actual Production atau Monthly Planning belum tersedia.</>
+                        )}
+                      </FormulaTooltip>
                     </article>
                   ))}
                 </div>
@@ -975,11 +1005,23 @@ export function OeeLineChart({
                 <h3 className="px-1 text-sm font-semibold text-[#101828]">Prod. Over Time</h3>
                 <div className="mt-3 flex gap-2">
                   {overTimeItems.map(([label, value]) => (
-                    <article key={label} className="min-w-0 flex-1 rounded-2xl border border-[#e4e7ec] bg-white p-3 shadow-sm">
+                    <article key={label} className="group relative min-w-0 flex-1 cursor-help rounded-2xl border border-[#e4e7ec] bg-white p-3 shadow-sm">
                       <p className="whitespace-nowrap text-[10px] font-medium text-[#667085]">{label}</p>
                       <p className="mt-1 whitespace-nowrap text-sm font-semibold text-[#101828]">
                         {formatNumber(value as number)}
                       </p>
+                      <FormulaTooltip>
+                        {String(label).startsWith("Cum.") ? (
+                          <>Σ OT Act per hari, tgl 1–filter.</>
+                        ) : (
+                          <>
+                            <span className="block">Monthly Planning OT ≥8 jam:</span>
+                            <span className="block">OT Act = WH Actual + 0,4</span>
+                            <span className="mt-1 block">Monthly Planning OT &lt;8 jam:</span>
+                            <span className="block">OT Act = WH Actual + 0,4 − 8</span>
+                          </>
+                        )}
+                      </FormulaTooltip>
                     </article>
                   ))}
                 </div>
