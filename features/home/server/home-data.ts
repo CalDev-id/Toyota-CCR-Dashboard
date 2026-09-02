@@ -79,27 +79,17 @@ function average(values: number[]) {
   return values.reduce((total, value) => total + value, 0) / values.length;
 }
 
-function getCurrentRange() {
+function getCurrentMonth() {
   const date = new Date();
   const year = date.getFullYear();
   const month = date.getMonth();
-  const selectedDate = `${year}-${String(month + 1).padStart(2, "0")}-${String(
-    date.getDate(),
-  ).padStart(2, "0")}`;
-  const start = `${selectedDate.slice(0, 7)}-01`;
-  const nextDate = new Date(year, month, date.getDate() + 1);
-  const endExclusive = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(
-    2,
-    "0",
-  )}-${String(nextDate.getDate()).padStart(2, "0")}`;
-
-  return { start, endExclusive };
+  return `${year}-${String(month + 1).padStart(2, "0")}`;
 }
 
-function getPreviousMonthRange() {
-  const date = new Date();
-  const startDate = new Date(date.getFullYear(), date.getMonth() - 1, 1);
-  const endDate = new Date(date.getFullYear(), date.getMonth(), 1);
+function getMonthRange(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const startDate = new Date(year, monthNumber - 1, 1);
+  const endDate = new Date(year, monthNumber, 1);
   const start = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(
     2,
     "0",
@@ -110,6 +100,16 @@ function getPreviousMonthRange() {
   )}-01`;
 
   return { start, endExclusive };
+}
+
+function getPreviousMonth(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const previous = new Date(year, monthNumber - 2, 1);
+  return `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function getSelectedMonth(value: string | null | undefined) {
+  return value && /^\d{4}-(0[1-9]|1[0-2])$/.test(value) ? value : getCurrentMonth();
 }
 
 function metricAverage(rows: RawHomeRow[], key: HomeMetricKey) {
@@ -185,9 +185,10 @@ function buildLineGaps(entries: Array<{ line: HomeLineConfig; rows: RawHomeRow[]
     .sort((a, b) => a.gap - b.gap);
 }
 
-export async function getHomeDashboard(): Promise<HomeDashboard> {
-  const currentRange = getCurrentRange();
-  const previousRange = getPreviousMonthRange();
+export async function getHomeDashboard(monthParam?: string | null): Promise<HomeDashboard> {
+  const selectedMonth = getSelectedMonth(monthParam);
+  const currentRange = getMonthRange(selectedMonth);
+  const previousRange = getMonthRange(getPreviousMonth(selectedMonth));
   const entries = await Promise.all(
     homeLineConfigs.map(async (line) => ({
       line,

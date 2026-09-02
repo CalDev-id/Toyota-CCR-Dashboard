@@ -6,18 +6,23 @@ import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   await requirePageAccess("/");
+  const { month } = await searchParams;
 
   return (
     <Suspense fallback={<HomeDashboardSkeleton />}>
-      <HomeDashboardContent />
+      <HomeDashboardContent month={month} />
     </Suspense>
   );
 }
 
-async function HomeDashboardContent() {
-  const dashboard = await getHomeDashboard();
+async function HomeDashboardContent({ month }: { month?: string }) {
+  const now = new Date();
+  const selectedMonth = month && /^\d{4}-(0[1-9]|1[0-2])$/.test(month)
+    ? month
+    : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const dashboard = await getHomeDashboard(selectedMonth);
 
-  return <HomeDashboard dashboard={dashboard} />;
+  return <HomeDashboard dashboard={dashboard} selectedMonth={selectedMonth} />;
 }

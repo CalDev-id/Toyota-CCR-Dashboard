@@ -232,8 +232,8 @@ function getOtGapMetrics(line: AnalysisLine, row: RawAnalysisOeeRow, planning: G
   const rawActualWorkHours = toNumber(row.actualWorkHours);
   const otPlan = monthlyOt;
   const whPlan = planning.dailyWorkHours.get(planningKey(line.key, date, planningShift)) ?? 0;
-  // Assy sementara tidak memakai adjustment +0,4.
-  const workHoursAdjustment = line.key === "assyline" ? 0 : 0.4;
+  // Assy memakai adjustment +0,5; line machining memakai +0,4.
+  const workHoursAdjustment = line.key === "assyline" ? 0.5 : 0.4;
   const whAct = rawActualWorkHours > 0
     ? rawActualWorkHours + workHoursAdjustment
     : 0;
