@@ -129,7 +129,6 @@ const menuItems: MenuItem[] = [
       {
         label: "Prod Acv Packom",
         href: "/packom",
-        roles: ["ADMIN", "CCR_OPERATION", "CCR_GROUP_LEADER"],
       },
       {
         label: "Linestop Report",

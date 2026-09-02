@@ -8,6 +8,7 @@ const userAllowedPaths = [
   "/analysis",
   "/production",
   "/production-achievement",
+  "/packom",
 ];
 
 export function canAccessPath(role: UserRole, pathname: string) {
