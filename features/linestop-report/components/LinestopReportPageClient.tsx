@@ -41,7 +41,7 @@ function formatPrintDateTime() {
 }
 
 export default function LinestopReportPageClient({ viewerRole }: { viewerRole: string }) {
-  const canManage = viewerRole === "ADMIN" || viewerRole === "CCR_GROUP_LEADER";
+  const canManage = viewerRole === "ADMIN" || viewerRole === "CCR_OPERATION" || viewerRole === "CCR_GROUP_LEADER";
   const [month, setMonth] = useState(currentMonth);
   const [summary, setSummary] = useState<Summary[]>([]);
   const [machines, setMachines] = useState<Machine[]>([]);
